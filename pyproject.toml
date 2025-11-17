@@ -1,0 +1,184 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maseval"
+version = "0.0.1"
+description = "A benchmark for Multi-Agent Systems."
+authors = [{ name = "Cornelius Emde", email = "cornelius.emde@**.***" }]
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["gitpython>=3.1.0", "tqdm>=4.66.0", "rich>=14.1.0"]
+
+# Enable optional dependencies
+[project.optional-dependencies]
+# Agent frameworks
+smolagents = ["smolagents>=1.21"]
+langgraph = ["langgraph>=0.6.0"]
+
+# Inference Enginges
+openai = ["openai>=1.107.2"]
+google-genai = ["google-genai>=1.37.0"]
+transformers = ["transformers>=4.37.0"]
+litellm = ["litellm>=0.2.0"]
+
+# Logging
+wandb = ["wandb>=0.15.0"]
+neptune = ["neptune>=1.14.0"]
+langfuse = ["langfuse>=3.3.4"]
+
+# Combinations
+examples = [
+    "datasets>=4.0.0",
+    "google-genai>=1.37.0",
+    "langchain>=0.3.27",
+    "langchain-google-genai>=2.1.12",
+    "langgraph>=0.6.0",
+    "langfuse>=3.3.4",
+    "neptune>=1.14.0",
+    "openai>=1.107.2",
+    "smolagents>=1.21.3",
+    "addict>=2.4.0",
+    "deepdiff>=8.6.1",
+    "docstring-parser>=0.17.0",
+    "loguru>=0.7.3",
+    "toml>=0.10.2",
+    "typing-extensions>=4.0.0",
+    # Jupyter notebook support
+    "jupyter>=1.0.0",
+    "ipykernel>=6.0.0",
+    "ipywidgets>=8.0.0",
+]
+all = [
+    # Agent frameworks
+    "smolagents>=1.21",
+    "langgraph>=0.6.0",
+    # Inference engines
+    "openai>=1.107.2",
+    "google-genai>=1.37.0",
+    "transformers>=4.37.0",
+    "litellm>=0.2.0",
+    # Logging
+    "wandb>=0.15.0",
+    "neptune>=1.14.0",
+    "langfuse>=3.3.4",
+    # Examples dependencies
+    "datasets>=4.0.0",
+    "langchain>=0.3.27",
+    "langchain-google-genai>=2.1.12",
+    "addict>=2.4.0",
+    "deepdiff>=8.6.1",
+    "docstring-parser>=0.17.0",
+    "loguru>=0.7.3",
+    "toml>=0.10.2",
+    "typing-extensions>=4.0.0",
+    "jupyter>=1.0.0",
+    "ipykernel>=6.0.0",
+    "ipywidgets>=8.0.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/parameterlab/MASEval"
+"Bug Tracker" = "https://github.com/parameterlab/MASEval/issues"
+
+[dependency-groups]
+# Dependencies needed for development (linting, testing)
+dev = ["pytest>=8.4.2", "pytest-cov>=7.0.0", "ruff>=0.13.0", "ty>=0.0.1a20"]
+
+
+# Dependencies needed to build the documentation
+docs = [
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.17.0",
+    "pymdown-extensions>=9.0.0",
+    "mkdocs-jupyter>=0.24.0",
+]
+
+# Dependencies needed for static type checking
+typing = [
+    # All optional dependencies for complete type checking
+    "smolagents>=1.21",
+    "langgraph>=0.6.0",
+    "openai>=1.107.2",
+    "google-genai>=1.37.0",
+    "transformers>=4.37.0",
+    "litellm>=0.2.0",
+    "wandb>=0.15.0",
+    "neptune>=1.14.0",
+    "langfuse>=3.3.4",
+]
+
+# Dependencies needed to run the example scripts (for contributors)
+examples = [
+    "datasets>=4.0.0",
+    "google-genai>=1.37.0",
+    "langchain>=0.3.27",
+    "langfuse>=3.3.4",
+    "neptune>=1.14.0",
+    "openai>=1.107.2",
+    "smolagents>=1.21.3",
+    "langchain-google-genai>=2.1.12",
+    "langgraph>=0.6.0",
+    "addict>=2.4.0",
+    "deepdiff>=8.6.1",
+    "docstring-parser>=0.17.0",
+    "loguru>=0.7.3",
+    "toml>=0.10.2",
+    "typing-extensions>=4.0.0",
+    # Jupyter notebook support
+    "jupyter>=1.0.0",
+    "ipykernel>=6.0.0",
+    "ipywidgets>=8.0.0",
+]
+
+[tool.setuptools]
+packages = ["maseval"]
+
+[tool.ruff]
+line-length = 144
+exclude = ["examples"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+markers = [
+    "core: Core tests that don't require optional dependencies",
+    "interface: Tests that require optional dependencies (smolagents, langgraph, etc.)",
+    "contract: Cross-implementation contract tests that validate framework-agnostic abstraction",
+    "smolagents: Tests that specifically require smolagents",
+    "langgraph: Tests that specifically require langgraph",
+]
+
+[tool.coverage.run]
+relative_files = true
+source = ["maseval"]
+omit = ["*/tests/*", "*/examples/*", "*/__pycache__/*"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+precision = 2
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.coverage.html]
+directory = "htmlcov"
