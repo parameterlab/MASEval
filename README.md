@@ -11,7 +11,7 @@
 [![ParameterLab](https://img.shields.io/badge/Parameter-Lab-black.svg)](https://www.parameterlab.de)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://badge.fury.io/py/maseval.svg)](https://badge.fury.io/py/maseval)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](#)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://maseval.readthedocs.io/en/stable/)
 [![Tests](https://github.com/parameterlab/MASEval/actions/workflows/test.yml/badge.svg)](https://github.com/parameterlab/MASEval/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -59,7 +59,7 @@ pip install "maseval[smolagents]"
 
 ## Example
 
-Examples are available in the documentiation. TODO add link!
+Examples are available in the [Documentation](https://maseval.readthedocs.io/en/stable/).
 
 ## Contribute
 

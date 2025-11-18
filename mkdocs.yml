@@ -1,4 +1,4 @@
-site_name: LLM-Based Multi-Agent System Benchmark
+site_name: Multi-Agent System Evaluation
 site_description: "System-level multi-agent benchmarks"
 docs_dir: docs
 site_dir: site

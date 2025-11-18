@@ -88,6 +88,7 @@ all = [
 [project.urls]
 "Homepage" = "https://github.com/parameterlab/MASEval"
 "Bug Tracker" = "https://github.com/parameterlab/MASEval/issues"
+"Documentation" = "https://maseval.readthedocs.io/en/stable/"
 
 [dependency-groups]
 # Dependencies needed for development (linting, testing)
