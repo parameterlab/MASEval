@@ -2,12 +2,6 @@
 
 Welcome to the MASEval documentation.
 
-> [!WARNING]
-> DO NOT DISTRIBUTE! CONFIDENTIAL!
-
-> [!WARNING]
-> DO NOT PUBLISH. MAY CONTAIN COPYRIGHTED MATERIAL.
-
 MASEval is an evaluation library that provides a unified interface for benchmarking (multi-)agent systems. It offers standardized abstractions for running any agent implementation—whether built with AutoGen, LangChain, custom frameworks, or direct API calls—against established benchmarks like GAIA and AgentBench, or your own custom evaluation tasks.
 
 Analogous to pytest for testing or MLflow for ML experimentation, MASEval focuses exclusively on evaluation infrastructure. It does not implement agents, define multi-agent communication protocols, or turn LLMs into agents. Instead, it wraps existing agent systems via simple adapters, orchestrates the evaluation lifecycle (setup, execution, measurement, teardown), and provides lifecycle hooks for tracing, logging, and metrics collection. This separation allows researchers to compare different agent architectures apples-to-apples across frameworks, while maintaining full control over their agent implementations.

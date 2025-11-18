@@ -5,7 +5,7 @@ site_dir: site
 
 theme:
   name: material
-  logo: assets/logo_short.svg
+  logo: assets/logo-short.svg
   palette:
     primary: teal
     accent: teal
