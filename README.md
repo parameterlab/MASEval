@@ -63,7 +63,7 @@ Examples are available in the documentiation. TODO add link!
 
 ## Contribute
 
-We welcome any contributions. Please read the [CONTRIBUTING.md](CONTRIBUTING.md) file to learn more!
+We welcome any contributions. Please read the [CONTRIBUTING.md](tree/fix-porting-issue?tab=contributing-ov-file) file to learn more!
 
 ## Benchmarks
 
