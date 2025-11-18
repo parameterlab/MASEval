@@ -35,6 +35,18 @@ jobs:
           fi
           echo "Version check passed: $TAG_VERSION"
 
+          # Check if CHANGELOG.md has an entry for this version
+          if ! grep -q "## \[$TAG_VERSION\]" CHANGELOG.md; then
+            echo "WARNING: No CHANGELOG.md entry found for version $TAG_VERSION"
+            echo "Consider adding release notes to CHANGELOG.md"
+          fi
+
+      - name: Extract changelog for release
+        id: changelog
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          python .github/scripts/extract_changelog.py "$TAG_VERSION" > changelog_section.txt
+
       - name: Build package
         run: uv build
 
@@ -45,4 +57,4 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: dist/*
-          generate_release_notes: true
+          body_path: changelog_section.txt

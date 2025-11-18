@@ -11,9 +11,11 @@ Before diving into the technical details, here are the core principles that guid
 We follow a standard GitHub workflow. Following these steps makes it easier to review and merge your changes.
 
 1.  **Create a new branch** for your feature or bugfix. Do not commit directly to `main`.
-2.  **Open a Pull Request** against the `main` branch.
-3.  **Request a review** from `cemde`.
-4.  Ensure all **automated tests pass** before your PR can be merged. Our automated checks are detailed in the technical section below.
+2.  **Make your changes** following our code style (see below).
+3.  **Update CHANGELOG.md**: Add a brief entry under `[Unreleased]` in the appropriate section (Added/Changed/Fixed/Removed).
+4.  **Open a Pull Request** against the `main` branch - our PR template will guide you through the checklist.
+5.  **Request a review** from `cemde`.
+6.  Ensure all **automated tests pass** before your PR can be merged. Our automated checks are detailed in the technical section below.
 
 ### Architectural Principles
 
@@ -186,8 +188,12 @@ The pipeline automatically performs the following tasks:
 
 - **Linting and Formatting**: Verifies that your code adheres to our style guide using `ruff`.
 - **Testing**: Runs the entire test suite across different Python versions and operating systems. This includes tests for both the core package and the optional integrations.
+- **Type Checking**: Validates type annotations using `ty`.
+- **Documentation**: Ensures documentation builds without errors using `mkdocs`.
 
 **All checks must pass** before your Pull Request can be merged. You can view the progress and logs of these checks directly on your Pull Request page in GitHub.
+
+> **Note:** You don't need to run all these checks locally - CI will catch issues. However, running `uv run ruff format && uv run ruff check` before pushing can save you time.
 
 ### 6. Implementing Framework Adapters
 
