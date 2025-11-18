@@ -1,0 +1,200 @@
+:root {
+  /* Teal-based color palette for cohesive design */
+  --maseval-teal-primary: #14b8a6; /* Main teal */
+  --maseval-teal-light: #2dd4bf; /* Light teal */
+  --maseval-teal-dark: #0f766e; /* Dark teal */
+  --maseval-teal-subtle: #5eead4; /* Very light teal */
+  --maseval-slate: #64748b; /* Neutral slate for secondary elements */
+}
+
+/* Sleeker headings with subtle teal accent */
+.md-typeset h1 {
+  color: var(--maseval-teal-dark);
+  border-bottom: 2px solid var(--maseval-teal-primary);
+  padding-bottom: 0.3rem;
+}
+
+.md-typeset h2 {
+  color: var(--maseval-teal-primary);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--maseval-teal-primary) 30%, transparent);
+  padding-bottom: 0.25rem;
+}
+
+.md-typeset h3,
+.md-typeset h4 {
+  color: var(--maseval-slate);
+}
+
+/* Class/function headings in mkdocstrings - more compact */
+.doc .doc-heading {
+  background: none;
+  background-clip: initial;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: initial;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--maseval-teal-primary) 25%, transparent);
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}
+
+/* Make the object name (like class names) more prominent */
+.doc .doc-object-name,
+.doc .doc-class-name {
+  font-weight: 700;
+  color: var(--maseval-teal-dark);
+  font-size: 1.15rem;
+}
+
+/* Cleaner label chips with teal theme */
+.doc-label {
+  border-radius: 8px;
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  background-color: color-mix(
+    in srgb,
+    var(--maseval-teal-primary) 12%,
+    transparent
+  );
+  color: var(--maseval-teal-dark);
+  border: 1px solid
+    color-mix(in srgb, var(--maseval-teal-primary) 20%, transparent);
+}
+
+/* Reduce spacing between top-level classes for more compact layout */
+.doc-contents.first > .doc-children > .doc-object.doc-class {
+  margin-top: 2rem !important;
+  margin-bottom: 2rem !important;
+  padding-top: 1rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--maseval-teal-primary) 20%, transparent);
+}
+/* Fallback: also apply when not a direct child relationship (defensive) */
+.doc-contents.first .doc-children .doc-object.doc-class {
+  margin-top: 2rem !important;
+  margin-bottom: 2rem !important;
+}
+
+/* Ensure consecutive classes have reasonable spacing */
+.doc-contents.first
+  > .doc-children
+  > .doc-object.doc-class
+  + .doc-object.doc-class {
+  margin-top: 2.5rem !important;
+}
+
+/* Top-level functions/modules: compact spacing */
+.doc-contents.first > .doc-children > .doc-object.doc-function,
+.doc-contents.first > .doc-children > .doc-object.doc-module {
+  margin-top: 1rem !important;
+  margin-bottom: 1rem !important;
+  padding-top: 0.4rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--maseval-teal-light) 15%, transparent);
+}
+
+/* Inside a class, keep methods compact and close to the class heading */
+.doc-object.doc-class .doc-children > .doc-object.doc-method,
+.doc-object.doc-class .doc-children > .doc-object.doc-function,
+.doc-object.doc-class .doc-children > .doc-object.doc-attribute {
+  margin-top: 0.4rem !important;
+  margin-bottom: 0.4rem !important;
+  padding-top: 0.2rem;
+  border-top: none !important;
+}
+
+/* Smaller signature font in code boxes */
+.doc-signature pre code {
+  font-size: 0.825rem !important;
+  line-height: 1.4;
+}
+
+/* Improve list-style of arguments for readability */
+.doc-parameters ul,
+.doc-other-parameters ul {
+  list-style: disc;
+  margin-left: 1rem;
+  margin-top: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+
+/* Increase font size in parameter tables/details */
+.doc-parameters,
+.doc-other-parameters,
+.doc-returns,
+.doc-raises {
+  font-size: 0.85rem !important;
+}
+
+/* Unified font size for all code elements */
+.md-typeset code {
+  font-size: 0.85rem !important;
+}
+
+.md-typeset pre code {
+  font-size: 0.85rem !important;
+}
+
+/* Subtle teal-themed code background */
+.md-typeset code:not(.doc-symbol-heading) {
+  background: color-mix(in srgb, var(--maseval-teal-primary) 8%, transparent);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  color: var(--maseval-teal-dark);
+  border: 1px solid
+    color-mix(in srgb, var(--maseval-teal-primary) 15%, transparent);
+}
+
+/* Normalize font size in example code blocks */
+.doc-contents .highlight pre,
+.doc-contents .highlight code,
+.doc-contents pre code {
+  font-size: 0.85rem !important;
+}
+
+/* Normalize text size in docstring content - examples, descriptions */
+.doc-contents .md-typeset,
+.doc-contents p,
+.doc-contents li {
+  font-size: 0.85rem !important;
+}
+
+/* Ensure admonitions (note, warning boxes) have unified text size */
+.doc-contents .admonition {
+  font-size: 0.85rem !important;
+}
+
+/* More compact vertical rhythm in docstrings */
+.doc-contents .md-typeset p {
+  margin: 0.4rem 0;
+}
+
+.doc-contents .md-typeset ul,
+.doc-contents .md-typeset ol {
+  margin: 0.4rem 0 0.4rem 1rem;
+}
+
+/* Compact spacing for parameter descriptions */
+.doc-parameters .doc-parameter-list,
+.doc-other-parameters .doc-parameter-list {
+  margin-top: 0.3rem;
+}
+
+/* Reduce section heading size in docstrings */
+.doc-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--maseval-teal-primary);
+  margin-top: 0.8rem;
+  margin-bottom: 0.3rem;
+}
+
+/* Increase vertical rhythm in content */
+.md-typeset p {
+  margin: 0.6rem 0;
+}
+.md-typeset ul,
+.md-typeset ol {
+  margin: 0.6rem 0 0.6rem 1.2rem;
+}

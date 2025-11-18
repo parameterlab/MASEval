@@ -2212,8 +2212,8 @@ wheels = [
 ]
 
 [[package]]
-name = "masbench"
-version = "0.1.0"
+name = "maseval"
+version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "gitpython" },
