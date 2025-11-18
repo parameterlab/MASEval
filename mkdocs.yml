@@ -1,0 +1,86 @@
+site_name: LLM-Based Multi-Agent System Benchmark
+site_description: "System-level multi-agent benchmarks"
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  logo: assets/logo_short.svg
+  palette:
+    primary: teal
+    accent: teal
+  features:
+    - navigation.sections
+    - content.code.copy
+extra_css:
+  - css/mkdocstrings.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - mkdocs-jupyter:
+      include_source: True
+      execute: False
+  - mkdocstrings:
+      handlers:
+        python:
+          # rendering:
+          #   show_root_full_path: true
+          #   show_root_heading: true
+          show_source: false
+          options:
+            # Render Google-style docstrings and show sections as lists instead of tables
+            # docstring_style: google
+            docstring_section_style: spacy
+            # Show type annotations in signatures inline with the heading
+            show_signature: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+            separate_signature: true
+            # Keep type paths brief in signatures
+            annotations_path: brief
+            show_root_full_path: true
+            show_root_heading: true
+            type_parameter_headings: true
+            show_source: false
+            # Hide private members (methods/attributes starting with _)
+            show_private: false
+
+nav:
+  - Getting Started:
+      - Home: index.md
+      - Quickstart: getting-started/quickstart.md
+      - FAQ: getting-started/faq.md
+  - Guides:
+      - Message Tracing: guides/message-tracing.md
+  - Examples:
+      - Example 1: examples/example1.md
+      - Example 2: examples/example2.md
+      - AWS Collaboration Benchmark: examples/amazon_collab.ipynb
+  - Reference:
+      - Core:
+          - Agent: reference/agent.md
+          - Benchmark: reference/benchmark.md
+          - Callback: reference/callback.md
+          - Environment: reference/environment.md
+          - Evaluator: reference/evaluator.md
+          - History: reference/history.md
+          - Model: reference/model.md
+          - Simulator: reference/simulator.md
+          - Task: reference/task.md
+          - User: reference/user.md
+      - Interface:
+          - Agents:
+              - SmolAgents: interface/agents/smolagents.md
+              # - LangGraph: interface/agents/langgraph.md
+          - Models:
+              - OpenAI: interface/inference/openai.md
+              - HuggingFace: interface/inference/huggingface.md
+              - Google GenAI: interface/inference/google_genai.md
+      - Benchmarks:
+          - GAIA: benchmarks/gaia.md
+          - AgentBench: benchmarks/agentbench.md
