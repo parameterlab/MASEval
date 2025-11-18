@@ -834,7 +834,7 @@ class Benchmark(ABC):
         """
         pass
 
-    def run(self, tasks: Union[Task, TaskCollection, Iterable[Union[Task, dict]]]):
+    def run(self, tasks: Union[Task, TaskCollection, Iterable[Union[Task, dict]]]) -> List[Dict[str, Any]]:
         """Initialize and execute the complete benchmark loop across all tasks.
 
         Args:

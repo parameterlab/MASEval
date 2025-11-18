@@ -47,8 +47,10 @@ plugins:
             show_root_heading: true
             type_parameter_headings: true
             show_source: false
+
             # Hide private members (methods/attributes starting with _)
-            show_private: false
+            extra:
+              show_private: false
 
 nav:
   - Getting Started:
