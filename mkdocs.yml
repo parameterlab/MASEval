@@ -60,7 +60,7 @@ nav:
   - Examples:
       - Example 1: examples/example1.md
       - Example 2: examples/example2.md
-      - AWS Collaboration Benchmark: examples/amazon_collab.ipynb
+      # - AWS Collaboration Benchmark: examples/amazon_collab.ipynb
   - Reference:
       - Core:
           - Agent: reference/agent.md
@@ -76,7 +76,7 @@ nav:
       - Interface:
           - Agents:
               - SmolAgents: interface/agents/smolagents.md
-              # - LangGraph: interface/agents/langgraph.md
+              - LangGraph: interface/agents/langgraph.md
           - Models:
               - OpenAI: interface/inference/openai.md
               - HuggingFace: interface/inference/huggingface.md
