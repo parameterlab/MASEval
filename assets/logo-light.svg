@@ -8,6 +8,6 @@
     </defs>
     <!-- Bold, gradient "MAS" text -->
     <text x="10" y="70" font-family="Roboto, sans-serif" font-size="72" font-weight="900" fill="url(#wildGrad2)">MAS</text>
-    <!-- Thin, black "Bench" text -->
-    <text x="175" y="70" font-family="Roboto, sans-serif" font-size="72" font-weight="100" fill="#000000">Bench</text>
+    <!-- Thin, black "Eval" text -->
+    <text x="175" y="70" font-family="Roboto, sans-serif" font-size="72" font-weight="100" fill="#000000">Eval</text>
 </svg>
