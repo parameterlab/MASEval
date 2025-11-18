@@ -81,6 +81,6 @@ nav:
               - OpenAI: interface/inference/openai.md
               - HuggingFace: interface/inference/huggingface.md
               - Google GenAI: interface/inference/google_genai.md
-      - Benchmarks:
-          - GAIA: benchmarks/gaia.md
-          - AgentBench: benchmarks/agentbench.md
+      # - Benchmarks:
+      # - GAIA: benchmarks/gaia.md
+      # - AgentBench: benchmarks/agentbench.md

@@ -1,3 +1,0 @@
-# GAIA
-
-::: maseval.benchmarks.gaia
