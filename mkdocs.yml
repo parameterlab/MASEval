@@ -28,10 +28,6 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          # rendering:
-          #   show_root_full_path: true
-          #   show_root_heading: true
-          show_source: false
           options:
             # Render Google-style docstrings and show sections as lists instead of tables
             # docstring_style: google
