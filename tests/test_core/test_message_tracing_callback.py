@@ -14,10 +14,10 @@ from maseval.core.history import MessageHistory
 from conftest import DummyAgent
 
 
-class TestAgentAdapter(AgentAdapter):
-    """Test wrapper implementation that populates message history for testing.
+class TracingTestAgentAdapter(AgentAdapter):
+    """Test adapter implementation that populates message history for testing.
 
-    This wrapper simulates realistic agent behavior by creating proper message
+    This adapter simulates realistic agent behavior by creating proper message
     histories with user queries, assistant responses, and optional tool calls.
     """
 
@@ -76,10 +76,10 @@ class TestMessageTracingCallback:
         """
         callback = MessageTracingAgentCallback()
         agent = DummyAgent()
-        wrapper = TestAgentAdapter(agent, name="test_agent", callbacks=[callback])
+        agent_adapter = TracingTestAgentAdapter(agent, name="test_agent", callbacks=[callback])
 
-        # Run query
-        wrapper.run("Test query")
+        # Run agent - should trigger callbacks
+        agent_adapter.run("Test query")
 
         # Check traced conversation
         conversations = callback.get_all_conversations()
@@ -101,12 +101,11 @@ class TestMessageTracingCallback:
         """
         callback = MessageTracingAgentCallback()
         agent = DummyAgent()
-        wrapper = TestAgentAdapter(agent, name="agent1", callbacks=[callback])
+        agent_adapter = TracingTestAgentAdapter(agent, name="agent1", callbacks=[callback])
 
-        # Run multiple queries
         queries = ["Query 1", "Query 2", "Query 3"]
         for query in queries:
-            wrapper.run(query)
+            agent_adapter.run(query)
 
         # Check all conversations traced
         conversations = callback.get_all_conversations()
@@ -124,9 +123,9 @@ class TestMessageTracingCallback:
         """
         callback = MessageTracingAgentCallback(include_metadata=True)
         agent = DummyAgent()
-        wrapper = TestAgentAdapter(agent, name="agent", callbacks=[callback])
+        agent_adapter = TracingTestAgentAdapter(agent, name="agent", callbacks=[callback])
 
-        wrapper.run("Test query with tool")
+        agent_adapter.run("Test query with tool")
 
         conv = callback.get_all_conversations()[0]
         assert "metadata" in conv
@@ -143,9 +142,9 @@ class TestMessageTracingCallback:
         """
         callback = MessageTracingAgentCallback(include_metadata=False)
         agent = DummyAgent()
-        wrapper = TestAgentAdapter(agent, name="agent", callbacks=[callback])
+        agent_adapter = TracingTestAgentAdapter(agent, name="agent", callbacks=[callback])
 
-        wrapper.run("Test query")
+        agent_adapter.run("Test query")
 
         conv = callback.get_all_conversations()[0]
         assert "metadata" not in conv
@@ -164,15 +163,15 @@ class TestMessageTracingCallback:
 
         # Create two agents
         agent1 = DummyAgent()
-        wrapper1 = TestAgentAdapter(agent1, name="agent1", callbacks=[callback])
+        adapter1 = TracingTestAgentAdapter(agent1, name="agent1", callbacks=[callback])
 
         agent2 = DummyAgent()
-        wrapper2 = TestAgentAdapter(agent2, name="agent2", callbacks=[callback])
+        adapter2 = TracingTestAgentAdapter(agent2, name="agent2", callbacks=[callback])
 
-        # Run queries on both
-        wrapper1.run("Query for agent1")
-        wrapper2.run("Query for agent2")
-        wrapper1.run("Another query for agent1")
+        # Run both agents
+        adapter1.run("Query for agent1")
+        adapter2.run("Query for agent2")
+        adapter1.run("Another query for agent1")
 
         # Check all conversations traced
         conversations = callback.get_all_conversations()
@@ -193,11 +192,11 @@ class TestMessageTracingCallback:
         """
         callback = MessageTracingAgentCallback()
         agent = DummyAgent()
-        wrapper = TestAgentAdapter(agent, name="test_agent", callbacks=[callback])
+        agent_adapter = TracingTestAgentAdapter(agent, name="test_agent", callbacks=[callback])
 
-        # Run queries
-        wrapper.run("Query 1")
-        wrapper.run("Query 2 with tool")
+        # Run multiple times
+        agent_adapter.run("Query 1")
+        agent_adapter.run("Query 2 with tool")
 
         stats = callback.get_statistics()
 
@@ -218,11 +217,11 @@ class TestMessageTracingCallback:
         """
         callback = MessageTracingAgentCallback()
         agent = DummyAgent()
-        wrapper = TestAgentAdapter(agent, name="agent", callbacks=[callback])
+        agent_adapter = TracingTestAgentAdapter(agent, name="agent", callbacks=[callback])
 
         # Trace some conversations
-        wrapper.run("Query 1")
-        wrapper.run("Query 2")
+        agent_adapter.run("Query 1")
+        agent_adapter.run("Query 2")
         assert len(callback.get_all_conversations()) == 2
 
         # Clear
@@ -238,10 +237,10 @@ class TestMessageTracingCallback:
         """
         callback = MessageTracingAgentCallback()
         agent = DummyAgent()
-        wrapper = TestAgentAdapter(agent, name="agent", callbacks=[callback])
+        agent_adapter = TracingTestAgentAdapter(agent, name="agent", callbacks=[callback])
 
         # Run query that triggers tool call
-        wrapper.run("Query with tool")
+        agent_adapter.run("Query with tool")
 
         conv = callback.get_all_conversations()[0]
 
@@ -261,17 +260,19 @@ class TestMessageTracingCallback:
         Verifies that callback creates valid conversation records even when
         agent adapters return empty histories (edge case for minimal agents).
         """
-
-        class NoHistoryWrapper(AgentAdapter):
-            def _run_agent(self, query: str) -> MessageHistory:
-                # Don't populate history
-                return MessageHistory()
-
         callback = MessageTracingAgentCallback()
         agent = DummyAgent()
-        wrapper = NoHistoryWrapper(agent, name="agent", callbacks=[callback])
 
-        wrapper.run("Test")
+        class NoHistoryAdapter(AgentAdapter):
+            def get_messages(self):
+                return MessageHistory()
+
+            def _run_agent(self, query: str):
+                return MessageHistory()
+
+        agent_adapter = NoHistoryAdapter(agent, name="agent", callbacks=[callback])
+
+        agent_adapter.run("Test")
 
         # Should still trace, but with empty messages
         conversations = callback.get_all_conversations()

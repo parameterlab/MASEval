@@ -150,7 +150,7 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
         from maseval import AgentAdapter
 
-        class FailingConfigWrapper(AgentAdapter):
+        class FailingConfigAdapter(AgentAdapter):
             def _run_agent(self, query: str) -> str:
                 return "success"
 
@@ -163,8 +163,8 @@ class TestConfigCollection:
                 from conftest import DummyAgent
 
                 agent = DummyAgent()
-                wrapper = FailingConfigWrapper(agent, "failing_agent")
-                return [wrapper], {"failing_agent": wrapper}  # type: ignore[return-value]
+                agent_adapter = FailingConfigAdapter(agent, "failing_agent")
+                return [agent_adapter], {"failing_agent": agent_adapter}  # type: ignore[return-value]
 
         tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})

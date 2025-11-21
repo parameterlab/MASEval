@@ -13,7 +13,7 @@ pytest.importorskip("smolagents")
 pytestmark = [pytest.mark.interface, pytest.mark.smolagents]
 
 
-def test_smolagents_wrapper_import():
+def test_smolagents_adapter_import():
     """Test that SmolAgentAdapter can be imported when smolagents is installed."""
     from maseval.interface.agents.smolagents import SmolAgentAdapter, SmolAgentUser
 
@@ -37,15 +37,15 @@ def test_check_smolagents_installed_function():
     _check_smolagents_installed()
 
 
-def test_smolagents_wrapper_creation():
+def test_smolagents_adapter_creation():
     """Test that SmolAgentAdapter can be created."""
     from maseval.interface.agents.smolagents import SmolAgentAdapter
 
-    # Create wrapper with mock agent
-    wrapper = SmolAgentAdapter(agent_instance=object(), name="test_agent")
+    # Create adapter with mock agent
+    agent_adapter = SmolAgentAdapter(agent_instance=object(), name="test_agent")
 
-    assert wrapper.name == "test_agent"
-    assert wrapper.agent is not None
+    assert agent_adapter.name == "test_agent"
+    assert agent_adapter.agent is not None
 
 
 def test_smolagents_user_creation():
@@ -67,7 +67,7 @@ def test_smolagents_user_creation():
     assert user.name == "test_user"
 
 
-def test_smolagents_wrapper_gather_traces_with_monitoring():
+def test_smolagents_adapter_gather_traces_with_monitoring():
     """Test that SmolAgentAdapter.gather_traces() captures token and timing data."""
     from maseval.interface.agents.smolagents import SmolAgentAdapter
     from smolagents.memory import ActionStep, AgentMemory
@@ -107,11 +107,11 @@ def test_smolagents_wrapper_gather_traces_with_monitoring():
     # Mock write_memory_to_messages to return empty list (we're testing gather_traces, not get_messages)
     mock_agent.write_memory_to_messages = Mock(return_value=[])
 
-    # Create wrapper
-    wrapper = SmolAgentAdapter(agent_instance=mock_agent, name="test_agent")
+    # Create adapter
+    agent_adapter = SmolAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     # Call gather_traces
-    traces = wrapper.gather_traces()
+    traces = agent_adapter.gather_traces()
 
     # Verify aggregated statistics
     assert "total_steps" in traces
@@ -154,7 +154,7 @@ def test_smolagents_wrapper_gather_traces_with_monitoring():
     assert step2_detail["action_output"] == "Output from step 2"
 
 
-def test_smolagents_wrapper_gather_traces_without_monitoring():
+def test_smolagents_adapter_gather_traces_without_monitoring():
     """Test that gather_traces works when agent has no monitoring data."""
     from maseval.interface.agents.smolagents import SmolAgentAdapter
     from smolagents.memory import AgentMemory
@@ -165,11 +165,11 @@ def test_smolagents_wrapper_gather_traces_without_monitoring():
     mock_agent.memory = AgentMemory(system_prompt="Test system prompt")
     mock_agent.write_memory_to_messages = Mock(return_value=[])
 
-    # Create wrapper
-    wrapper = SmolAgentAdapter(agent_instance=mock_agent, name="test_agent")
+    # Create adapter
+    agent_adapter = SmolAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     # Call gather_traces
-    traces = wrapper.gather_traces()
+    traces = agent_adapter.gather_traces()
 
     # Verify aggregated statistics show zero usage
     assert "total_steps" in traces
@@ -191,7 +191,7 @@ def test_smolagents_wrapper_gather_traces_without_monitoring():
     assert len(traces["steps_detail"]) == 0
 
 
-def test_smolagents_wrapper_gather_traces_with_planning_step():
+def test_smolagents_adapter_gather_traces_with_planning_step():
     """Test that gather_traces captures PlanningStep data correctly."""
     from maseval.interface.agents.smolagents import SmolAgentAdapter
     from smolagents.memory import PlanningStep, AgentMemory
@@ -218,11 +218,11 @@ def test_smolagents_wrapper_gather_traces_with_planning_step():
     # Mock write_memory_to_messages
     mock_agent.write_memory_to_messages = Mock(return_value=[])
 
-    # Create wrapper
-    wrapper = SmolAgentAdapter(agent_instance=mock_agent, name="test_agent")
+    # Create adapter
+    agent_adapter = SmolAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     # Call gather_traces
-    traces = wrapper.gather_traces()
+    traces = agent_adapter.gather_traces()
 
     # Verify aggregated statistics
     assert traces["total_steps"] == 1
@@ -245,14 +245,12 @@ def test_smolagents_wrapper_gather_traces_with_planning_step():
     assert "observations" not in step_detail
 
 
-def test_smolagents_wrapper_message_manipulation_not_supported():
-    """Test that smolagents explicitly raises NotImplementedError for message manipulation.
+def test_smolagents_adapter_message_manipulation_not_supported():
+    """
+    Test that message manipulation methods raise NotImplementedError.
 
-    smolagents builds its AgentMemory from execution steps and does not support
-    arbitrary message injection. The wrapper should raise clear NotImplementedError
-    for set_message_history and append_to_message_history operations.
-
-    Only clear_message_history is supported (resets memory with system prompt).
+    Smolagents maintains its own internal message state and doesn't support
+    arbitrary message injection. The adapter should raise clear NotImplementedError
     """
     from maseval.interface.agents.smolagents import SmolAgentAdapter
     from maseval import MessageHistory
@@ -262,11 +260,11 @@ def test_smolagents_wrapper_message_manipulation_not_supported():
     # Create a smolagents agent
     mock_model = FakeSmolagentsModel(["Test response"])
     agent = CodeAgent(tools=[], model=mock_model, max_steps=1)
-    wrapper = SmolAgentAdapter(agent_instance=agent, name="test_agent")
+    agent_adapter = SmolAgentAdapter(agent_instance=agent, name="test_agent")
 
     # Test that append_to_message_history raises NotImplementedError
     with pytest.raises(NotImplementedError) as exc_info:
-        wrapper.append_to_message_history("user", "Manual message")
+        agent_adapter.append_to_message_history("user", "Manual message")
 
     assert "doesn't support appending" in str(exc_info.value)
     assert "memory is built from execution steps" in str(exc_info.value)
@@ -275,13 +273,13 @@ def test_smolagents_wrapper_message_manipulation_not_supported():
     with pytest.raises(NotImplementedError) as exc_info:
         new_history = MessageHistory()
         new_history.add_message("user", "Test message")
-        wrapper.set_message_history(new_history)
+        agent_adapter.set_message_history(new_history)
 
     assert "doesn't support setting" in str(exc_info.value)
     assert "memory is built from execution steps" in str(exc_info.value)
 
 
-def test_smolagents_wrapper_clear_message_history_supported():
+def test_smolagents_adapter_clear_message_history_supported():
     """Test that smolagents supports clear_message_history.
 
     clear_message_history is the only history manipulation operation
@@ -295,20 +293,20 @@ def test_smolagents_wrapper_clear_message_history_supported():
     # Create a smolagents agent
     mock_model = FakeSmolagentsModel(["Test response"])
     agent = CodeAgent(tools=[], model=mock_model, max_steps=1)
-    wrapper = SmolAgentAdapter(agent_instance=agent, name="test_agent")
+    agent_adapter = SmolAgentAdapter(agent_instance=agent, name="test_agent")
 
     # Run the agent to populate memory
-    wrapper.run("Test query")
+    agent_adapter.run("Test query")
 
     # Verify memory has content (should have multiple messages after run)
-    messages_before = wrapper.get_messages()
+    messages_before = agent_adapter.get_messages()
     assert len(messages_before) > 1  # At least system + user messages
 
     # Clear the memory
-    wrapper.clear_message_history()
+    agent_adapter.clear_message_history()
 
     # Verify memory is reset (only system message remains)
-    messages_after = wrapper.get_messages()
+    messages_after = agent_adapter.get_messages()
     assert len(messages_after) == 1
     assert messages_after[0]["role"] == "system"
     # System prompt content is framework-specific, just verify it exists and has content
@@ -423,6 +421,7 @@ def test_smolagents_adapter_logs_property():
 def test_smolagents_adapter_logs_with_errors():
     """Test that adapter.logs captures error information from failed steps."""
     from maseval.interface.agents.smolagents import SmolAgentAdapter
+    from smolagents import AgentError
     from smolagents.memory import ActionStep, AgentMemory
     from smolagents.monitoring import Timing
     from unittest.mock import Mock
@@ -439,7 +438,9 @@ def test_smolagents_adapter_logs_with_errors():
         timing=Timing(start_time=start_time, end_time=start_time + 0.2),
         observations_images=[],
     )
-    step.error = "Tool execution failed: Connection timeout"
+    # Create a proper AgentError object with mock logger
+    mock_logger = Mock()
+    step.error = AgentError("Tool execution failed: Connection timeout", logger=mock_logger)
     mock_agent.memory.steps.append(step)
 
     # Mock write_memory_to_messages

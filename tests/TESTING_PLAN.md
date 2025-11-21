@@ -393,7 +393,7 @@ Test files:
 
 **Smolagents (10 tests):**
 
-- Wrapper/user creation and import guards
+- Adapter creation and import guards
 - Trace gathering with/without monitoring
 - Trace gathering with planning steps
 - Message manipulation support (not supported)
@@ -401,7 +401,7 @@ Test files:
 
 **LangGraph (5 tests):**
 
-- Wrapper import and availability checks
+- Adapter import and availability checks
 - Message manipulation with/without system messages
 
 **Why:** Validates framework-specific adapters work correctly with their respective libraries and handle framework-specific features properly.
@@ -421,7 +421,7 @@ Test files:
 
 **Thread Safety and Concurrency:**
 
-- `test_wrapper_concurrent_runs()` - Multiple threads calling run() simultaneously
+- `test_adapter_concurrent_runs()` - Multiple threads calling run() simultaneously
 - `test_trace_collection_thread_safety()` - Trace accumulation in concurrent execution
 - `test_callback_thread_safety()` - Callbacks triggered from multiple threads
 

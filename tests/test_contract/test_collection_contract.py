@@ -355,12 +355,12 @@ class TestCrossFrameworkTracingConsistency:
 
         # All agents must have these fields (AgentAdapter contract)
         assert "agent_type" in config, "Missing 'agent_type' field"
-        assert "wrapper_type" in config, "Missing 'wrapper_type' field"
+        assert "adapter_type" in config, "Missing 'adapter_type' field"
         assert "callbacks" in config, "Missing 'callbacks' field"
 
         # Verify types
         assert isinstance(config["agent_type"], str)
-        assert isinstance(config["wrapper_type"], str)
+        assert isinstance(config["adapter_type"], str)
         assert isinstance(config["callbacks"], list)
 
     def test_all_frameworks_have_json_serializable_traces(self, framework):

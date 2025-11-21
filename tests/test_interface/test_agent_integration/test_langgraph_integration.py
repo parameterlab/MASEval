@@ -69,13 +69,13 @@ def test_langgraph_adapter_message_manipulation():
     graph.add_edge("agent", END)
     compiled = graph.compile()
 
-    wrapper = LangGraphAgentAdapter(agent_instance=compiled, name="test_agent")
+    agent_adapter = LangGraphAgentAdapter(agent_instance=compiled, name="test_agent")
 
     # Test append_to_message_history
-    wrapper.append_to_message_history("user", "First message")
-    wrapper.append_to_message_history("assistant", "First response")
+    agent_adapter.append_to_message_history("user", "First message")
+    agent_adapter.append_to_message_history("assistant", "First response")
 
-    history = wrapper.get_messages()
+    history = agent_adapter.get_messages()
     assert len(history) == 2
     assert history[0]["role"] == "user"
     assert history[0]["content"] == "First message"
@@ -83,8 +83,8 @@ def test_langgraph_adapter_message_manipulation():
     assert history[1]["content"] == "First response"
 
     # Test clear_message_history
-    wrapper.clear_message_history()
-    history = wrapper.get_messages()
+    agent_adapter.clear_message_history()
+    history = agent_adapter.get_messages()
     assert len(history) == 0
 
     # Test set_message_history
@@ -93,15 +93,15 @@ def test_langgraph_adapter_message_manipulation():
     new_history.add_message("assistant", "Set response 1")
     new_history.add_message("user", "Set message 2")
 
-    wrapper.set_message_history(new_history)
-    history = wrapper.get_messages()
+    agent_adapter.set_message_history(new_history)
+    history = agent_adapter.get_messages()
     assert len(history) == 3
     assert history[0]["content"] == "Set message 1"
     assert history[1]["content"] == "Set response 1"
     assert history[2]["content"] == "Set message 2"
 
     # Verify history persists across multiple retrievals
-    history_again = wrapper.get_messages()
+    history_again = agent_adapter.get_messages()
     assert len(history_again) == 3
     assert history_again[0]["content"] == "Set message 1"
 
@@ -133,22 +133,21 @@ def test_langgraph_adapter_message_manipulation_with_system_message():
     graph.add_edge("agent", END)
     compiled = graph.compile()
 
-    wrapper = LangGraphAgentAdapter(agent_instance=compiled, name="test_agent")
+    agent_adapter = LangGraphAgentAdapter(agent_instance=compiled, name="test_agent")
 
-    # Test set_message_history with system message
+    # Create a history with a system message
     new_history = MessageHistory()
-    new_history.add_message("system", "You are a helpful assistant")
-    new_history.add_message("user", "Hello")
-    new_history.add_message("assistant", "Hi there")
+    new_history.add_message("system", "You are a helpful assistant.")
+    new_history.add_message("user", "Hello!")
 
-    wrapper.set_message_history(new_history)
-    history = wrapper.get_messages()
+    agent_adapter.set_message_history(new_history)
+    history = agent_adapter.get_messages()
 
-    assert len(history) == 3
+    assert len(history) == 2
     assert history[0]["role"] == "system"
-    assert history[0]["content"] == "You are a helpful assistant"
+    assert history[0]["content"] == "You are a helpful assistant."
     assert history[1]["role"] == "user"
-    assert history[2]["role"] == "assistant"
+    assert history[1]["content"] == "Hello!"
 
 
 def test_langgraph_adapter_logs_after_run():

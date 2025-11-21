@@ -31,7 +31,7 @@ class SmolAgentAdapter(AgentAdapter):
 
     Requires smolagents to be installed.
 
-    This wrapper converts smolagents' internal message format to MASEval's
+    This adapter converts smolagents' internal message format to MASEval's
     OpenAI-compatible MessageHistory format. It automatically tracks tool calls,
     tool responses, and agent reasoning.
 
@@ -41,11 +41,11 @@ class SmolAgentAdapter(AgentAdapter):
         from smolagents import MultiStepAgent
 
         agent = MultiStepAgent(...)
-        wrapper = SmolAgentAdapter(agent)
-        result = wrapper.run("What's the weather?")
+        agent_adapter = SmolAgentAdapter(agent)
+        result = agent_adapter.run("What's the weather?")
 
         # Access message history
-        for msg in wrapper.get_messages():
+        for msg in agent_adapter.get_messages():
             print(msg['role'], msg['content'])
         ```
     """
@@ -290,7 +290,7 @@ class SmolAgentAdapter(AgentAdapter):
             - gathered_at: ISO timestamp
             - name: Agent name
             - agent_type: Underlying agent class name
-            - wrapper_type: SmolAgentAdapter
+            - adapter_type: SmolAgentAdapter
             - callbacks: List of callback class names
             - smolagents_config: Full configuration from agent.to_dict() including:
                 - model: Model configuration with class and parameters

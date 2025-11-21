@@ -86,8 +86,8 @@ class TestTraceCollection:
                 from conftest import DummyAgent
 
                 agent = DummyAgent()
-                wrapper = FailingAgentAdapter(agent, "failing_agent")
-                return [wrapper], {"failing_agent": wrapper}  # type: ignore[return-value]
+                agent_adapter = FailingAgentAdapter(agent, "failing_agent")
+                return [agent_adapter], {"failing_agent": agent_adapter}  # type: ignore[return-value]
 
         tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})
@@ -125,10 +125,10 @@ class TestTraceCollection:
                 from conftest import DummyAgent
 
                 agent = DummyAgent()
-                wrapper = ModelUsingAgentAdapter(agent, "test_agent", model)
+                agent_adapter = ModelUsingAgentAdapter(agent, "test_agent", model)
                 # Manually register the model
                 self.register("models", "test_model", model)
-                return [wrapper], {"test_agent": wrapper}  # type: ignore[return-value]
+                return [agent_adapter], {"test_agent": agent_adapter}  # type: ignore[return-value]
 
         tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})

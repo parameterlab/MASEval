@@ -215,8 +215,8 @@ class DummyBenchmark(Benchmark):
     ) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
         self.setup_agents_calls.append((agent_data, environment, task, user))
         agent = DummyAgent()
-        wrapper = DummyAgentAdapter(agent, "test_agent")
-        return [wrapper], {"test_agent": wrapper}
+        agent_adapter = DummyAgentAdapter(agent, "test_agent")
+        return [agent_adapter], {"test_agent": agent_adapter}
 
     def setup_evaluators(
         self, environment: Environment, task: Task, agents: Sequence[AgentAdapter], user: Optional[User]

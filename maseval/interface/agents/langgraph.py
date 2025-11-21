@@ -6,7 +6,7 @@ This module requires langgraph to be installed:
 
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict
 
 from maseval import AgentAdapter, MessageHistory, User
 
@@ -34,13 +34,13 @@ class LangGraphAgentAdapter(AgentAdapter):
 
     Requires langgraph to be installed.
 
-    This wrapper converts LangChain/LangGraph message types to MASEval's
+    This adapter converts LangChain/LangGraph message types to MASEval's
     OpenAI-compatible MessageHistory format. It preserves tool calls, tool
     responses, and multi-modal content.
 
     LangGraph graphs can be stateless or stateful (with checkpointer). This
-    wrapper supports both modes:
-    - Stateless: Messages from invoke() result are cached in wrapper
+    adapter supports both modes:
+    - Stateless: Messages from invoke() result are cached in adapter
     - Stateful: Messages fetched from graph state if config/thread_id provided
 
     Example:
@@ -52,17 +52,17 @@ class LangGraphAgentAdapter(AgentAdapter):
         graph = StateGraph(...)
         compiled_graph = graph.compile()
 
-        wrapper = LangGraphAgentAdapter(compiled_graph, "agent_name")
-        result = wrapper.run("What's the weather?")
+        agent_adapter = LangGraphAgentAdapter(compiled_graph, "agent_name")
+        result = agent_adapter.run("What's the weather?")
 
         # Access message history
-        for msg in wrapper.get_messages():
+        for msg in agent_adapter.get_messages():
             print(msg['role'], msg['content'])
         ```
     """
 
     def __init__(self, agent_instance, name: str, callbacks=None, config=None):
-        """Initialize the LangGraph wrapper.
+        """Initialize the LangGraph adapter.
 
         Args:
             agent_instance: Compiled LangGraph graph
@@ -193,7 +193,7 @@ class LangGraphAgentAdapter(AgentAdapter):
             - gathered_at: ISO timestamp
             - name: Agent name
             - agent_type: CompiledGraph or similar
-            - wrapper_type: LangGraphAgentAdapter
+            - adapter_type: LangGraphAgentAdapter
             - callbacks: List of callback class names
             - has_checkpointer: Whether the graph has state persistence
             - config: LangGraph config dict (with sensitive data removed)
@@ -238,8 +238,6 @@ class LangGraphAgentAdapter(AgentAdapter):
         return base_config
 
     def _run_agent(self, query: str) -> Any:
-        import time
-        from datetime import datetime
 
         _check_langgraph_installed()
         from langchain_core.messages import HumanMessage

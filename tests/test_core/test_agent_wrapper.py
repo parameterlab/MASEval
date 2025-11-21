@@ -1,7 +1,7 @@
 """Test AgentAdapter functionality.
 
 These tests verify that AgentAdapter provides the correct interface for
-wrapping agents from any framework.
+adapting agents from any framework.
 """
 
 import pytest
@@ -110,7 +110,7 @@ class TestAgentAdapter:
         assert config["type"] == "DummyAgentAdapter"
 
     def test_agent_adapter_multiple_runs(self, dummy_agent_adapter):
-        """Test that wrapper can be run multiple times."""
+        """Test that adapter can be run multiple times."""
         result1 = dummy_agent_adapter.run("Query 1")
         assert "Query 1" in result1
 
