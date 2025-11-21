@@ -92,19 +92,33 @@ class FakeSmolagentsModel:
 
 
 class DummyAgentAdapter(AgentAdapter):
-    """Test agent wrapper that populates message history."""
+    """Test agent adapter that populates message history."""
 
     def _run_agent(self, query: str) -> str:
-        # Create message history
-        history = MessageHistory()
-        history.add_message(role="user", content=query)
+        import time
+
+        # Track timing
+        start_time = time.time()
 
         # Run underlying agent
         response = self.agent.run(query)
-        history.add_message(role="assistant", content=response)
 
-        # Store history
-        self.set_message_history(history)
+        # Store history directly
+        if self.messages is None:
+            self.messages = MessageHistory()
+        self.messages.add_message(role="user", content=query)
+        self.messages.add_message(role="assistant", content=response)
+
+        # Populate logs to fulfill contract
+        duration = time.time() - start_time
+        self.logs.append(
+            {
+                "query": query,
+                "duration_seconds": duration,
+                "status": "success",
+                "response": response,
+            }
+        )
 
         # Return final answer (not the history)
         return response
@@ -199,8 +213,8 @@ class DummyBenchmark(Benchmark):
     ) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
         self.setup_agents_calls.append((agent_data, environment, task, user))
         agent = DummyAgent()
-        wrapper = DummyAgentAdapter(agent, "test_agent")
-        return [wrapper], {"test_agent": wrapper}
+        agent_adapter = DummyAgentAdapter(agent, "test_agent")
+        return [agent_adapter], {"test_agent": agent_adapter}
 
     def setup_evaluators(
         self, environment: Environment, task: Task, agents: Sequence[AgentAdapter], user: Optional[User]
@@ -240,8 +254,8 @@ def dummy_agent():
 
 
 @pytest.fixture
-def dummy_agent_wrapper(dummy_agent):
-    """Create a dummy agent wrapper."""
+def dummy_agent_adapter(dummy_agent):
+    """Create a dummy agent adapter."""
     return DummyAgentAdapter(dummy_agent, "test_agent")
 
 

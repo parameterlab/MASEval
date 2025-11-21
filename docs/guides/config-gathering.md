@@ -124,8 +124,8 @@ class MyBenchmark(Benchmark):
     def setup_agents(self, agent_data, environment, task, user):
         model = MyModelAdapter(...)
         agent = MyAgent(model=model)
-        wrapper = AgentAdapter(agent, "agent")
-        return [wrapper], {"agent": wrapper}
+        adapter = AgentAdapter(agent, "agent")
+        return [adapter], {"agent": adapter}
     # ... other methods
 
 # Run benchmark

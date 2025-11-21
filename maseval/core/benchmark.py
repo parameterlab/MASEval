@@ -64,8 +64,8 @@ class Benchmark(ABC):
 
                 def setup_agents(self, agent_data, environment, task, user):
                     agent = MyAgent(model=agent_data["model"])
-                    wrapper = AgentAdapter(agent, "agent")
-                    return [wrapper], {"agent": wrapper}
+                    agent_adapter = AgentAdapter(agent, "agent")
+                    return [agent_adapter], {"agent": agent_adapter}
 
                 def run_agents(self, agents, task, environment):
                     return agents[0].run(task.query)
@@ -258,10 +258,10 @@ class Benchmark(ABC):
 
                 # Create agent (auto-registered when returned)
                 agent = MyAgent(model=model)
-                wrapper = AgentAdapter(agent, "agent1")
+                agent_adapter = AgentAdapter(agent, "agent1")
 
                 # Environment and user are also auto-registered
-                return [wrapper], {"agent1": wrapper}
+                return [agent_adapter], {"agent1": agent_adapter}
             ```
 
             Traces and configs are automatically collected before evaluation via
@@ -673,12 +673,12 @@ class Benchmark(ABC):
                     model=model,
                     managed_agents=[w.agent for w in workers.values()]
                 )
-                orchestrator_wrapper = AgentAdapter(orchestrator, "orchestrator")
+                orchestrator_adapter = AgentAdapter(orchestrator, "orchestrator")
 
                 # Return orchestrator to run, but all agents for monitoring
                 # All agents auto-registered for tracing
-                all_agents = {"orchestrator": orchestrator_wrapper, **workers}
-                return [orchestrator_wrapper], all_agents
+                all_agents = {"orchestrator": orchestrator_adapter, **workers}
+                return [orchestrator_adapter], all_agents
             ```
         """
         pass

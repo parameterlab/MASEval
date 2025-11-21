@@ -16,7 +16,7 @@ MASEval provides message tracing to capture agent conversations during benchmark
 
 ## Core Concepts
 
-**`MessageHistory`**: OpenAI-compatible message storage that all agent wrappers use internally.
+**`MessageHistory`**: OpenAI-compatible message storage that all agent adapters use internally.
 
 **`AgentAdapter.get_messages()`**: Standard method to retrieve conversation history from any wrapped agent.
 
@@ -26,17 +26,17 @@ MASEval provides message tracing to capture agent conversations during benchmark
 
 ### Accessing Message History
 
-Every agent wrapper exposes message history through `get_messages()`:
+Every agent adapter exposes message history through `get_messages()`:
 
 ```python
-from maseval.interface.agents import SmolAgentsWrapper
+from maseval.interface.agents import SmolAgentAdapter
 
 # Create and run your agent
-wrapper = SmolAgentsWrapper(agent, name="researcher")
-result = wrapper.run("What's the capital of France?")
+agent_adapter = SmolAgentAdapter(agent, name="researcher")
+result = agent_adapter.run("What's the capital of France?")
 
 # Get the conversation
-messages = wrapper.get_messages()
+messages = agent_adapter.get_messages()
 
 # Inspect messages
 for msg in messages:
@@ -45,17 +45,20 @@ for msg in messages:
         print(f"  Tools called: {[tc['function']['name'] for tc in msg['tool_calls']]}")
 ```
 
-### Clearing History Between Tasks
+### Fresh Conversations for Multiple Tasks
 
-In benchmarks, you typically want to clear history before each new task:
+In benchmarks, you typically want a fresh agent instance for each task:
 
 ```python
 # In your benchmark loop
 for task in benchmark.tasks:
-    wrapper.clear_message_history()  # Reset for new task
-    result = wrapper.run(task.query)
+    # Create a new adapter instance for each task
+    agent_adapter = YourAgentAdapter(agent_instance=agent, name="task_agent")
+    result = agent_adapter.run(task.query)
     evaluate(result, task.ground_truth)
 ```
+
+This ensures each task starts with a clean slate and avoids conversation history contamination.
 
 ## Using the Tracing Callback
 
@@ -68,12 +71,12 @@ from maseval.core.callbacks import MessageTracingAgentCallback
 tracer = MessageTracingAgentCallback()
 
 # Attach to your agent(s)
-wrapper = SmolAgentsWrapper(agent, name="assistant", callbacks=[tracer])
+agent_adapter = SmolAgentAdapter(agent, name="assistant", callbacks=[tracer])
 
 # Run tasks
-wrapper.run("Task 1")
-wrapper.run("Task 2")
-wrapper.run("Task 3")
+agent_adapter.run("Task 1")
+agent_adapter.run("Task 2")
+agent_adapter.run("Task 3")
 
 # Get all conversations
 conversations = tracer.get_all_conversations()
@@ -93,8 +96,8 @@ Share one tracer across multiple agents to collect all conversations:
 tracer = MessageTracingAgentCallback()
 
 # Attach to multiple agents
-agent1 = SmolAgentsWrapper(agent1, name="researcher", callbacks=[tracer])
-agent2 = SmolAgentsWrapper(agent2, name="writer", callbacks=[tracer])
+agent1 = SmolAgentAdapter(agent1, name="researcher", callbacks=[tracer])
+agent2 = SmolAgentAdapter(agent2, name="writer", callbacks=[tracer])
 
 # Run both agents
 agent1.run("Research topic X")
@@ -119,7 +122,7 @@ tracer = MessageTracingAgentCallback()
 
 for batch in task_batches:
     for task in batch:
-        wrapper.run(task.query)
+        agent_adapter.run(task.query)
 
     # Process this batch
     conversations = tracer.get_all_conversations()
@@ -190,9 +193,9 @@ Messages use OpenAI's chat completion format:
 }
 ```
 
-## Custom Agent Wrappers
+## Custom Agent Adapters
 
-If you're implementing a custom wrapper, the framework handles message storage automatically via `get_messages()`. Just ensure your `_run_agent()` method returns a `MessageHistory`:
+If you're implementing a custom adapter, the framework handles message storage automatically via `get_messages()`. Just ensure your `_run_agent()` method returns a `MessageHistory`:
 
 ```python
 from maseval import AgentAdapter, MessageHistory
@@ -211,13 +214,13 @@ class MyAgentAdapter(AgentAdapter):
         return history
 ```
 
-See the [Agent Wrapper guide](../reference/agent.md) for details on implementing custom wrappers.
+See the [AgentAdapter guide](../reference/agent.md) for details on implementing custom adapters.
 
 ## Tips
 
 **For debugging**: Use `verbose=True` to see traces in real-time.
 
-**For benchmarks**: Clear history between tasks with `wrapper.clear_message_history()`.
+**For benchmarks**: Create a new adapter instance for each task to ensure clean conversation history.
 
 **For multi-agent systems**: Use a shared tracer and `get_conversations_by_agent()` to analyze each agent separately.
 

@@ -102,12 +102,12 @@ uv remove <package-name>
 
 **Framework Adapter Pattern:**
 
-When implementing wrappers for external frameworks, **always use the framework's native message storage as the source of truth**:
+When implementing adapters for external frameworks, **always use the framework's native message storage as the source of truth**:
 
 **Pattern 1: Persistent State (smolagents)**
 
 ```python
-class MyFrameworkWrapper(AgentAdapter):
+class MyFrameworkAdapter(AgentAdapter):
     def get_messages(self) -> MessageHistory:
         """Dynamically fetch from framework's internal storage."""
         # Get from framework (e.g., agent.memory, agent.messages)
@@ -236,3 +236,7 @@ For lists and dictionaries, use `Dict[...,...]`, `List[...]`, `Sequence[...]` et
 - DO NOT publicly distribute code or data
 - DO NOT publish without explicit permission
 - DO NOT share copyrighted third-party benchmark data
+
+## Changelog
+
+When the task is completed, add your changes to the Changelog.

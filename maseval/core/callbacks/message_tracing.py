@@ -30,8 +30,8 @@ class MessageTracingAgentCallback(AgentCallback):
         tracer = MessageTracingAgentCallback(include_metadata=True, verbose=True)
 
         # Use with agent
-        wrapper = MyAgentAdapter(agent, name="agent1", callbacks=[tracer])
-        wrapper.run("What's the weather?")
+        agent_adapter = MyAgentAdapter(agent, name="agent1", callbacks=[tracer])
+        agent_adapter.run("What's the weather?")
 
         # Access traced conversations
         for conversation in tracer.get_all_conversations():
@@ -71,7 +71,7 @@ class MessageTracingAgentCallback(AgentCallback):
         """Called when agent execution completes.
 
         Args:
-            agent: The agent wrapper instance
+            agent: The agent adapter instance
             result: The result returned by the agent (usually MessageHistory)
         """
         # Get message history from agent

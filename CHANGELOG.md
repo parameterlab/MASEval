@@ -9,11 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The `logs` property inside `SmolAgentAdapter` and `LanggraphAgentAdapter` are now properly filled. (PR: #3)
+
 ### Changed
 
 ### Fixed
 
+- Consistent naming of agent `adapter` over `wrapper` (PR: #3)
+
 ### Removed
+
+- Removed `set_message_history`, `append_message_history` and `clear_message_history` for `AgentAdapter` and subclasses. (PR: #3)
 
 ## [0.1.2] - 2025-11-18
 

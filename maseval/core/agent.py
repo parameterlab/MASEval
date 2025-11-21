@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Any, Optional, Union, Dict
+from typing import List, Any, Optional, Dict
 
 from .callback import AgentCallback
-from .history import MessageHistory, RoleType
+from .history import MessageHistory
 from .tracing import TraceableMixin
 from .config import ConfigurableMixin
 
@@ -10,7 +10,7 @@ from .config import ConfigurableMixin
 class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
     """Wraps an agent from any framework to provide a standard interface.
 
-    This wrapper provides:
+    This Adapter provides:
     - Unified execution interface via `run()`
     - Callback hooks for monitoring
     - Message history management via getter/setter
@@ -101,35 +101,6 @@ class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
         """
         return self.messages if self.messages is not None else MessageHistory()
 
-    def set_message_history(self, history: MessageHistory) -> None:
-        """Set the message history.
-
-        This is typically called by _run_agent() implementations after executing
-        the agent, but can also be used to inject or modify history.
-
-        Args:
-            history: The MessageHistory to set
-        """
-        self.messages = history
-
-    def clear_message_history(self) -> None:
-        """Clear the message history."""
-        self.messages = None
-
-    def append_to_message_history(self, role: Union[RoleType, str], content: Union[str, List[Any]], **kwargs) -> None:
-        """Append a message to the history.
-
-        If no history exists, creates a new one.
-
-        Args:
-            role: The message role ("user", "assistant", "system", "tool")
-            content: The message content (string or list of content parts)
-            **kwargs: Additional fields (name, metadata, timestamp, etc.)
-        """
-        if self.messages is None:
-            self.messages = MessageHistory()
-        self.messages.add_message(role, content, **kwargs)  # type: ignore
-
     def gather_traces(self) -> dict[str, Any]:
         """Gather execution traces from this agent.
 
@@ -148,7 +119,7 @@ class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
 
         How to use:
             This method is automatically called by Benchmark during trace collection.
-            Framework-specific wrappers can extend this to include additional data:
+            Framework-specific adapters can extend this to include additional data:
 
             ```python
             def gather_traces(self) -> dict[str, Any]:
@@ -181,12 +152,12 @@ class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
             - gathered_at: ISO timestamp
             - name: Agent name
             - agent_type: Underlying agent framework class name
-            - wrapper_type: The specific wrapper class (e.g., SmolAgentAdapter)
+            - adapter_type: The specific adapter class (e.g., SmolAgentAdapter)
             - callbacks: List of callback class names attached to this agent
 
         How to use:
             This method is automatically called by Benchmark during config collection.
-            Framework-specific wrappers can extend this to include additional data:
+            Framework-specific adapters can extend this to include additional data:
 
             ```python
             def gather_config(self) -> dict[str, Any]:
@@ -200,7 +171,7 @@ class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
             **super().gather_config(),
             "name": self.name,
             "agent_type": type(self.agent).__name__,
-            "wrapper_type": type(self).__name__,
+            "adapter_type": type(self).__name__,
             "callbacks": [type(cb).__name__ for cb in self.callbacks],
         }
 

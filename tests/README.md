@@ -101,7 +101,7 @@ Tests are organized into three directories following a **bottom-up and top-down 
 Examples:
 
 - `test_model_adapter.py` - Base `ModelAdapter` class behavior
-- `test_agent_wrapper.py` - Base `AgentAdapter` class behavior
+- `test_agent_adapter.py` - Base `AgentAdapter` class behavior
 - `test_benchmark_lifecycle.py` - Core benchmark orchestration
 
 ### `test_interface/`
@@ -110,7 +110,7 @@ Examples:
 
 Examples:
 
-- `test_agent_integration/` - Framework-specific agent wrappers
+- `test_agent_integration/` - Framework-specific agent adapters
 - `test_model_integration/` - Provider-specific model adapters (OpenAI, Google, HuggingFace, LiteLLM)
 
 ### `test_contract/`
@@ -119,7 +119,7 @@ Examples:
 
 Contract tests use parametrized tests to verify that all implementations (e.g., different framework adapters) behave identically for key operations:
 
-- `test_agent_wrapper_contract.py` - All `AgentAdapter` implementations return same message format, trigger callbacks uniformly
+- `test_agent_adapter_contract.py` - All `AgentAdapter` implementations return same message format, trigger callbacks uniformly
 - `test_model_adapter_contract.py` - All `ModelAdapter` implementations log calls identically, produce same trace/config structure (65+ parameterized tests)
 - `test_collection_contract.py` - All components (Agent, Model, Environment, User) follow same tracing/config contracts
 

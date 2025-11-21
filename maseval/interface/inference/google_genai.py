@@ -44,7 +44,7 @@ class GoogleGenAIModelAdapter(ModelAdapter):
             if "candidates" in response and response["candidates"]:
                 return response["candidates"][0].get("content", "")
             if "output" in response and isinstance(response["output"], list) and response["output"]:
-                # some wrappers return a list of text chunks
+                # some implementations return a list of text chunks
                 first = response["output"][0]
                 if isinstance(first, dict):
                     return first.get("content", "")

@@ -88,12 +88,12 @@ def test_duplicate_registration_helpful_message():
 
     # Create and register an agent
     agent = DummyAgent()
-    wrapper = DummyAgentAdapter(agent, "my_agent")
-    benchmark.register("agents", "first_name", wrapper)
+    agent_adapter = DummyAgentAdapter(agent, "my_agent")
+    benchmark.register("agents", "first_name", agent_adapter)
 
     # Try to register again with different name
     with pytest.raises(ValueError) as exc_info:
-        benchmark.register("agents", "second_name", wrapper)
+        benchmark.register("agents", "second_name", agent_adapter)
 
     error_message = str(exc_info.value)
     assert "already registered as 'agents:first_name'" in error_message

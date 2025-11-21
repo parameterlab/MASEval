@@ -318,8 +318,8 @@ class TestFailureSafeExecution:
         class TaskFailureBenchmark(DummyBenchmark):
             def setup_agents(self, agent_data, environment, task, user):
                 agent = FailingAgent()
-                wrapper = FailingAgentAdapter(agent, "failing_agent")
-                return [wrapper], {"failing_agent": wrapper}
+                agent_adapter = FailingAgentAdapter(agent, "failing_agent")
+                return [agent_adapter], {"failing_agent": agent_adapter}
 
         tasks = TaskCollection.from_list([{"query": "Test query", "environment_data": {}}])
         benchmark = TaskFailureBenchmark(
@@ -354,8 +354,8 @@ class TestFailureSafeExecution:
         class TaskFailureBenchmark(DummyBenchmark):
             def setup_agents(self, agent_data, environment, task, user):
                 agent = FailingAgent()
-                wrapper = FailingAgentAdapter(agent, "failing_agent")
-                return [wrapper], {"failing_agent": wrapper}
+                agent_adapter = FailingAgentAdapter(agent, "failing_agent")
+                return [agent_adapter], {"failing_agent": agent_adapter}
 
         tasks = TaskCollection.from_list([{"query": "Test query", "environment_data": {}}])
         benchmark = TaskFailureBenchmark(
@@ -440,13 +440,13 @@ class TestFailureSafeExecution:
             def setup_agents(self, agent_data, environment, task, user):
                 if self.task_counter == 1:  # Fail second task
                     agent = FailingAgent()
-                    wrapper = FailingAgentAdapter(agent, "failing")
+                    agent_adapter = FailingAgentAdapter(agent, "failing")
                 else:
                     agent = DummyAgent()
-                    wrapper = DummyAgentAdapter(agent, "test_agent")
+                    agent_adapter = DummyAgentAdapter(agent, "test_agent")
 
                 self.task_counter += 1
-                return [wrapper], {wrapper.name: wrapper}
+                return [agent_adapter], {agent_adapter.name: agent_adapter}
 
         tasks = TaskCollection.from_list(
             [
@@ -611,13 +611,13 @@ class TestFailureSafeExecution:
                 # Fail second task on first run only
                 if self.task_counter == 1 and self.fail_on_first_run:
                     agent = FailingAgent()
-                    wrapper = FailingAgentAdapter(agent, "failing")
+                    agent_adapter = FailingAgentAdapter(agent, "failing")
                 else:
                     agent = DummyAgent()
-                    wrapper = DummyAgentAdapter(agent, "test_agent")
+                    agent_adapter = DummyAgentAdapter(agent, "test_agent")
 
                 self.task_counter += 1
-                return [wrapper], {wrapper.name: wrapper}
+                return [agent_adapter], {agent_adapter.name: agent_adapter}
 
         tasks = TaskCollection.from_list(
             [

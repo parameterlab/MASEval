@@ -4,7 +4,9 @@ This module requires langgraph to be installed:
     pip install maseval[langgraph]
 """
 
-from typing import TYPE_CHECKING, Any
+import time
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Dict
 
 from maseval import AgentAdapter, MessageHistory, User
 
@@ -32,13 +34,13 @@ class LangGraphAgentAdapter(AgentAdapter):
 
     Requires langgraph to be installed.
 
-    This wrapper converts LangChain/LangGraph message types to MASEval's
+    This adapter converts LangChain/LangGraph message types to MASEval's
     OpenAI-compatible MessageHistory format. It preserves tool calls, tool
     responses, and multi-modal content.
 
     LangGraph graphs can be stateless or stateful (with checkpointer). This
-    wrapper supports both modes:
-    - Stateless: Messages from invoke() result are cached in wrapper
+    adapter supports both modes:
+    - Stateless: Messages from invoke() result are cached in adapter
     - Stateful: Messages fetched from graph state if config/thread_id provided
 
     Example:
@@ -50,17 +52,17 @@ class LangGraphAgentAdapter(AgentAdapter):
         graph = StateGraph(...)
         compiled_graph = graph.compile()
 
-        wrapper = LangGraphAgentAdapter(compiled_graph, "agent_name")
-        result = wrapper.run("What's the weather?")
+        agent_adapter = LangGraphAgentAdapter(compiled_graph, "agent_name")
+        result = agent_adapter.run("What's the weather?")
 
         # Access message history
-        for msg in wrapper.get_messages():
+        for msg in agent_adapter.get_messages():
             print(msg['role'], msg['content'])
         ```
     """
 
     def __init__(self, agent_instance, name: str, callbacks=None, config=None):
-        """Initialize the LangGraph wrapper.
+        """Initialize the LangGraph adapter.
 
         Args:
             agent_instance: Compiled LangGraph graph
@@ -103,85 +105,6 @@ class LangGraphAgentAdapter(AgentAdapter):
         # No messages available
         return MessageHistory()
 
-    def set_message_history(self, history: MessageHistory) -> None:
-        """Set message history for langgraph.
-
-        For stateless graphs, updates the cached result.
-        For stateful graphs, this is not fully supported as LangGraph manages state internally.
-
-        Args:
-            history: MASEval MessageHistory to set
-        """
-        _check_langgraph_installed()
-        from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
-
-        # Convert MessageHistory to LangChain messages
-        lc_messages = []
-        for msg in history:
-            role = msg.get("role", "assistant")
-            content = msg.get("content", "")
-
-            if role == "user":
-                lc_messages.append(HumanMessage(content=content))
-            elif role == "assistant":
-                lc_messages.append(AIMessage(content=content))
-            elif role == "system":
-                lc_messages.append(SystemMessage(content=content))
-            elif role == "tool":
-                tool_call_id = msg.get("tool_call_id", "")
-                lc_messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
-
-        # Update cached result
-        self._last_result = {"messages": lc_messages}
-
-        # Also update base class cache
-        super().set_message_history(history)
-
-    def clear_message_history(self) -> None:
-        """Clear message history for langgraph.
-
-        Clears the cached result. For stateful graphs, this doesn't clear
-        the persistent state in the checkpointer.
-        """
-        self._last_result = None
-        super().clear_message_history()
-
-    def append_to_message_history(self, role: str, content: Any, **kwargs) -> None:
-        """Append message to history.
-
-        For stateless graphs, this appends to the cached result.
-        For stateful graphs, messages are managed by LangGraph during invoke().
-
-        Args:
-            role: Message role
-            content: Message content (string or list)
-            **kwargs: Additional message fields
-        """
-        _check_langgraph_installed()
-        from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-
-        # Get current messages
-        current_messages = []
-        if self._last_result and "messages" in self._last_result:
-            current_messages = self._last_result["messages"]
-
-        # Create new message
-        if role == "user":
-            new_msg = HumanMessage(content=str(content))
-        elif role == "assistant":
-            new_msg = AIMessage(content=str(content))
-        elif role == "system":
-            new_msg = SystemMessage(content=str(content))
-        else:
-            new_msg = AIMessage(content=str(content))
-
-        # Append and update cache
-        current_messages.append(new_msg)
-        self._last_result = {"messages": current_messages}
-
-        # Also update base class cache
-        super().append_to_message_history(role, content, **kwargs)
-
     def gather_config(self) -> dict[str, Any]:
         """Gather configuration from this LangGraph agent.
 
@@ -191,7 +114,7 @@ class LangGraphAgentAdapter(AgentAdapter):
             - gathered_at: ISO timestamp
             - name: Agent name
             - agent_type: CompiledGraph or similar
-            - wrapper_type: LangGraphAgentAdapter
+            - adapter_type: LangGraphAgentAdapter
             - callbacks: List of callback class names
             - has_checkpointer: Whether the graph has state persistence
             - config: LangGraph config dict (with sensitive data removed)
@@ -239,27 +162,101 @@ class LangGraphAgentAdapter(AgentAdapter):
         _check_langgraph_installed()
         from langchain_core.messages import HumanMessage
 
-        # Initialize the state with the user query
-        initial_state = {"messages": [HumanMessage(content=query)]}
+        start_time = time.time()
+        timestamp = datetime.now().isoformat()
 
-        # Invoke the graph (with config if provided)
-        if self._langgraph_config:
-            result = self.agent.invoke(initial_state, config=self._langgraph_config)
-        else:
-            result = self.agent.invoke(initial_state)
+        try:
+            # Initialize the state with the user query
+            initial_state = {"messages": [HumanMessage(content=query)]}
 
-        # Cache the result for stateless graphs
-        self._last_result = result
+            # Invoke the graph (with config if provided)
+            if self._langgraph_config:
+                result = self.agent.invoke(initial_state, config=self._langgraph_config)
+            else:
+                result = self.agent.invoke(initial_state)
 
-        # Extract and return the final answer from the graph's result
-        # LangGraph typically returns dict with 'messages' key, extract the last AI message
-        messages = result.get("messages", [])
-        if messages:
-            last_message = messages[-1]
-            # Return the content of the last message as the final answer
-            return getattr(last_message, "content", str(last_message))
+            # Cache the result for stateless graphs
+            self._last_result = result
+            duration = time.time() - start_time
 
-        return None
+            # Log successful execution
+            log_entry: Dict[str, Any] = {
+                "timestamp": timestamp,
+                "query": query,
+                "query_length": len(query),
+                "duration_seconds": duration,
+                "status": "success",
+            }
+
+            # Extract state information if available
+            if isinstance(result, dict):
+                log_entry["state_keys"] = list(result.keys())
+                messages = result.get("messages", [])
+                log_entry["message_count"] = len(messages) if messages else 0
+
+                # Try to extract token usage from messages if available
+                # (LangChain messages may have usage_metadata)
+                total_input_tokens = 0
+                total_output_tokens = 0
+                for msg in messages:
+                    if hasattr(msg, "usage_metadata") and msg.usage_metadata:
+                        # usage_metadata can be dict or object
+                        if isinstance(msg.usage_metadata, dict):
+                            total_input_tokens += msg.usage_metadata.get("input_tokens", 0)
+                            total_output_tokens += msg.usage_metadata.get("output_tokens", 0)
+                        else:
+                            total_input_tokens += getattr(msg.usage_metadata, "input_tokens", 0)
+                            total_output_tokens += getattr(msg.usage_metadata, "output_tokens", 0)
+
+                if total_input_tokens > 0 or total_output_tokens > 0:
+                    log_entry["input_tokens"] = total_input_tokens
+                    log_entry["output_tokens"] = total_output_tokens
+                    log_entry["total_tokens"] = total_input_tokens + total_output_tokens
+
+            # For stateful graphs with checkpointer, get state snapshot metadata
+            if self._langgraph_config and hasattr(self.agent, "get_state"):
+                try:
+                    state_snapshot = self.agent.get_state(self._langgraph_config)
+                    if state_snapshot.metadata:
+                        log_entry["checkpoint_metadata"] = {
+                            "source": state_snapshot.metadata.get("source"),
+                            "step": state_snapshot.metadata.get("step"),
+                        }
+                    if state_snapshot.created_at:
+                        log_entry["checkpoint_created_at"] = state_snapshot.created_at
+                except Exception:
+                    # If get_state fails, just skip metadata
+                    pass
+
+            self.logs.append(log_entry)
+
+            # Extract and return the final answer from the graph's result
+            # LangGraph typically returns dict with 'messages' key, extract the last AI message
+            messages = result.get("messages", [])
+            if messages:
+                last_message = messages[-1]
+                # Return the content of the last message as the final answer
+                return getattr(last_message, "content", str(last_message))
+
+            return None
+
+        except Exception as e:
+            duration = time.time() - start_time
+
+            # Log failed execution
+            self.logs.append(
+                {
+                    "timestamp": timestamp,
+                    "query": query,
+                    "query_length": len(query),
+                    "duration_seconds": duration,
+                    "status": "error",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            )
+
+            raise
 
     def _convert_langchain_messages(self, lc_messages: list) -> MessageHistory:
         """Convert LangChain messages to MASEval MessageHistory format.

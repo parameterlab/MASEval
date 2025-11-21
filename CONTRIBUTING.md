@@ -23,7 +23,7 @@ The `maseval` package is designed with a strict separation between its core logi
 
 1.  **`maseval/core`**: This is the heart of the library. It contains the essential logic and **must not** have any optional dependencies. It should be fully functional with a minimal installation.
 
-2.  **`maseval/interface`**: This contains adapters and wrappers for other multi-agent frameworks (like `crewai`, `langgraph`, etc.). All dependencies for these integrations are optional.
+2.  **`maseval/interface`**: This contains adapters for other multi-agent frameworks (like `crewai`, `langgraph`, etc.). All dependencies for these integrations are optional.
 
 > [!WARNING]
 > Code in `maseval/core` **must never** import from `maseval/interface`. This separation is critical to keep the core package lightweight and dependency-free. Breaking this rule will cause the library to fail.
@@ -197,11 +197,11 @@ The pipeline automatically performs the following tasks:
 
 ### 6. Implementing Framework Adapters
 
-When creating wrappers for external agent frameworks (in `maseval/interface/agents/`), follow these best practices to ensure consistency and reliability:
+When creating adapters for external agent frameworks (in `maseval/interface/agents/`), follow these best practices to ensure consistency and reliability:
 
 #### Message History Pattern
 
-**Always use the framework's native message storage as the source of truth.** Do not cache converted messages in the wrapper, as this can lead to inconsistencies if the framework's internal state changes.
+**Always use the framework's native message storage as the source of truth.** Do not cache converted messages in the adapter, as this can lead to inconsistencies if the framework's internal state changes.
 
 **Correct Pattern** (SmolAgents example):
 
@@ -256,13 +256,14 @@ When adding support for a new framework:
 - [ ] Add conditional import in `maseval/interface/agents/__init__.py`
 - [ ] Write integration tests in `tests/test_interface/`
 - [ ] Update documentation with usage examples
+- [ ] Provide a `logs` property inside the `AgentAdapter`.
 
 #### Framework-Specific Patterns
 
 **Pattern 1: Persistent State (smolagents)**
 
 ```python
-class MyFrameworkWrapper(AgentAdapter):
+class MyFrameworkAdapter(AgentAdapter):
     def get_messages(self) -> MessageHistory:
         """Dynamically fetch from framework's internal storage."""
         # Get from framework (e.g., agent.memory, agent.messages)
