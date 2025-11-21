@@ -297,10 +297,11 @@ class FileResultLogger(ResultLogger):
 
     def __init__(
         self,
-        output_dir: str = "./results",
+        output_dir: Path | str = "./results",
         filename_pattern: str = "benchmark_{timestamp}.jsonl",
         write_metadata: bool = True,
         atomic_writes: bool = True,
+        overwrite: bool = False,
         include_traces: bool = True,
         include_config: bool = True,
         include_eval: bool = True,
@@ -309,11 +310,14 @@ class FileResultLogger(ResultLogger):
         """Initialize the file logger.
 
         Args:
-            output_dir: Directory where result files will be written (created if needed)
+            output_dir: Directory where result files will be written (created if needed).
+                Accepts either a Path object or a string path.
             filename_pattern: Pattern for result filename. Use {timestamp} for
                 automatic timestamp insertion (format: YYYYMMDD_HHMMSS)
             write_metadata: If True, write a metadata file alongside results
             atomic_writes: If True, use atomic writes (write to temp, then rename)
+            overwrite: If True, overwrite existing files. If False, raise an error
+                when the output file already exists.
             include_traces: If True, include execution traces in logged results
             include_config: If True, include configuration in logged results
             include_eval: If True, include evaluation results in logged results
@@ -330,6 +334,7 @@ class FileResultLogger(ResultLogger):
         self.filename_pattern = filename_pattern
         self.write_metadata = write_metadata
         self.atomic_writes = atomic_writes
+        self.overwrite = overwrite
 
         # Runtime state
         self._output_path: Optional[Path] = None
@@ -447,6 +452,7 @@ class FileResultLogger(ResultLogger):
 
         Raises:
             IOError: If file or directory creation fails
+            FileExistsError: If output file exists and overwrite is False
         """
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -457,6 +463,10 @@ class FileResultLogger(ResultLogger):
         # Generate filename
         filename = self.filename_pattern.replace("{timestamp}", self._timestamp)
         self._output_path = self.output_dir / filename
+
+        # Check if file exists and handle overwrite
+        if self._output_path.exists() and not self.overwrite:
+            raise FileExistsError(f"Output file already exists: {self._output_path}. Set overwrite=True to allow overwriting existing files.")
 
         # Open file for writing
         self._file_handle = open(self._output_path, "w")
