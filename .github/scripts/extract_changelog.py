@@ -19,6 +19,7 @@ def extract_section(version: str, changelog_path: Path) -> str:
     if not match:
         print(f"No changelog entry found for version {version}", file=sys.stderr)
         sys.exit(1)
+    assert match is not None
     return match.group(0).strip()
 
 
