@@ -45,7 +45,7 @@ Every benchmark execution follows: **Setup → Run → Evaluate**
 
 - `setup_environment()` → creates isolated task environment
 - `setup_user()` → optional user simulator
-- `setup_agents()` → instantiates agent wrappers
+- `setup_agents()` → instantiates agent adapters
 - `run_agents()` → executes multi-agent system
 - Message collection and `evaluate()` → assessment
 
@@ -110,7 +110,7 @@ All core functionality is fully tested. See individual test files in `tests/test
 - `test_message_history.py` (14 tests) - Message history interface and operations
 - `test_trace_collection.py` (10 tests) - Trace gathering from all components
 - `test_config_collection.py` (11 tests) - Configuration collection for reproducibility
-- `test_agent_wrapper.py` (8 tests) - Agent wrapper base functionality
+- `test_agent_adapter.py` (8 tests) - agent adapter base functionality
 - `test_environment.py` (7 tests) - Environment state management and tools
 - `test_user_simulator.py` (5 tests) - User simulation for collaborative benchmarks
 - `test_model_adapter.py` (36 tests) - Model adapter comprehensive testing
@@ -125,7 +125,7 @@ All core functionality is fully tested. See individual test files in `tests/test
 
 All contract tests validate cross-implementation consistency. See individual test files in `tests/test_contract/` for complete contract guarantees:
 
-- `test_agent_wrapper_contract.py` (11 tests) - Framework-agnostic agent wrapper contract
+- `test_agent_adapter_contract.py` (11 tests) - Framework-agnostic agent adapter contract
 - `test_collection_contract.py` (20 tests) - Universal tracing and config contract
 - `test_model_adapter_contract.py` (16 tests) - Model provider abstraction contract
 
@@ -187,11 +187,11 @@ Test file: `tests/test_core/test_config_collection.py`
 
 **Why:** Reproducibility depends on comprehensive config capture.
 
-#### 5. **Agent Wrapper Tests** ✅ FULLY IMPLEMENTED
+#### 5. **agent adapter Tests** ✅ FULLY IMPLEMENTED
 
 **Status:** ✅ **COMPLETE** - 8 tests implemented
 
-Test file: `tests/test_core/test_agent_wrapper.py`
+Test file: `tests/test_core/test_agent_adapter.py`
 
 **What is tested:** See test file for complete list. Tests cover callback triggering, message history operations (get/set/clear/append), trace collection, and config gathering.
 
@@ -314,7 +314,7 @@ Test file: `tests/test_core/test_benchmark_integration.py` (proposed)
 
 **Status:** ✅ **COMPLETE** - 11 tests implemented
 
-Test file: `tests/test_contract/test_agent_wrapper_contract.py`
+Test file: `tests/test_contract/test_agent_adapter_contract.py`
 
 **Purpose:** Validates that ALL AgentAdapter implementations (smolagents, langgraph, dummy) honor the same behavioral contract and behave identically for key operations. This is MASEval's **CORE PROMISE** - framework-agnostic agent abstraction.
 
@@ -526,13 +526,13 @@ Each test file should:
 
 ### P1 (Should Have - High Value) ✅ ALL COMPLETE
 
-6. ✅ Agent wrapper tests
+6. ✅ agent adapter tests
 7. ✅ Environment tests
 8. ✅ Callback orchestration tests
 9. ✅ Task collection tests
 10. ✅ Evaluator tests
 11. ✅ Result logger callbacks
-12. ✅ Contract tests (agent wrapper, collection, model adapter)
+12. ✅ Contract tests (agent adapter, collection, model adapter)
 
 ### P2 (Nice to Have - Completeness) ✅ ALL COMPLETE
 
@@ -561,7 +561,7 @@ Shared fixtures implemented in `tests/conftest.py`:
 
 - `dummy_model` - DummyModelAdapter with configurable responses
 - `dummy_agent` - DummyAgent that tracks calls
-- `dummy_agent_wrapper` - DummyAgentAdapter with message history
+- `dummy_agent_adapter` - DummyAgentAdapter with message history
 - `dummy_environment` - DummyEnvironment with state management
 - `dummy_user` - DummyUser for simulation testing
 - `dummy_task` - Single Task instance
@@ -614,7 +614,7 @@ pytest -x --ff  # Stop on first failure, run previous failures first
 
 - ✅ **Test Count:** 333 tests implemented across 23 test files
 - ✅ **Core Coverage:** All P0 (4/5), P1 (7/7), and P2 (6/6) tests complete
-- ✅ **Contract Coverage:** All contract tests implemented (agent wrapper, collection, model adapter)
+- ✅ **Contract Coverage:** All contract tests implemented (agent adapter, collection, model adapter)
 - ✅ **Interface Coverage:** All adapter integration tests complete (agents + models)
 - 🟡 **Runtime:** Not yet measured
 - 🟡 **Reliability:** Not yet run in CI
@@ -639,14 +639,14 @@ pytest -x --ff  # Stop on first failure, run previous failures first
 
 ### Phase 2 (Week 2): Core Coverage ✅ COMPLETE
 
-- ✅ Implement P1 tests (agent wrapper, environment, callbacks, tasks, evaluator)
+- ✅ Implement P1 tests (agent adapter, environment, callbacks, tasks, evaluator)
 - ✅ Add callback orchestration tests
 - ✅ Message tracing callback specialized tests
 - ✅ Automatic registration tests
 
 ### Phase 3 (Week 3): Interface Coverage ✅ COMPLETE
 
-- ✅ Contract tests (agent wrapper, collection, model adapter - 47 tests)
+- ✅ Contract tests (agent adapter, collection, model adapter - 47 tests)
 - ✅ Smolagents integration (10 tests)
 - ✅ LangGraph integration (5 tests)
 - ✅ Model adapter integrations (22 tests across 4 providers)

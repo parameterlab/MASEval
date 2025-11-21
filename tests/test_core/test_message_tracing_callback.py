@@ -259,7 +259,7 @@ class TestMessageTracingCallback:
         """Test graceful handling when agent returns empty message history.
 
         Verifies that callback creates valid conversation records even when
-        agent wrappers return empty histories (edge case for minimal agents).
+        agent adapters return empty histories (edge case for minimal agents).
         """
 
         class NoHistoryWrapper(AgentAdapter):

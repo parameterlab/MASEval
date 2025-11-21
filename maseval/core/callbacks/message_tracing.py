@@ -71,7 +71,7 @@ class MessageTracingAgentCallback(AgentCallback):
         """Called when agent execution completes.
 
         Args:
-            agent: The agent wrapper instance
+            agent: The agent adapter instance
             result: The result returned by the agent (usually MessageHistory)
         """
         # Get message history from agent

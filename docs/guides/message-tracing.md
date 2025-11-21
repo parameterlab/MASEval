@@ -16,7 +16,7 @@ MASEval provides message tracing to capture agent conversations during benchmark
 
 ## Core Concepts
 
-**`MessageHistory`**: OpenAI-compatible message storage that all agent wrappers use internally.
+**`MessageHistory`**: OpenAI-compatible message storage that all agent adapters use internally.
 
 **`AgentAdapter.get_messages()`**: Standard method to retrieve conversation history from any wrapped agent.
 
@@ -26,17 +26,17 @@ MASEval provides message tracing to capture agent conversations during benchmark
 
 ### Accessing Message History
 
-Every agent wrapper exposes message history through `get_messages()`:
+Every agent adapter exposes message history through `get_messages()`:
 
 ```python
-from maseval.interface.agents import SmolAgentsWrapper
+from maseval.interface.agents import SmolAgentAdapter
 
 # Create and run your agent
-wrapper = SmolAgentsWrapper(agent, name="researcher")
-result = wrapper.run("What's the capital of France?")
+agent_adapter = SmolAgentAdapter(agent, name="researcher")
+result = agent_adapter.run("What's the capital of France?")
 
 # Get the conversation
-messages = wrapper.get_messages()
+messages = agent_adapter.get_messages()
 
 # Inspect messages
 for msg in messages:
@@ -52,8 +52,8 @@ In benchmarks, you typically want to clear history before each new task:
 ```python
 # In your benchmark loop
 for task in benchmark.tasks:
-    wrapper.clear_message_history()  # Reset for new task
-    result = wrapper.run(task.query)
+    agent_adapter.clear_message_history()  # Reset for new task
+    result = agent_adapter.run(task.query)
     evaluate(result, task.ground_truth)
 ```
 
@@ -68,12 +68,12 @@ from maseval.core.callbacks import MessageTracingAgentCallback
 tracer = MessageTracingAgentCallback()
 
 # Attach to your agent(s)
-wrapper = SmolAgentsWrapper(agent, name="assistant", callbacks=[tracer])
+agent_adapter = SmolAgentAdapter(agent, name="assistant", callbacks=[tracer])
 
 # Run tasks
-wrapper.run("Task 1")
-wrapper.run("Task 2")
-wrapper.run("Task 3")
+agent_adapter.run("Task 1")
+agent_adapter.run("Task 2")
+agent_adapter.run("Task 3")
 
 # Get all conversations
 conversations = tracer.get_all_conversations()
@@ -93,8 +93,8 @@ Share one tracer across multiple agents to collect all conversations:
 tracer = MessageTracingAgentCallback()
 
 # Attach to multiple agents
-agent1 = SmolAgentsWrapper(agent1, name="researcher", callbacks=[tracer])
-agent2 = SmolAgentsWrapper(agent2, name="writer", callbacks=[tracer])
+agent1 = SmolAgentAdapter(agent1, name="researcher", callbacks=[tracer])
+agent2 = SmolAgentAdapter(agent2, name="writer", callbacks=[tracer])
 
 # Run both agents
 agent1.run("Research topic X")
@@ -119,7 +119,7 @@ tracer = MessageTracingAgentCallback()
 
 for batch in task_batches:
     for task in batch:
-        wrapper.run(task.query)
+        agent_adapter.run(task.query)
 
     # Process this batch
     conversations = tracer.get_all_conversations()
@@ -190,9 +190,9 @@ Messages use OpenAI's chat completion format:
 }
 ```
 
-## Custom Agent Wrappers
+## Custom agent adapters
 
-If you're implementing a custom wrapper, the framework handles message storage automatically via `get_messages()`. Just ensure your `_run_agent()` method returns a `MessageHistory`:
+If you're implementing a custom adapter, the framework handles message storage automatically via `get_messages()`. Just ensure your `_run_agent()` method returns a `MessageHistory`:
 
 ```python
 from maseval import AgentAdapter, MessageHistory
@@ -211,13 +211,13 @@ class MyAgentAdapter(AgentAdapter):
         return history
 ```
 
-See the [Agent Wrapper guide](../reference/agent.md) for details on implementing custom wrappers.
+See the [agent adapter guide](../reference/agent.md) for details on implementing custom adapters.
 
 ## Tips
 
 **For debugging**: Use `verbose=True` to see traces in real-time.
 
-**For benchmarks**: Clear history between tasks with `wrapper.clear_message_history()`.
+**For benchmarks**: Clear history between tasks with `agent_adapter.clear_message_history()`.
 
 **For multi-agent systems**: Use a shared tracer and `get_conversations_by_agent()` to analyze each agent separately.
 

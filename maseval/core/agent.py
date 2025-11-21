@@ -10,7 +10,7 @@ from .config import ConfigurableMixin
 class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
     """Wraps an agent from any framework to provide a standard interface.
 
-    This wrapper provides:
+    This Adapter provides:
     - Unified execution interface via `run()`
     - Callback hooks for monitoring
     - Message history management via getter/setter
@@ -148,7 +148,7 @@ class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
 
         How to use:
             This method is automatically called by Benchmark during trace collection.
-            Framework-specific wrappers can extend this to include additional data:
+            Framework-specific adapters can extend this to include additional data:
 
             ```python
             def gather_traces(self) -> dict[str, Any]:
@@ -181,12 +181,12 @@ class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
             - gathered_at: ISO timestamp
             - name: Agent name
             - agent_type: Underlying agent framework class name
-            - wrapper_type: The specific wrapper class (e.g., SmolAgentAdapter)
+            - adapter_type: The specific adapter class (e.g., SmolAgentAdapter)
             - callbacks: List of callback class names attached to this agent
 
         How to use:
             This method is automatically called by Benchmark during config collection.
-            Framework-specific wrappers can extend this to include additional data:
+            Framework-specific adapters can extend this to include additional data:
 
             ```python
             def gather_config(self) -> dict[str, Any]:
@@ -200,7 +200,7 @@ class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
             **super().gather_config(),
             "name": self.name,
             "agent_type": type(self.agent).__name__,
-            "wrapper_type": type(self).__name__,
+            "adapter_type": type(self).__name__,
             "callbacks": [type(cb).__name__ for cb in self.callbacks],
         }
 

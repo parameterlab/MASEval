@@ -124,7 +124,7 @@ def remove_timestamp(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def create_agent_for_framework(framework: str):
-    """Create agent wrapper for specified framework."""
+    """Create agent adapter for specified framework."""
     if framework == "dummy":
         agent = DummyAgent()
         return DummyAgentAdapter(agent, "test_agent")
@@ -187,7 +187,7 @@ class TestUniversalTracingContract:
     """Test that ALL components follow the same tracing contract."""
 
     def test_agent_traces_have_base_fields(self):
-        """Agent wrappers must include base trace fields including name."""
+        """agent adapters must include base trace fields including name."""
         agent = create_agent_for_framework("dummy")
         agent.run("Test query")
 
@@ -250,7 +250,7 @@ class TestUniversalConfigContract:
     """Test that ALL components follow the same configuration contract."""
 
     def test_agent_config_has_base_fields(self):
-        """Agent wrappers must include base config fields including name."""
+        """agent adapters must include base config fields including name."""
         agent = create_agent_for_framework("dummy")
 
         config = agent.gather_config()
@@ -320,7 +320,7 @@ class TestUniversalConfigContract:
 @pytest.mark.interface
 @pytest.mark.parametrize("framework", ["dummy", "smolagents", "langgraph"])
 class TestCrossFrameworkTracingConsistency:
-    """Test that agent wrappers have consistent tracing across frameworks."""
+    """Test that agent adapters have consistent tracing across frameworks."""
 
     def test_all_frameworks_return_same_base_structure(self, framework):
         """All frameworks must return same base trace structure."""

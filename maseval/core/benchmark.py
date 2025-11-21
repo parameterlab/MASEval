@@ -673,12 +673,12 @@ class Benchmark(ABC):
                     model=model,
                     managed_agents=[w.agent for w in workers.values()]
                 )
-                orchestrator_wrapper = AgentAdapter(orchestrator, "orchestrator")
+                orchestrator_adapter = AgentAdapter(orchestrator, "orchestrator")
 
                 # Return orchestrator to run, but all agents for monitoring
                 # All agents auto-registered for tracing
-                all_agents = {"orchestrator": orchestrator_wrapper, **workers}
-                return [orchestrator_wrapper], all_agents
+                all_agents = {"orchestrator": orchestrator_adapter, **workers}
+                return [orchestrator_adapter], all_agents
             ```
         """
         pass

@@ -51,7 +51,7 @@ class SmolAgentAdapter(AgentAdapter):
     """
 
     def __init__(self, agent_instance, name: str, callbacks=None):
-        """Initialize the SmolAgent wrapper.
+        """Initialize the Smolagent adapter.
 
         Note: We don't call super().__init__() to avoid initializing self.logs as a list,
         since we override it as a property that dynamically fetches from agent.memory.

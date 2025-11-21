@@ -13,7 +13,7 @@ pytest.importorskip("langgraph")
 pytestmark = [pytest.mark.interface, pytest.mark.langgraph]
 
 
-def test_langgraph_wrapper_import():
+def test_langgraph_adapter_import():
     """Test that LangGraphAgentAdapter can be imported when langgraph is installed."""
     from maseval.interface.agents.langgraph import LangGraphAgentAdapter, LangGraphUser
 
@@ -37,7 +37,7 @@ def test_check_langgraph_installed_function():
     _check_langgraph_installed()
 
 
-def test_langgraph_wrapper_message_manipulation():
+def test_langgraph_adapter_message_manipulation():
     """Test that LangGraphAgentAdapter supports message history manipulation.
 
     LangGraph supports manually managing message history through:
@@ -106,7 +106,7 @@ def test_langgraph_wrapper_message_manipulation():
     assert history_again[0]["content"] == "Set message 1"
 
 
-def test_langgraph_wrapper_message_manipulation_with_system_message():
+def test_langgraph_adapter_message_manipulation_with_system_message():
     """Test message manipulation with system messages.
 
     Verifies that system messages are properly converted and handled

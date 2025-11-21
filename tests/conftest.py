@@ -92,7 +92,7 @@ class FakeSmolagentsModel:
 
 
 class DummyAgentAdapter(AgentAdapter):
-    """Test agent wrapper that populates message history."""
+    """Test agent adapter that populates message history."""
 
     def _run_agent(self, query: str) -> str:
         import time
@@ -256,8 +256,8 @@ def dummy_agent():
 
 
 @pytest.fixture
-def dummy_agent_wrapper(dummy_agent):
-    """Create a dummy agent wrapper."""
+def dummy_agent_adapter(dummy_agent):
+    """Create a dummy agent adapter."""
     return DummyAgentAdapter(dummy_agent, "test_agent")
 
 
