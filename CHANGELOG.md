@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The `logs` property inside `SmolAgentAdapter` and `LanggraphAgentAdapter` are now properly filled. (PR: #3)
+
 ### Changed
 
 ### Fixed
+
+- Consistent naming of agent `adapter` over `wrapper` (PR: #3)
 
 ### Removed
 
