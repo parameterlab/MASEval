@@ -165,7 +165,7 @@ def test_langgraph_adapter_logs_after_run():
     from maseval.interface.agents.langgraph import LangGraphAgentAdapter
     from langgraph.graph import StateGraph, END
     from typing_extensions import TypedDict
-    from langchain_core.messages import AIMessage, HumanMessage
+    from langchain_core.messages import AIMessage
     from langchain_core.messages.ai import UsageMetadata
     import time
 
@@ -199,7 +199,7 @@ def test_langgraph_adapter_logs_after_run():
     time_before = time.time()
 
     # Run the agent
-    result = adapter.run("Test query")
+    adapter.run("Test query")
 
     # Capture time after run
     time_after = time.time()

@@ -444,6 +444,26 @@ class TestAgentAdapterContract:
         agent = create_agent_for_framework(framework, mock_llm)
         adapter = create_adapter_for_framework(framework, agent)
 
+        # First run
+        adapter.run("First query")
+        history_1 = adapter.get_messages()
+        assert len(history_1) > 0
+
+        # Clear and verify empty (or just system message for smolagents)
+        adapter.clear_message_history()
+        history_after_clear = adapter.get_messages()
+        expected_after_clear = 1 if framework == "smolagents" else 0  # smolagents keeps system message
+        assert len(history_after_clear) == expected_after_clear
+
+        # Second run should populate new history
+        adapter.run("Second query")
+        history_2 = adapter.get_messages()
+        assert len(history_2) > expected_after_clear  # Should have more than just system message
+
+        # History should only contain second run's messages
+        # (exact count depends on framework, but should have at least one message)
+        assert any("Second query" in str(msg.get("content", "")) for msg in history_2)
+
     def test_adapter_logs_populated_after_run(self, framework):
         """Test all adapters populate self.logs during execution.
 

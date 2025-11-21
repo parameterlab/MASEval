@@ -238,7 +238,6 @@ class LangGraphAgentAdapter(AgentAdapter):
         return base_config
 
     def _run_agent(self, query: str) -> Any:
-
         _check_langgraph_installed()
         from langchain_core.messages import HumanMessage
 
