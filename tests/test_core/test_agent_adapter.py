@@ -49,37 +49,6 @@ class TestAgentAdapter:
         assert history[0]["role"] == "user"
         assert history[1]["role"] == "assistant"
 
-    def test_agent_adapter_set_message_history(self, dummy_agent_adapter):
-        """Test that message history can be set manually."""
-        new_history = MessageHistory()
-        new_history.add_message("user", "Custom message")
-        new_history.add_message("assistant", "Custom response")
-
-        dummy_agent_adapter.set_message_history(new_history)
-
-        retrieved = dummy_agent_adapter.get_messages()
-        assert len(retrieved) == 2
-        assert retrieved[0]["content"] == "Custom message"
-        assert retrieved[1]["content"] == "Custom response"
-
-    def test_agent_adapter_clear_message_history(self, dummy_agent_adapter):
-        """Test that message history can be cleared."""
-        dummy_agent_adapter.run("Test")
-        assert len(dummy_agent_adapter.get_messages()) > 0
-
-        dummy_agent_adapter.clear_message_history()
-        assert len(dummy_agent_adapter.get_messages()) == 0
-
-    def test_agent_adapter_append_to_message_history(self, dummy_agent_adapter):
-        """Test that messages can be appended to history."""
-        dummy_agent_adapter.append_to_message_history("user", "First message")
-        dummy_agent_adapter.append_to_message_history("assistant", "First response")
-
-        history = dummy_agent_adapter.get_messages()
-        assert len(history) == 2
-        assert history[0]["content"] == "First message"
-        assert history[1]["content"] == "First response"
-
     def test_agent_adapter_gather_traces_includes_messages(self, dummy_agent_adapter):
         """Test that gather_traces() includes message history."""
         dummy_agent_adapter.run("Test query")
@@ -110,17 +79,15 @@ class TestAgentAdapter:
         assert config["type"] == "DummyAgentAdapter"
 
     def test_agent_adapter_multiple_runs(self, dummy_agent_adapter):
-        """Test that adapter can be run multiple times."""
+        """Test that adapter can be run multiple times and history accumulates."""
         result1 = dummy_agent_adapter.run("Query 1")
         assert "Query 1" in result1
-
-        # Clear history for second run
-        dummy_agent_adapter.clear_message_history()
 
         result2 = dummy_agent_adapter.run("Query 2")
         assert "Query 2" in result2
 
-        # History should only have second run
+        # History should have both runs
         history = dummy_agent_adapter.get_messages()
-        assert len(history) == 2
-        assert history[0]["content"] == "Query 2"
+        assert len(history) == 4  # 2 messages per run
+        assert history[0]["content"] == "Query 1"
+        assert history[2]["content"] == "Query 2"

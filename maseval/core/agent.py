@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Any, Optional, Union, Dict
+from typing import List, Any, Optional, Dict
 
 from .callback import AgentCallback
-from .history import MessageHistory, RoleType
+from .history import MessageHistory
 from .tracing import TraceableMixin
 from .config import ConfigurableMixin
 
@@ -100,35 +100,6 @@ class AgentAdapter(ABC, TraceableMixin, ConfigurableMixin):
             ```
         """
         return self.messages if self.messages is not None else MessageHistory()
-
-    def set_message_history(self, history: MessageHistory) -> None:
-        """Set the message history.
-
-        This is typically called by _run_agent() implementations after executing
-        the agent, but can also be used to inject or modify history.
-
-        Args:
-            history: The MessageHistory to set
-        """
-        self.messages = history
-
-    def clear_message_history(self) -> None:
-        """Clear the message history."""
-        self.messages = None
-
-    def append_to_message_history(self, role: Union[RoleType, str], content: Union[str, List[Any]], **kwargs) -> None:
-        """Append a message to the history.
-
-        If no history exists, creates a new one.
-
-        Args:
-            role: The message role ("user", "assistant", "system", "tool")
-            content: The message content (string or list of content parts)
-            **kwargs: Additional fields (name, metadata, timestamp, etc.)
-        """
-        if self.messages is None:
-            self.messages = MessageHistory()
-        self.messages.add_message(role, content, **kwargs)  # type: ignore
 
     def gather_traces(self) -> dict[str, Any]:
         """Gather execution traces from this agent.

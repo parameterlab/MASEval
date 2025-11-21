@@ -97,19 +97,17 @@ class DummyAgentAdapter(AgentAdapter):
     def _run_agent(self, query: str) -> str:
         import time
 
-        # Create message history
-        history = MessageHistory()
-        history.add_message(role="user", content=query)
-
         # Track timing
         start_time = time.time()
 
         # Run underlying agent
         response = self.agent.run(query)
-        history.add_message(role="assistant", content=response)
 
-        # Store history
-        self.set_message_history(history)
+        # Store history directly
+        if self.messages is None:
+            self.messages = MessageHistory()
+        self.messages.add_message(role="user", content=query)
+        self.messages.add_message(role="assistant", content=response)
 
         # Populate logs to fulfill contract
         duration = time.time() - start_time

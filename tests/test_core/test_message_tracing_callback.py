@@ -47,8 +47,8 @@ class TracingTestAgentAdapter(AgentAdapter):
             # Normal response without tools
             history.add_message(role="assistant", content=response)
 
-        # Store history so get_messages() can retrieve it
-        self.set_message_history(history)
+        # Store history directly
+        self.messages = history
 
         return response
 

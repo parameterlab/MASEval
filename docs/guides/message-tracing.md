@@ -45,17 +45,20 @@ for msg in messages:
         print(f"  Tools called: {[tc['function']['name'] for tc in msg['tool_calls']]}")
 ```
 
-### Clearing History Between Tasks
+### Fresh Conversations for Multiple Tasks
 
-In benchmarks, you typically want to clear history before each new task:
+In benchmarks, you typically want a fresh agent instance for each task:
 
 ```python
 # In your benchmark loop
 for task in benchmark.tasks:
-    agent_adapter.clear_message_history()  # Reset for new task
+    # Create a new adapter instance for each task
+    agent_adapter = YourAgentAdapter(agent_instance=agent, name="task_agent")
     result = agent_adapter.run(task.query)
     evaluate(result, task.ground_truth)
 ```
+
+This ensures each task starts with a clean slate and avoids conversation history contamination.
 
 ## Using the Tracing Callback
 
@@ -190,7 +193,7 @@ Messages use OpenAI's chat completion format:
 }
 ```
 
-## Custom agent adapters
+## Custom Agent Adapters
 
 If you're implementing a custom adapter, the framework handles message storage automatically via `get_messages()`. Just ensure your `_run_agent()` method returns a `MessageHistory`:
 
@@ -211,13 +214,13 @@ class MyAgentAdapter(AgentAdapter):
         return history
 ```
 
-See the [agent adapter guide](../reference/agent.md) for details on implementing custom adapters.
+See the [AgentAdapter guide](../reference/agent.md) for details on implementing custom adapters.
 
 ## Tips
 
 **For debugging**: Use `verbose=True` to see traces in real-time.
 
-**For benchmarks**: Clear history between tasks with `agent_adapter.clear_message_history()`.
+**For benchmarks**: Create a new adapter instance for each task to ensure clean conversation history.
 
 **For multi-agent systems**: Use a shared tracer and `get_conversations_by_agent()` to analyze each agent separately.
 

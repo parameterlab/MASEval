@@ -351,54 +351,6 @@ class SmolAgentAdapter(AgentAdapter):
         # Convert and return
         return self._convert_smolagents_messages(smol_messages)
 
-    def set_message_history(self, history: MessageHistory) -> None:
-        """Set message history - NOT SUPPORTED by smolagents.
-
-        Args:
-            history: MASEval MessageHistory to set
-
-        Raises:
-            NotImplementedError: smolagents doesn't support arbitrary message injection
-        """
-        raise NotImplementedError(
-            "smolagents doesn't support setting arbitrary message history. "
-            "The agent's memory is built from execution steps and cannot be directly manipulated. "
-            "Use clear_message_history() to reset, then run() to generate new conversation."
-        )
-
-    def clear_message_history(self) -> None:
-        """Clear message history by resetting smolagents memory."""
-        _check_smolagents_installed()
-        from smolagents.memory import AgentMemory
-
-        # Get system prompt before clearing
-        system_prompt = ""
-        if hasattr(self.agent, "memory") and hasattr(self.agent.memory, "system_prompt"):
-            system_prompt = self.agent.memory.system_prompt
-
-        # Reset memory
-        self.agent.memory = AgentMemory(system_prompt=system_prompt)
-
-        # Also clear base class cache
-        super().clear_message_history()
-
-    def append_to_message_history(self, role: str, content: Any, **kwargs) -> None:
-        """Append message to history - NOT SUPPORTED by smolagents.
-
-        Args:
-            role: Message role
-            content: Message content (string or list)
-            **kwargs: Additional message fields
-
-        Raises:
-            NotImplementedError: smolagents doesn't support arbitrary message injection
-        """
-        raise NotImplementedError(
-            "smolagents doesn't support appending arbitrary messages to history. "
-            "The agent's memory is built from execution steps and cannot be directly manipulated. "
-            "Use run() to generate conversation messages."
-        )
-
     def _run_agent(self, query: str) -> str:
         _check_smolagents_installed()
 

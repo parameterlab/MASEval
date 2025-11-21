@@ -236,3 +236,7 @@ For lists and dictionaries, use `Dict[...,...]`, `List[...]`, `Sequence[...]` et
 - DO NOT publicly distribute code or data
 - DO NOT publish without explicit permission
 - DO NOT share copyrighted third-party benchmark data
+
+## Changelog
+
+When the task is completed, add your changes to the Changelog.
