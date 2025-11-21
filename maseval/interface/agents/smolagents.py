@@ -4,7 +4,7 @@ This module requires smolagents to be installed:
     pip install maseval[smolagents]
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from maseval import AgentAdapter, MessageHistory, User
 
@@ -49,6 +49,159 @@ class SmolAgentAdapter(AgentAdapter):
             print(msg['role'], msg['content'])
         ```
     """
+
+    def __init__(self, agent_instance, name: str, callbacks=None):
+        """Initialize the SmolAgent wrapper.
+
+        Note: We don't call super().__init__() to avoid initializing self.logs as a list,
+        since we override it as a property that dynamically fetches from agent.memory.
+        """
+        self.agent = agent_instance
+        self.name = name
+        self.callbacks = callbacks or []
+        self.messages = None
+
+    @property
+    def logs(self) -> List[Dict[str, Any]]:  # type: ignore[override]
+        """Dynamically generate logs from smolagents' internal memory.
+
+        Converts smolagents' ActionStep and PlanningStep objects into log entries
+        compatible with the AgentAdapter contract, including all available properties.
+
+        Returns:
+            List of log dictionaries with comprehensive step information
+        """
+        _check_smolagents_installed()
+        from smolagents.memory import ActionStep, PlanningStep, TaskStep
+
+        logs_list: List[Dict[str, Any]] = []
+
+        if not hasattr(self.agent, "memory") or not hasattr(self.agent.memory, "steps"):
+            return logs_list
+
+        for step in self.agent.memory.steps:
+            if isinstance(step, ActionStep):
+                log_entry: Dict[str, Any] = {
+                    "step_type": "ActionStep",
+                    "step_number": step.step_number,
+                    "status": "error" if step.error else "success",
+                }
+
+                # Timing information
+                if hasattr(step, "timing") and step.timing:
+                    log_entry["start_time"] = step.timing.start_time
+                    log_entry["end_time"] = step.timing.end_time
+                    log_entry["duration_seconds"] = step.timing.duration
+
+                # Token usage information
+                if hasattr(step, "token_usage") and step.token_usage:
+                    log_entry["input_tokens"] = step.token_usage.input_tokens
+                    log_entry["output_tokens"] = step.token_usage.output_tokens
+                    log_entry["total_tokens"] = step.token_usage.total_tokens
+
+                # Model input messages - convert to MASEval format
+                if hasattr(step, "model_input_messages") and step.model_input_messages:
+                    log_entry["model_input_messages"] = self._convert_smolagents_messages(step.model_input_messages).to_list()
+
+                # Tool calls (ToolCall objects)
+                if hasattr(step, "tool_calls") and step.tool_calls:
+                    log_entry["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "name": tc.name,
+                            "arguments": tc.arguments,
+                        }
+                        for tc in step.tool_calls
+                    ]
+
+                # Error information
+                if step.error:
+                    log_entry["error"] = str(step.error)
+                    log_entry["error_type"] = type(step.error).__name__
+
+                # Model output message - convert to MASEval format
+                if hasattr(step, "model_output_message") and step.model_output_message:
+                    converted = self._convert_smolagents_messages([step.model_output_message])
+                    if len(converted) > 0:
+                        log_entry["model_output_message"] = converted[0]
+
+                # Model output (raw)
+                if hasattr(step, "model_output") and step.model_output is not None:
+                    log_entry["model_output"] = step.model_output
+
+                # Code action (for CodeAgent)
+                if hasattr(step, "code_action") and step.code_action:
+                    log_entry["code_action"] = step.code_action
+
+                # Observations
+                if hasattr(step, "observations") and step.observations:
+                    log_entry["observations"] = step.observations
+
+                # Observations images
+                if hasattr(step, "observations_images") and step.observations_images:
+                    log_entry["observations_images_count"] = len(step.observations_images)
+
+                # Action output
+                if hasattr(step, "action_output") and step.action_output is not None:
+                    # Convert to string if it's not JSON-serializable
+                    try:
+                        log_entry["action_output"] = step.action_output
+                    except (TypeError, ValueError):
+                        log_entry["action_output"] = str(step.action_output)
+
+                # Is final answer flag
+                if hasattr(step, "is_final_answer"):
+                    log_entry["is_final_answer"] = step.is_final_answer
+
+                logs_list.append(log_entry)
+
+            elif isinstance(step, PlanningStep):
+                log_entry = {
+                    "step_type": "PlanningStep",
+                }
+
+                # Timing information
+                if hasattr(step, "timing") and step.timing:
+                    log_entry["start_time"] = step.timing.start_time
+                    log_entry["end_time"] = step.timing.end_time
+                    log_entry["duration_seconds"] = step.timing.duration
+
+                # Token usage information
+                if hasattr(step, "token_usage") and step.token_usage:
+                    log_entry["input_tokens"] = step.token_usage.input_tokens
+                    log_entry["output_tokens"] = step.token_usage.output_tokens
+                    log_entry["total_tokens"] = step.token_usage.total_tokens
+
+                # Model input messages - convert to MASEval format
+                if hasattr(step, "model_input_messages") and step.model_input_messages:
+                    log_entry["model_input_messages"] = self._convert_smolagents_messages(step.model_input_messages).to_list()
+
+                # Model output message - convert to MASEval format
+                if hasattr(step, "model_output_message") and step.model_output_message:
+                    converted = self._convert_smolagents_messages([step.model_output_message])
+                    if len(converted) > 0:
+                        log_entry["model_output_message"] = converted[0]
+
+                # Plan
+                if hasattr(step, "plan") and step.plan:
+                    log_entry["plan"] = step.plan
+
+                logs_list.append(log_entry)
+
+            elif isinstance(step, TaskStep):
+                # Log task initiation
+                log_entry = {
+                    "step_type": "TaskStep",
+                    "task": step.task,
+                }
+
+                # Task images if present
+                if hasattr(step, "task_images") and step.task_images:
+                    log_entry["task_images_count"] = len(step.task_images)
+
+                logs_list.append(log_entry)
+
+        return logs_list
 
     def gather_traces(self) -> dict:
         """Gather traces including message history and monitoring data.
@@ -250,9 +403,10 @@ class SmolAgentAdapter(AgentAdapter):
         _check_smolagents_installed()
 
         # Run the agent (this updates the agent's internal memory and returns the final answer)
+        # All execution details are tracked in agent.memory.steps automatically
         final_answer = self.agent.run(query)
 
-        # Return the final answer (traces are captured via get_messages())
+        # Return the final answer (traces are captured via get_messages() and gather_traces())
         return final_answer
 
     def _convert_smolagents_messages(self, smol_messages: list) -> MessageHistory:

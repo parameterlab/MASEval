@@ -95,9 +95,14 @@ class DummyAgentAdapter(AgentAdapter):
     """Test agent wrapper that populates message history."""
 
     def _run_agent(self, query: str) -> str:
+        import time
+
         # Create message history
         history = MessageHistory()
         history.add_message(role="user", content=query)
+
+        # Track timing
+        start_time = time.time()
 
         # Run underlying agent
         response = self.agent.run(query)
@@ -105,6 +110,17 @@ class DummyAgentAdapter(AgentAdapter):
 
         # Store history
         self.set_message_history(history)
+
+        # Populate logs to fulfill contract
+        duration = time.time() - start_time
+        self.logs.append(
+            {
+                "query": query,
+                "duration_seconds": duration,
+                "status": "success",
+                "response": response,
+            }
+        )
 
         # Return final answer (not the history)
         return response

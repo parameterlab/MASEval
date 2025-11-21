@@ -172,7 +172,7 @@ def create_wrapper_for_framework(framework: str, agent, callbacks: Optional[List
 class TestAgentAdapterContract:
     """Verify all AgentAdapter implementations honor the same contract."""
 
-    def test_wrapper_run_returns_same_structure(self, framework):
+    def test_adapter_run_returns_same_structure(self, framework):
         """Test all frameworks return string result and populate message history.
 
         Contract: run() must return a string (the final answer) and populate
@@ -180,16 +180,16 @@ class TestAgentAdapterContract:
         """
         mock_llm = MockLLM(responses=["Test response to query"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent)
+        adapter = create_wrapper_for_framework(framework, agent)
 
-        result = wrapper.run("Test query")
+        result = adapter.run("Test query")
 
         # All should return string (final answer)
         assert isinstance(result, str)
         assert len(result) > 0
 
         # All should populate message history identically
-        history = wrapper.get_messages()
+        history = adapter.get_messages()
         assert len(history) > 0
 
         # Some frameworks (smolagents) prepend a system message; accept either.
@@ -198,7 +198,7 @@ class TestAgentAdapterContract:
         # Ensure at least one assistant/tool message exists somewhere in the history
         assert any(msg.get("role") in ["assistant", "tool"] for msg in history)
 
-    def test_wrapper_message_format_identical(self, framework):
+    def test_adapter_message_format_identical(self, framework):
         """Test all frameworks produce OpenAI-compatible message format.
 
         Contract: All messages must have 'role' and 'content' keys, matching
@@ -206,10 +206,10 @@ class TestAgentAdapterContract:
         """
         mock_llm = MockLLM(responses=["Response content"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent)
+        adapter = create_wrapper_for_framework(framework, agent)
 
-        wrapper.run("Test query")
-        history = wrapper.get_messages()
+        adapter.run("Test query")
+        history = adapter.get_messages()
 
         # Verify OpenAI format
         for msg in history:
@@ -219,18 +219,18 @@ class TestAgentAdapterContract:
             allowed = {"user", "assistant", "system", "tool"}
             assert role in allowed or role.startswith("tool"), f"Invalid role: {msg['role']}"
 
-    def test_wrapper_callbacks_triggered_uniformly(self, framework):
+    def test_adapter_callbacks_triggered_uniformly(self, framework):
         """Test callbacks fire in same order across all frameworks.
 
         Contract: on_run_start and on_run_end callbacks must fire in the
-        correct order (start before run, end after run) for all wrappers.
+        correct order (start before run, end after run) for all adapters.
         """
         callback_tracker = CallbackTracker()
         mock_llm = MockLLM(responses=["Response"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent, callbacks=[callback_tracker])
+        adapter = create_wrapper_for_framework(framework, agent, callbacks=[callback_tracker])
 
-        wrapper.run("Test query")
+        adapter.run("Test query")
 
         # All frameworks should trigger same callback sequence
         assert "on_agent_start" in callback_tracker.events
@@ -238,18 +238,18 @@ class TestAgentAdapterContract:
         assert callback_tracker.events[0] == "on_agent_start"
         assert callback_tracker.events[-1] == "on_agent_end"
 
-    def test_wrapper_traces_same_structure(self, framework):
+    def test_adapter_traces_same_structure(self, framework):
         """Test gather_traces returns consistent structure across frameworks.
 
-        Contract: All wrappers must provide message history in traces, enabling
+        Contract: All adapters must provide message history in traces, enabling
         uniform access to execution data regardless of underlying framework.
         """
         mock_llm = MockLLM(responses=["Response"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent)
+        adapter = create_wrapper_for_framework(framework, agent)
 
-        wrapper.run("Test query")
-        traces = wrapper.gather_traces()
+        adapter.run("Test query")
+        traces = adapter.gather_traces()
 
         # All should include message history; different wrappers name this key
         if "message_history" in traces:
@@ -260,24 +260,24 @@ class TestAgentAdapterContract:
         assert isinstance(messages, list)
         assert len(messages) > 0
 
-    def test_wrapper_config_same_structure(self, framework):
+    def test_adapter_config_same_structure(self, framework):
         """Test gather_config returns consistent structure across frameworks.
 
-        Contract: All wrappers must provide agent name in config, enabling
+        Contract: All adapters must provide agent name in config, enabling
         identification and reproducibility tracking.
         """
         mock_llm = MockLLM(responses=["Response"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent)
+        adapter = create_wrapper_for_framework(framework, agent)
 
-        config = wrapper.gather_config()
+        config = adapter.gather_config()
 
         # All should include agent name
         assert "agent_name" in config or "name" in config
         # All should include some identifying information
         assert len(config) > 0
 
-    def test_wrapper_get_messages_after_multiple_runs(self, framework):
+    def test_adapter_get_messages_after_multiple_runs(self, framework):
         """Test message history accumulation across multiple agent runs.
 
         Contract: Message history behavior during multi-turn conversations must
@@ -285,24 +285,24 @@ class TestAgentAdapterContract:
         """
         mock_llm = MockLLM(responses=["First response", "Second response"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent)
+        adapter = create_wrapper_for_framework(framework, agent)
 
         # First run
-        wrapper.run("First query")
-        history_1 = wrapper.get_messages()
+        adapter.run("First query")
+        history_1 = adapter.get_messages()
         len_1 = len(history_1)
         assert len_1 > 0
 
         # Second run (behavior may differ: some accumulate, some reset)
-        wrapper.run("Second query")
-        history_2 = wrapper.get_messages()
+        adapter.run("Second query")
+        history_2 = adapter.get_messages()
         len_2 = len(history_2)
 
         # At minimum, should have messages from second run
         assert len_2 > 0
         # Note: We don't enforce accumulation vs reset - that's framework-specific
 
-    def test_wrapper_empty_query_handling(self, framework):
+    def test_adapter_empty_query_handling(self, framework):
         """All frameworks handle empty queries gracefully.
 
         Note: This test accepts both success and failure for empty queries.
@@ -312,21 +312,21 @@ class TestAgentAdapterContract:
         """
         mock_llm = MockLLM(responses=["Response to empty"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent)
+        adapter = create_wrapper_for_framework(framework, agent)
 
         # Should not crash on empty query
         try:
-            result = wrapper.run("")
+            result = adapter.run("")
             # If it succeeds, should return something
             assert result is not None
         except (ValueError, AssertionError):
             # It's acceptable to reject empty queries
             pass
 
-    def test_wrapper_on_event_callback(self, framework):
+    def test_adapter_on_event_callback(self, framework):
         """Test that standard callback hooks fire consistently across frameworks.
 
-        Contract: All wrappers must fire on_run_start and on_run_end callbacks.
+        Contract: All adapters must fire on_run_start and on_run_end callbacks.
         The on_event hook is optional for custom events.
         """
         events = []
@@ -343,20 +343,20 @@ class TestAgentAdapterContract:
 
         mock_llm = MockLLM(responses=["Response"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent, callbacks=[EventTracker()])
+        adapter = create_wrapper_for_framework(framework, agent, callbacks=[EventTracker()])
 
-        wrapper.run("Test query")
+        adapter.run("Test query")
 
         # Verify standard callbacks fired
         event_types = [e[0] for e in events]
         assert "on_run_start" in event_types
         assert "on_run_end" in event_types
 
-        # Note: on_event() is a generic hook that wrappers can use to emit custom events.
+        # Note: on_event() is a generic hook that adapters can use to emit custom events.
         # The base AgentAdapter doesn't emit any events by default, but the callback
-        # mechanism should work if wrappers choose to use it.
+        # mechanism should work if adapters choose to use it.
 
-    def test_wrapper_callback_lifecycle_order(self, framework):
+    def test_adapter_callback_lifecycle_order(self, framework):
         """Test callbacks fire in correct lifecycle order with proper state.
 
         Contract: on_run_start fires before execution with initial state,
@@ -379,9 +379,9 @@ class TestAgentAdapterContract:
 
         mock_llm = MockLLM(responses=["Test response"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent, callbacks=[LifecycleTracker()])
+        adapter = create_wrapper_for_framework(framework, agent, callbacks=[LifecycleTracker()])
 
-        result = wrapper.run("Test query")
+        result = adapter.run("Test query")
 
         # Verify callback order
         assert len(lifecycle_events) == 2
@@ -444,24 +444,123 @@ class TestAgentAdapterContract:
         """
         mock_llm = MockLLM(responses=["First response", "Second response"])
         agent = create_agent_for_framework(framework, mock_llm)
-        wrapper = create_wrapper_for_framework(framework, agent)
+        adapter = create_wrapper_for_framework(framework, agent)
 
         # First run
-        wrapper.run("First query")
-        history_1 = wrapper.get_messages()
+        adapter.run("First query")
+        history_1 = adapter.get_messages()
         assert len(history_1) > 0
 
         # Clear and verify empty (or just system message for smolagents)
-        wrapper.clear_message_history()
-        history_after_clear = wrapper.get_messages()
+        adapter.clear_message_history()
+        history_after_clear = adapter.get_messages()
         expected_after_clear = 1 if framework == "smolagents" else 0  # smolagents keeps system message
         assert len(history_after_clear) == expected_after_clear
 
         # Second run should populate new history
-        wrapper.run("Second query")
-        history_2 = wrapper.get_messages()
+        adapter.run("Second query")
+        history_2 = adapter.get_messages()
         assert len(history_2) > expected_after_clear  # Should have more than just system message
 
         # History should only contain second run's messages
         # (exact count depends on framework, but should have at least one message)
         assert any("Second query" in str(msg.get("content", "")) for msg in history_2)
+
+    def test_adapter_logs_populated_after_run(self, framework):
+        """Test all adapters populate self.logs during execution.
+
+        Contract: All AgentAdapter implementations must populate the self.logs
+        attribute with execution information. This enables uniform access to
+        detailed execution traces regardless of the underlying framework.
+
+        The logs should contain basic execution information that can be used
+        for debugging, monitoring, and evaluation purposes.
+        """
+        mock_llm = MockLLM(responses=["Test response"])
+        agent = create_agent_for_framework(framework, mock_llm)
+        adapter = create_wrapper_for_framework(framework, agent)
+
+        # Before run, logs should be empty
+        assert isinstance(adapter.logs, list)
+        initial_log_count = len(adapter.logs)
+
+        # Run the agent
+        adapter.run("Test query")
+
+        # After run, logs should be populated
+        assert len(adapter.logs) > initial_log_count
+        assert isinstance(adapter.logs, list)
+
+        # Verify logs contain useful information (at least one entry)
+        # Different frameworks may structure logs differently, but all should have entries
+        assert len(adapter.logs) > 0
+
+    def test_adapter_logs_in_gather_traces(self, framework):
+        """Test that gather_traces includes logs field.
+
+        Contract: The gather_traces() method must include the logs field,
+        providing a unified way to access execution details across all frameworks.
+        """
+        mock_llm = MockLLM(responses=["Test response"])
+        agent = create_agent_for_framework(framework, mock_llm)
+        adapter = create_wrapper_for_framework(framework, agent)
+
+        # Run the agent
+        adapter.run("Test query")
+
+        # Gather traces
+        traces = adapter.gather_traces()
+
+        # Verify logs field exists and is populated
+        assert "logs" in traces
+        assert isinstance(traces["logs"], list)
+        assert len(traces["logs"]) > 0
+
+    def test_adapter_logs_structure_has_basic_info(self, framework):
+        """Test that logs entries contain basic execution information.
+
+        Contract: While the exact structure of log entries may vary by framework,
+        all implementations should provide basic execution information in their logs.
+        This test verifies that log entries are dictionaries containing some form
+        of execution data.
+        """
+        mock_llm = MockLLM(responses=["Test response"])
+        agent = create_agent_for_framework(framework, mock_llm)
+        adapter = create_wrapper_for_framework(framework, agent)
+
+        # Run the agent
+        adapter.run("Test query")
+
+        # Verify logs contain dict entries with data
+        logs = adapter.logs
+        assert len(logs) > 0
+
+        # Each log entry should be a dictionary
+        for log_entry in logs:
+            assert isinstance(log_entry, dict)
+            # Should have at least one field with information
+            assert len(log_entry) > 0
+
+    def test_adapter_logs_accumulate_across_runs(self, framework):
+        """Test that logs accumulate or reset consistently across multiple runs.
+
+        Contract: Adapter logs should maintain a consistent lifecycle behavior
+        across runs. While accumulation vs reset is framework-specific, the
+        behavior should be predictable and documented.
+        """
+        mock_llm = MockLLM(responses=["First response", "Second response"])
+        agent = create_agent_for_framework(framework, mock_llm)
+        adapter = create_wrapper_for_framework(framework, agent)
+
+        # First run
+        adapter.run("First query")
+        logs_count_after_first = len(adapter.logs)
+        assert logs_count_after_first > 0
+
+        # Second run
+        adapter.run("Second query")
+        logs_count_after_second = len(adapter.logs)
+
+        # Logs should either accumulate or stay consistent
+        # (we accept both behaviors as long as logs are populated)
+        assert logs_count_after_second > 0
