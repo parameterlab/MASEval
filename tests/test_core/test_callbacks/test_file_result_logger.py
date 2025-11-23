@@ -80,7 +80,7 @@ def test_file_result_logger_accepts_pathlib_path(tmp_path):
     logger = FileResultLogger(output_dir=out_dir, filename_pattern="test_results.jsonl")
 
     benchmark = MockBenchmark(n_tasks=1, n_repeats=1)
-    logger.n_run_start(benchmark)  # type: ignore[arg-type]
+    logger.on_run_start(benchmark)  # type: ignore[arg-type]
 
     report = {
         "task_id": benchmark.task_ids[0],
