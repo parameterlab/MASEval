@@ -509,11 +509,11 @@ class TestAgentAdapterContract:
             assert len(log_entry) > 0
 
     def test_adapter_logs_accumulate_across_runs(self, framework):
-        """Test that logs accumulate or reset consistently across multiple runs.
+        """Test that logs accumulate or reset consistently across multiple run
+        calls to the agent.
 
         Contract: Adapter logs should maintain a consistent lifecycle behavior
-        across runs. While accumulation vs reset is framework-specific, the
-        behavior should be predictable and documented.
+        across runs.
         """
         mock_llm = MockLLM(responses=["First response", "Second response"])
         agent = create_agent_for_framework(framework, mock_llm)
