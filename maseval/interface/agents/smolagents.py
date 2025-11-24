@@ -27,27 +27,75 @@ def _check_smolagents_installed():
 
 
 class SmolAgentAdapter(AgentAdapter):
-    """An AgentAdapter for smol-agents MultiStepAgent.
+    """An AgentAdapter for HuggingFace smolagents MultiStepAgent.
 
-    Requires smolagents to be installed.
+    This adapter integrates smolagents' MultiStepAgent with MASEval's benchmarking framework,
+    converting smolagents' internal message format to OpenAI-compatible MessageHistory format.
+    It automatically tracks tool calls, tool responses, agent reasoning steps, and provides
+    comprehensive execution monitoring through smolagents' built-in memory system.
 
-    This adapter converts smolagents' internal message format to MASEval's
-    OpenAI-compatible MessageHistory format. It automatically tracks tool calls,
-    tool responses, and agent reasoning.
+    The adapter leverages smolagents' native memory storage as the source of truth, dynamically
+    fetching messages, logs, and execution traces from the agent's internal state. This ensures
+    accurate tracking of tool usage, timing, and token consumption without additional overhead.
 
-    Example:
-        ```python
-        from maseval.interface.smolagents import SmolAgentAdapter
-        from smolagents import MultiStepAgent
+    How to use:
+        1. **Create a smolagents agent** with tools and configuration
+        2. **Wrap with SmolAgentAdapter** to enable MASEval integration
+        3. **Use in benchmarks** or call directly for testing
+        4. **Access traces and config** for analysis and debugging
 
-        agent = MultiStepAgent(...)
-        agent_adapter = SmolAgentAdapter(agent)
-        result = agent_adapter.run("What's the weather?")
+        Example workflow:
+            ```python
+            from maseval.interface.agents.smolagents import SmolAgentAdapter
+            from smolagents import MultiStepAgent, ToolCallingAgent
+            from smolagents.tools import DuckDuckGoSearchTool
 
-        # Access message history
-        for msg in agent_adapter.get_messages():
-            print(msg['role'], msg['content'])
-        ```
+            # Create a smolagents agent
+            agent = ToolCallingAgent(
+                tools=[DuckDuckGoSearchTool()],
+                model="gpt-4",
+                max_steps=10
+            )
+
+            # Wrap with adapter
+            agent_adapter = SmolAgentAdapter(agent, name="search_agent")
+
+            # Run agent
+            result = agent_adapter.run("What's the latest news on AI?")
+
+            # Access message history in OpenAI format
+            for msg in agent_adapter.get_messages():
+                print(f"{msg['role']}: {msg['content']}")
+
+            # Gather execution traces with timing and token usage
+            traces = agent_adapter.gather_traces()
+            print(f"Total tokens: {traces['total_tokens']}")
+            print(f"Total duration: {traces['total_duration_seconds']}s")
+
+            # Use in benchmark
+            benchmark = MyBenchmark(agent_data={"agent": agent_adapter})
+            results = benchmark.run(tasks)
+            ```
+
+        The adapter automatically converts smolagents' ActionStep and PlanningStep objects
+        into structured logs, preserving timing, token usage, tool calls, and error information.
+
+    Message Format:
+        smolagents uses its own message format. The adapter converts to `maseval` / OpenAI format.
+
+        Tool calls are preserved with their IDs, names, and arguments.
+
+    Execution Monitoring:
+        The adapter provides comprehensive monitoring through `gather_traces()`:
+
+        - **Token usage**: Input, output, and total tokens per step and aggregated
+        - **Timing**: Duration per step and total execution time
+        - **Tool calls**: Complete tool call history with arguments and results
+        - **Errors**: Error tracking with type and message
+        - **Observations**: Tool outputs and agent observations
+
+    Requires:
+        smolagents to be installed: `pip install maseval[smolagents]`
     """
 
     def __init__(self, agent_instance, name: str, callbacks=None):

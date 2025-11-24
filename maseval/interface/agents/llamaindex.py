@@ -36,36 +36,79 @@ def _check_llamaindex_installed():
 class LlamaIndexAgentAdapter(AgentAdapter):
     """An AgentAdapter for LlamaIndex workflow-based agents.
 
-    Requires llama-index-core to be installed.
+    This adapter integrates LlamaIndex's workflow-based agent system with MASEval's benchmarking
+    framework, converting LlamaIndex's ChatMessage format to OpenAI-compatible MessageHistory format.
+    It handles both AgentWorkflow and BaseWorkflowAgent instances, automatically managing async
+    execution in synchronous contexts.
 
-    This adapter converts LlamaIndex's ChatMessage format to MASEval's
-    OpenAI-compatible MessageHistory format. It handles both AgentWorkflow
-    and BaseWorkflowAgent instances, automatically managing async execution
-    in a sync context.
+    LlamaIndex agents are async-first, using workflows that must be awaited. This adapter handles
+    the async-to-sync conversion automatically, supporting both agents with persistent memory and
+    stateless execution modes. It seamlessly integrates with MASEval's synchronous benchmarking API.
 
-    LlamaIndex agents use async workflows by default. This adapter handles
-    the async-to-sync conversion automatically, supporting both agents with
-    persistent memory and stateless execution modes.
+    How to use:
+        1. **Create a LlamaIndex workflow agent** with tools and LLM
+        2. **Wrap with LlamaIndexAgentAdapter** to enable MASEval integration
+        3. **Use in benchmarks** or call directly for testing
+        4. **Access traces and config** for analysis and debugging
 
-    Example:
-        ```python
-        from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
-        from llama_index.core.agent.workflow import AgentWorkflow
+        Example workflow:
+            ```python
+            from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
+            from llama_index.core.agent.workflow import AgentWorkflow
+            from llama_index.core.llms import OpenAI
+            from llama_index.core.tools import FunctionTool
 
-        # Create a LlamaIndex workflow
-        workflow = AgentWorkflow.from_tools_or_functions(
-            tools_or_functions=[...],
-            llm=llm,
-            system_prompt="You are a helpful assistant"
-        )
+            # Define a tool
+            def search(query: str) -> str:
+                \"\"\"Search for information.\"\"\"
+                return f\"Results for: {query}\"
 
-        agent_adapter = LlamaIndexAgentAdapter(workflow, "agent_name")
-        result = agent_adapter.run("What's the weather?")
+            search_tool = FunctionTool.from_defaults(fn=search)
 
-        # Access message history
-        for msg in agent_adapter.get_messages():
-            print(msg['role'], msg['content'])
-        ```
+            # Create a LlamaIndex workflow
+            workflow = AgentWorkflow.from_tools_or_functions(
+                tools_or_functions=[search_tool],
+                llm=OpenAI(model=\"gpt-4\"),
+                system_prompt=\"You are a helpful research assistant\"
+            )
+
+            # Wrap with adapter
+            agent_adapter = LlamaIndexAgentAdapter(workflow, \"research_agent\")
+
+            # Run agent (async handled automatically)
+            result = agent_adapter.run(\"What are the latest developments in quantum computing?\")\n\n            # Access message history in OpenAI format\n            for msg in agent_adapter.get_messages():\n                print(f\"{msg['role']}: {msg['content']}\")\n\n            # Gather configuration including tools and system prompt\n            config = agent_adapter.gather_config()\n            print(f\"System prompt: {config['llamaindex_config']['system_prompt']}\")\n            print(f\"Tools: {config['llamaindex_config']['tools']}\")\n\n            # Gather execution traces with timing\n            traces = agent_adapter.gather_traces()\n            if 'total_tokens' in traces:\n                print(f\"Total tokens: {traces['total_tokens']}\")\n\n            # Use in benchmark\n            benchmark = MyBenchmark(agent_data={\"agent\": agent_adapter})\n            results = benchmark.run(tasks)\n            ```
+
+        The adapter works with various LlamaIndex agent types including AgentWorkflow,\n        FunctionAgent (tool calling), ReActAgent, and CodeActAgent.
+
+    Message Format:
+        LlamaIndex uses ChatMessage objects with MessageRole enums. The adapter converts to `maseval` / OpenAI format.
+
+        Tool calls are preserved in the `additional_kwargs` field and converted to OpenAI's
+        tool call format when available.
+
+    Async Handling:
+        LlamaIndex agents return a WorkflowHandler from `.run()` which must be awaited.
+        The adapter handles this automatically:
+
+        - Checks for `run_sync()` method first (for compatibility)
+        - Falls back to `asyncio.run()` to execute the async `run()` method
+        - Works seamlessly in synchronous benchmarking contexts
+
+        This allows you to use async-first LlamaIndex agents in MASEval's sync API without
+        any additional configuration.
+
+    Supported Agent Types:
+        - **AgentWorkflow**: Multi-agent workflow orchestrator
+        - **FunctionAgent**: Function-calling based agent (for LLMs with tool calling)
+        - **ReActAgent**: ReAct prompting pattern agent
+        - **CodeActAgent**: Code execution based agent
+
+    Token Usage:
+        Token usage is extracted from LLM responses when available. If the LLM response
+        includes usage metadata, it's automatically captured in execution traces.
+
+    Requires:
+        llama-index-core to be installed: `pip install maseval[llamaindex]`
     """
 
     def __init__(self, agent_instance, name: str, callbacks=None):
