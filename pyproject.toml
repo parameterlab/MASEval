@@ -23,6 +23,7 @@ dependencies = ["gitpython>=3.1.0", "tqdm>=4.66.0", "rich>=14.1.0"]
 # Agent frameworks
 smolagents = ["smolagents>=1.21"]
 langgraph = ["langgraph>=0.6.0"]
+llamaindex = ["llama-index-core>=0.12.0"]
 
 # Inference Enginges
 openai = ["openai>=1.107.2"]
@@ -61,6 +62,7 @@ all = [
     # Agent frameworks
     "smolagents>=1.21",
     "langgraph>=0.6.0",
+    "llama-index-core>=0.12.0",
     # Inference engines
     "openai>=1.107.2",
     "google-genai>=1.37.0",
@@ -110,6 +112,7 @@ typing = [
     # All optional dependencies for complete type checking
     "smolagents>=1.21",
     "langgraph>=0.6.0",
+    "llama-index-core>=0.12.0",
     "openai>=1.107.2",
     "google-genai>=1.37.0",
     "transformers>=4.37.0",
@@ -159,6 +162,7 @@ markers = [
     "contract: Cross-implementation contract tests that validate framework-agnostic abstraction",
     "smolagents: Tests that specifically require smolagents",
     "langgraph: Tests that specifically require langgraph",
+    "llamaindex: Tests that specifically require llama-index-core",
 ]
 
 [tool.coverage.run]

@@ -75,6 +75,7 @@ nav:
           - Agents:
               - SmolAgents: interface/agents/smolagents.md
               - LangGraph: interface/agents/langgraph.md
+              - LlamaIndex: interface/agents/llamaindex.md
           - Models:
               - OpenAI: interface/inference/openai.md
               - HuggingFace: interface/inference/huggingface.md

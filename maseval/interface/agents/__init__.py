@@ -20,3 +20,11 @@ try:
     __all__.extend(["LangGraphAgentAdapter", "LangGraphUser"])
 except ImportError:
     pass
+
+# Conditionally import llamaindex
+try:
+    from .llamaindex import LlamaIndexAgentAdapter, LlamaIndexUser  # noqa: F401
+
+    __all__.extend(["LlamaIndexAgentAdapter", "LlamaIndexUser"])
+except ImportError:
+    pass

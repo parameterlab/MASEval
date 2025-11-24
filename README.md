@@ -45,16 +45,23 @@ The package is published on PyPI as `maseval`. To install the stable release for
 pip install maseval
 ```
 
-If you want the optional integrations used by the examples (smolagents, langchain, etc.), install the examples extras:
+If you want the optional integrations used by the examples (smolagents, langgraph, llamaindex, etc.), install the examples extras:
 
 ```bash
 pip install "maseval[examples]"
 ```
 
-Or install only the smolagents integration:
+Or install specific framework integrations:
 
 ```bash
+# Smolagents
 pip install "maseval[smolagents]"
+
+# LangGraph
+pip install "maseval[langgraph]"
+
+# LlamaIndex
+pip install "maseval[llamaindex]"
 ```
 
 ## Example

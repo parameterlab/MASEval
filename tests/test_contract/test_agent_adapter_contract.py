@@ -126,6 +126,54 @@ def create_agent_for_framework(framework: str, mock_llm: MockLLM):
 
         return graph.compile()
 
+    elif framework == "llamaindex":
+        pytest.importorskip("llama_index.core")
+        # Import here to avoid requiring llama-index-core for all tests
+        from llama_index.core.base.llms.types import ChatMessage, MessageRole
+
+        # Create a minimal mock agent for contract testing
+        # Using real LlamaIndex agents (ReActAgent, FunctionAgent) with MockLLM causes
+        # infinite loops because MockLLM doesn't return properly formatted responses
+        class SimpleMockAgent:
+            """Minimal mock agent that returns predictable responses for testing."""
+
+            def __init__(self, response: str = "Test response"):
+                self.response = response
+                self._messages = []
+
+            def run(self, user_msg=None, **kwargs):
+                """Return an async handler that yields the response."""
+
+                async def _run():
+                    # Extract user message
+                    if isinstance(user_msg, ChatMessage):
+                        user_content = user_msg.content
+                    else:
+                        user_content = str(user_msg) if user_msg else ""
+
+                    # Store messages
+                    self._messages.append(ChatMessage(role=MessageRole.USER, content=user_content))
+
+                    # Create response
+                    response_msg = ChatMessage(role=MessageRole.ASSISTANT, content=self.response)
+                    self._messages.append(response_msg)
+
+                    # Create a simple result object
+                    class Result:
+                        def __init__(self, response):
+                            self.response = response
+
+                    return Result(response=response_msg)
+
+                # Return the coroutine (this mimics how LlamaIndex workflow.run() returns an awaitable)
+                return _run()
+
+        # Create the test agent with the expected response from mock_llm
+        response = mock_llm.responses[0] if mock_llm.responses else "Test response"
+        agent = SimpleMockAgent(response=response)
+
+        return agent
+
     else:
         raise ValueError(f"Unknown framework: {framework}")
 
@@ -160,6 +208,16 @@ def create_adapter_for_framework(framework: str, agent, callbacks: Optional[List
         assert hasattr(agent, "invoke"), f"Expected LangGraph compiled graph with 'invoke' method, got {type(agent)}"
         return LangGraphAgentAdapter(agent, "test_agent", callbacks=callbacks)
 
+    elif framework == "llamaindex":
+        pytest.importorskip("llama_index.core")
+        from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
+
+        # LlamaIndex agents should have run or run_sync method
+        assert hasattr(agent, "run") or hasattr(agent, "run_sync"), (
+            f"Expected LlamaIndex agent with run() or run_sync() method, got {type(agent)}"
+        )
+        return LlamaIndexAgentAdapter(agent, "test_agent", callbacks=callbacks)
+
     else:
         raise ValueError(f"Unknown framework: {framework}")
 
@@ -168,7 +226,7 @@ def create_adapter_for_framework(framework: str, agent, callbacks: Optional[List
 
 
 @pytest.mark.contract
-@pytest.mark.parametrize("framework", ["dummy", "smolagents", "langgraph"])
+@pytest.mark.parametrize("framework", ["dummy", "smolagents", "langgraph", "llamaindex"])
 class TestAgentAdapterContract:
     """Verify all AgentAdapter implementations honor the same contract."""
 
