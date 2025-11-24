@@ -8,4 +8,6 @@ Adapters that integrate MASEval with agent frameworks:
 
 ::: maseval.interface.agents.smolagents.SmolAgentAdapter
 
-<!-- ::: maseval.interface.agents.langgraph -->
+::: maseval.interface.agents.langgraph.LangGraphAgentAdapter
+
+::: maseval.interface.agents.llamaindex.LlamaIndexAgentAdapter

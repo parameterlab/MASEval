@@ -9,3 +9,7 @@ The User is initialized with a persona and a scenario, both of which are typical
 Some integrations provide convenience user/tool implementations for specific agent frameworks. For example:
 
 ::: maseval.interface.agents.smolagents.SmolAgentUser
+
+::: maseval.interface.agents.langgraph.LangGraphUser
+
+::: maseval.interface.agents.llamaindex.LlamaIndexUser
