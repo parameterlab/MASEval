@@ -1,7 +1,9 @@
 # SmolAgents
 
-Adapter implementing commonly used functions for the HuggingFace
-[smolagents](https://huggingface.co/docs/smolagents/en/index) package.
+Adapter implementing commonly used functions for the HuggingFace `smolagents` package.
+
+- [Documentation](https://huggingface.co/docs/smolagents/en/index)
+- [Code Repository](https://github.com/huggingface/smolagents)
 
 ## Installation
 

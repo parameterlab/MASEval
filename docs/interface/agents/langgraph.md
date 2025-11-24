@@ -1,6 +1,9 @@
 # LangGraph
 
-Adapter for the [LangGraph](https://langchain-ai.github.io/langgraph/) agent framework.
+Adapter for the `LangGraph` agent framework.
+
+- [Documentation](https://langchain-ai.github.io/langgraph/)
+- [Code Repository](https://github.com/langchain-ai/langgraph)
 
 ## Installation
 
