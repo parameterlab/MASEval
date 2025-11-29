@@ -274,11 +274,31 @@ class FiveADayBenchmark(Benchmark):
         return sanitized
 
     @staticmethod
-    def _filter_tools(all_tools: List[Any], tool_names: List[str]) -> List[Any]:
-        """Filter tools by name."""
+    def _filter_tool_adapters(adapters: List[Any], tool_names: List[str]) -> List[Any]:
+        """Filter tool adapters by name or collection prefix.
+
+        Adapters preserve original tool names (e.g., "banking.get_balance") before
+        framework-specific sanitization, making filtering consistent across frameworks.
+
+        Supports:
+        - Exact match: tool_name="calculator" matches adapter.name="calculator"
+        - Collection match: tool_name="banking" matches adapter.name="banking.get_balance"
+        """
         if not tool_names:
             return []
-        return [t for t in all_tools if hasattr(t, "name") and t.name in tool_names]
+
+        filtered = []
+        for adapter in adapters:
+            if not hasattr(adapter, "name"):
+                continue
+
+            for tool_name in tool_names:
+                # Exact match or collection prefix match (only need to check . since adapters use original names)
+                if adapter.name == tool_name or adapter.name.startswith(f"{tool_name}."):
+                    filtered.append(adapter)
+                    break
+
+        return filtered
 
     def setup_environment(self, agent_data: Dict[str, Any], task: Task) -> Environment:
         """Create environment from task data.
@@ -471,11 +491,11 @@ class FiveADayBenchmark(Benchmark):
             # Create specialist agents
             specialist_agents = []
             all_tool_adapters = environment.get_tools()
-            all_tools = [adapter.tool for adapter in all_tool_adapters]
 
             for agent_spec in specialist_specs:
-                # Get tools for this specialist
-                specialist_tools = self._filter_tools(all_tools, agent_spec["tools"])
+                # Filter adapters, then extract tools for this specialist
+                specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
+                specialist_tools = [adapter.tool for adapter in specialist_adapters]
                 specialist_tools.append(FinalAnswerTool())
 
                 # Sanitize agent name to be a valid Python identifier
@@ -493,7 +513,8 @@ class FiveADayBenchmark(Benchmark):
                 specialist_agents.append(specialist)
 
             # Get primary agent tools (usually empty for orchestrators)
-            primary_tools = self._filter_tools(all_tools, primary_spec["tools"])
+            primary_adapters = self._filter_tool_adapters(all_tool_adapters, primary_spec["tools"])
+            primary_tools = [adapter.tool for adapter in primary_adapters]
             primary_tools.append(FinalAnswerTool())
 
             # Sanitize agent name to be a valid Python identifier
@@ -530,7 +551,6 @@ class FiveADayBenchmark(Benchmark):
                 next_agent: str
 
             all_tool_adapters = environment.get_tools()
-            all_tools = [adapter.tool for adapter in all_tool_adapters]
 
             # Create specialist agent nodes
             specialist_nodes = {}
@@ -538,8 +558,9 @@ class FiveADayBenchmark(Benchmark):
                 agent_id = agent_spec["agent_id"]
                 agent_instruction = agent_spec["agent_instruction"]
 
-                # Get tools for this specialist
-                specialist_tools = self._filter_tools(all_tools, agent_spec["tools"])
+                # Filter adapters, then extract tools for this specialist
+                specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
+                specialist_tools = [adapter.tool for adapter in specialist_adapters]
 
                 # Create specialist node function
                 specialist_model = model.bind_tools(specialist_tools) if specialist_tools else model
@@ -638,7 +659,6 @@ class FiveADayBenchmark(Benchmark):
             model = get_model(model_id, framework, temperature)
 
             all_tool_adapters = environment.get_tools()
-            all_tools = [adapter.tool for adapter in all_tool_adapters]
 
             # Create specialist agents
             specialist_agents_dict = {}
@@ -647,8 +667,9 @@ class FiveADayBenchmark(Benchmark):
                 agent_name = agent_spec["agent_name"]
                 agent_instruction = agent_spec["agent_instruction"]
 
-                # Get tools for this specialist
-                specialist_tools = self._filter_tools(all_tools, agent_spec["tools"])
+                # Filter adapters, then extract tools for this specialist
+                specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
+                specialist_tools = [adapter.tool for adapter in specialist_adapters]
 
                 # Create specialist agent
                 specialist_agent = ReActAgent.from_tools(
@@ -693,7 +714,8 @@ class FiveADayBenchmark(Benchmark):
             orchestrator_tools = [make_handoff_tool(spec_id, spec_info) for spec_id, spec_info in specialist_agents_dict.items()]
 
             # Get primary agent tools (if any)
-            primary_tools = self._filter_tools(all_tools, primary_spec["tools"])
+            primary_adapters = self._filter_tool_adapters(all_tool_adapters, primary_spec["tools"])
+            primary_tools = [adapter.tool for adapter in primary_adapters]
             orchestrator_tools.extend(primary_tools)
 
             # Create orchestrator agent with handoff tools
