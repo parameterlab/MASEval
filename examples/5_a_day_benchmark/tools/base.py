@@ -197,7 +197,7 @@ class BaseTool(ABC, TraceableMixin, ConfigurableMixin):
         except ImportError as e:
             raise ImportError("langchain is not installed. Install it with: pip install maseval[langgraph]") from e
 
-        return LangGraphToolAdapter(self).tool
+        return LangGraphToolAdapter(self)
 
     def to_llamaindex(self) -> Any:
         """Convert to LlamaIndex FunctionTool."""
@@ -206,7 +206,7 @@ class BaseTool(ABC, TraceableMixin, ConfigurableMixin):
         except ImportError as e:
             raise ImportError("llamaindex is not installed. Install it with: pip install llama-index-core") from e
 
-        return LlamaIndexToolAdapter(self).tool
+        return LlamaIndexToolAdapter(self)
 
 
 class SmolagentsToolAdapter(TraceableMixin, ConfigurableMixin):
@@ -224,9 +224,13 @@ class SmolagentsToolAdapter(TraceableMixin, ConfigurableMixin):
 
         self.base_tool = base_tool
 
+        # Sanitize tool name to be a valid Python identifier for smolagents
+        # Replace dots with underscores (email.get_inbox -> email_get_inbox)
+        sanitized_tool_name = base_tool.name.replace(".", "_").replace("-", "_")
+
         # Create a dynamic smolagents Tool class
         class DynamicSmolagentsTool(SmolagentsTool):
-            name = base_tool.name
+            name = sanitized_tool_name
             description = base_tool.description
             # Use specific tool arguments (excluding 'action' which is smolagents internal)
             inputs = base_tool.tool_args

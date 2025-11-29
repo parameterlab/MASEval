@@ -10,7 +10,6 @@ from .stock_price import StockPriceToolCollection
 from .calendar import CalendarToolCollection
 from .fitness import RunningAppToolCollection, GymTrackerToolCollection
 from .hotel_search import HotelSearchToolCollection
-from .factory import ToolFactory
 from .mcp_calendar import MCPCalendarToolCollection
 
 __all__ = [
@@ -27,6 +26,5 @@ __all__ = [
     "RunningAppToolCollection",
     "GymTrackerToolCollection",
     "HotelSearchToolCollection",
-    "ToolFactory",
     "MCPCalendarToolCollection",
 ]

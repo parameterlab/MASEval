@@ -232,23 +232,21 @@ class FiveADayEnvironment(Environment):
         return tools_list
 
     def _convert_tool(self, base_tool):
-        """Convert BaseTool to framework-specific tool type.
+        """Convert BaseTool to framework-specific tool adapter.
 
         Args:
             base_tool: BaseTool instance
 
         Returns:
-            Framework-specific tool object with tracing preserved
+            Tool adapter with gather_traces() for tracing support.
+            For smolagents: SmolagentsToolAdapter (has .tool attribute for raw Tool)
+            For langgraph: LangGraphToolAdapter (has .tool attribute for StructuredTool)
+            For llamaindex: LlamaIndexToolAdapter (has .tool attribute for FunctionTool)
         """
         if self.framework == "smolagents":
-            adapter = base_tool.to_smolagents()
-            # Return the actual tool, not the adapter
-            # The adapter has a .tool attribute with the smolagents Tool instance
-            return adapter.tool if hasattr(adapter, "tool") else adapter
+            return base_tool.to_smolagents()
         elif self.framework == "langgraph":
-            adapter = base_tool.to_langgraph()
-            # LangGraph adapter already returns the StructuredTool directly
-            return adapter
+            return base_tool.to_langgraph()
         elif self.framework == "llamaindex":
             return base_tool.to_llamaindex()
         else:
@@ -339,7 +337,7 @@ class FiveADayBenchmark(Benchmark):
         temperature: float,
     ) -> tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
         """Setup a single agent with all tools."""
-        tools = environment.get_tools()
+        tool_adapters = environment.get_tools()
         agent_spec = agent_data["agent"]
 
         # Sanitize agent name to be a valid Python identifier for smolagents
@@ -350,6 +348,9 @@ class FiveADayBenchmark(Benchmark):
 
             # Create smolagents model
             model = get_model(model_id, framework, temperature)
+
+            # Extract raw smolagents Tool objects from adapters
+            tools = [adapter.tool for adapter in tool_adapters]
 
             # Create agent
             agent = ToolCallingAgent(
@@ -374,6 +375,9 @@ class FiveADayBenchmark(Benchmark):
 
             # Create LangChain model
             model = get_model(model_id, framework, temperature)
+
+            # Extract raw LangChain StructuredTool objects from adapters
+            tools = [adapter.tool for adapter in tool_adapters]
 
             # Create agent graph
             class AgentState(TypedDict):
@@ -411,6 +415,9 @@ class FiveADayBenchmark(Benchmark):
 
             # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
             model = get_model(model_id, framework, temperature)
+
+            # Extract raw LlamaIndex FunctionTool objects from adapters
+            tools = [adapter.tool for adapter in tool_adapters]
 
             # Create ReActAgent with tools
             agent = ReActAgent.from_tools(
@@ -463,7 +470,8 @@ class FiveADayBenchmark(Benchmark):
 
             # Create specialist agents
             specialist_agents = []
-            all_tools = environment.get_tools()
+            all_tool_adapters = environment.get_tools()
+            all_tools = [adapter.tool for adapter in all_tool_adapters]
 
             for agent_spec in specialist_specs:
                 # Get tools for this specialist
@@ -521,7 +529,8 @@ class FiveADayBenchmark(Benchmark):
                 messages: Annotated[List[Any], add_messages]
                 next_agent: str
 
-            all_tools = environment.get_tools()
+            all_tool_adapters = environment.get_tools()
+            all_tools = [adapter.tool for adapter in all_tool_adapters]
 
             # Create specialist agent nodes
             specialist_nodes = {}
@@ -628,7 +637,8 @@ class FiveADayBenchmark(Benchmark):
             # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
             model = get_model(model_id, framework, temperature)
 
-            all_tools = environment.get_tools()
+            all_tool_adapters = environment.get_tools()
+            all_tools = [adapter.tool for adapter in all_tool_adapters]
 
             # Create specialist agents
             specialist_agents_dict = {}
