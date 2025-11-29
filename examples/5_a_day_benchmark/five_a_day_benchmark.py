@@ -136,7 +136,7 @@ class FiveADayEnvironment(Environment):
 
     def setup_state(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """Initialize environment state from task data."""
-        return task_data.get("environment_data", {})
+        return task_data["environment_data"]
 
     def _get_mcp_calendar_data(self, calendar_key: str) -> Dict[str, Any]:
         """Convert availability format to MCP events format.
@@ -146,10 +146,10 @@ class FiveADayEnvironment(Environment):
         """
         # For other_calendar, check person-specific availability
         if calendar_key == "other_calendar":
-            person = self.state.get("other_person_name", "")
-            availability = self.state.get(f"{person}_availability", {})
+            person = self.state["other_person_name"]
+            availability = self.state[f"{person}_availability"]
         else:
-            availability = self.state.get(calendar_key, {})
+            availability = self.state[calendar_key]
 
         # Convert to events format
         events = [
@@ -173,20 +173,19 @@ class FiveADayEnvironment(Environment):
             List of framework-specific tool objects (smolagents Tool, LangChain StructuredTool, etc.)
         """
         tools_list = []
-        tool_names = self.state.get("tools", [])
 
         # Map tool names to tool classes and their initialization data
         tool_mapping = {
-            "email": (EmailTool, lambda: self.state.get("email_inbox", [])),
-            "banking": (BankingTool, lambda: (self.state.get("bank_transactions", []), self.state.get("current_balance", 0))),
+            "email": (EmailTool, lambda: self.state["email_inbox"]),
+            "banking": (BankingTool, lambda: (self.state["bank_transactions"], self.state["current_balance"])),
             "calculator": (CalculatorTool, lambda: ()),
-            "python_executor": (CodeExecutionTool, lambda: (self.state.get("test_cases", []),)),
-            "family_info": (FamilyInfoTool, lambda: (self.state.get("family_info", {}),)),
-            "stock_price": (StockPriceTool, lambda: (self.state.get("stock_price_lookup", {}),)),
-            "calendar": (CalendarTool, lambda: ("my_calendar", self.state.get("my_calendar_availability", {}))),
-            "running_app": (RunningAppTool, lambda: (self.state.get("running_activities", []),)),
-            "gym_tracker": (GymTrackerTool, lambda: (self.state.get("gym_activities", []),)),
-            "hotel_search": (HotelSearchTool, lambda: (self.state.get("hotels", []),)),
+            "python_executor": (CodeExecutionTool, lambda: (self.state["test_cases"],)),
+            "family_info": (FamilyInfoTool, lambda: (self.state["family_info"],)),
+            "stock_price": (StockPriceTool, lambda: (self.state["stock_price_lookup"],)),
+            "calendar": (CalendarTool, lambda: ("my_calendar", self.state["my_calendar_availability"])),
+            "running_app": (RunningAppTool, lambda: (self.state["running_activities"],)),
+            "gym_tracker": (GymTrackerTool, lambda: (self.state["gym_activities"],)),
+            "hotel_search": (HotelSearchTool, lambda: (self.state["hotels"],)),
             # MCP calendar tools
             "my_calendar_mcp": (
                 MCPCalendarTool,
@@ -198,7 +197,7 @@ class FiveADayEnvironment(Environment):
             ),
         }
 
-        for tool_name in tool_names:
+        for tool_name in self.state["tools"]:
             if tool_name in tool_mapping:
                 ToolClass, get_init_args = tool_mapping[tool_name]
                 init_args = get_init_args()
@@ -251,6 +250,21 @@ class FiveADayBenchmark(Benchmark):
     Supports single-agent and multi-agent (orchestrator+specialist) configurations.
     """
 
+    @staticmethod
+    def _sanitize_name(name: str) -> str:
+        """Sanitize name to be a valid Python identifier (for smolagents)."""
+        sanitized = name.replace(" ", "_").replace("-", "_")
+        if not sanitized[0].isalpha() and sanitized[0] != "_":
+            sanitized = "_" + sanitized
+        return sanitized
+
+    @staticmethod
+    def _filter_tools(all_tools: List[Any], tool_names: List[str]) -> List[Any]:
+        """Filter tools by name."""
+        if not tool_names:
+            return []
+        return [t for t in all_tools if hasattr(t, "name") and t.name in tool_names]
+
     def setup_environment(self, agent_data: Dict[str, Any], task: Task) -> Environment:
         """Create environment from task data.
 
@@ -264,8 +278,6 @@ class FiveADayBenchmark(Benchmark):
         Returns:
             FiveADayEnvironment with framework-specific tools
         """
-        framework = agent_data.get("framework", "smolagents")
-
         # Pass full task data to environment
         task_data = {
             "environment_data": task.environment_data,
@@ -274,46 +286,41 @@ class FiveADayBenchmark(Benchmark):
             "metadata": task.metadata,
         }
 
-        return FiveADayEnvironment(task_data, framework=framework)
+        return FiveADayEnvironment(task_data, framework=agent_data["framework"])
 
     def setup_agents(
         self, agent_data: Dict[str, Any], environment: Environment, task: Task, user=None
     ) -> tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
         """Create framework-specific agent with tools from environment."""
-        framework = agent_data.get("framework", "smolagents")
-        agent_type = agent_data.get("agent_type", "single")
-        model_config = agent_data.get("model_config", {})
-        model_id = model_config.get("model_id", "gemini-2.0-flash-exp")
-        temperature = model_config.get("temperature", 0.7)
-
-        tools = environment.get_tools()
-
-        if agent_type == "single":
-            return self._setup_single_agent(agent_data, framework, model_id, temperature, tools)
-        elif agent_type == "multi":
-            return self._setup_multi_agent(agent_data, environment, framework, model_id, temperature)
+        if agent_data["agent_type"] == "single":
+            setup_fn = self._setup_single_agent
+        elif agent_data["agent_type"] == "multi":
+            setup_fn = self._setup_multi_agent
         else:
-            raise ValueError(f"Unsupported agent_type: {agent_type}")
+            raise ValueError(f"Unsupported agent_type: {agent_data['agent_type']}")
+
+        return setup_fn(
+            agent_data,
+            environment,
+            agent_data["framework"],
+            agent_data["model_config"]["model_id"],
+            agent_data["model_config"]["temperature"],
+        )
 
     def _setup_single_agent(
         self,
         agent_data: Dict[str, Any],
+        environment: Environment,
         framework: str,
         model_id: str,
         temperature: float,
-        tools: List[Any],
     ) -> tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
         """Setup a single agent with all tools."""
-        agent_spec = agent_data.get("agent", {})
-        agent_id = agent_spec.get("agent_id", "main_agent")
-        agent_name = agent_spec.get("agent_name", "5-a-day-agent")
-        agent_instruction = agent_spec.get("agent_instruction", "")
+        tools = environment.get_tools()
+        agent_spec = agent_data["agent"]
 
         # Sanitize agent name to be a valid Python identifier for smolagents
-        # Replace spaces and special chars with underscores, ensure it starts with letter/underscore
-        sanitized_name = agent_name.replace(" ", "_").replace("-", "_")
-        if not sanitized_name[0].isalpha() and sanitized_name[0] != "_":
-            sanitized_name = "_" + sanitized_name
+        sanitized_name = self._sanitize_name(agent_spec["agent_name"])
 
         if framework == "smolagents":
             from smolagents import ToolCallingAgent
@@ -326,14 +333,14 @@ class FiveADayBenchmark(Benchmark):
                 model=model,
                 tools=tools,
                 name=sanitized_name,
-                instructions=agent_instruction,
+                instructions=agent_spec["agent_instruction"],
                 verbosity_level=2,
             )
 
             # Wrap in adapter
             from maseval.interface.agents.smolagents import SmolAgentAdapter
 
-            wrapper = SmolAgentAdapter(agent, agent_id)
+            wrapper = SmolAgentAdapter(agent, agent_spec["agent_id"])
 
         elif framework == "langgraph":
             from langchain_core.messages import SystemMessage
@@ -355,8 +362,8 @@ class FiveADayBenchmark(Benchmark):
                 messages = state["messages"]
                 # Add system message with agent instruction if not present
                 has_system = any(isinstance(m, SystemMessage) for m in messages)
-                if not has_system and agent_instruction:
-                    system_message = SystemMessage(content=agent_instruction)
+                if not has_system and agent_spec["agent_instruction"]:
+                    system_message = SystemMessage(content=agent_spec["agent_instruction"])
                     messages = [system_message] + messages
 
                 response = llm_with_tools.invoke(messages)
@@ -374,7 +381,7 @@ class FiveADayBenchmark(Benchmark):
             # Wrap in adapter
             from maseval.interface.agents.langgraph import LangGraphAgentAdapter
 
-            wrapper = LangGraphAgentAdapter(graph, agent_id)
+            wrapper = LangGraphAgentAdapter(graph, agent_spec["agent_id"])
 
         elif framework == "llamaindex":
             from llama_index.core.agent import ReActAgent
@@ -391,18 +398,18 @@ class FiveADayBenchmark(Benchmark):
             )
 
             # Set system prompt if provided
-            if agent_instruction:
-                agent.update_prompts({"agent_worker:system_prompt": agent_instruction})
+            if agent_spec["agent_instruction"]:
+                agent.update_prompts({"agent_worker:system_prompt": agent_spec["agent_instruction"]})
 
             # Wrap in adapter
             from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
 
-            wrapper = LlamaIndexAgentAdapter(agent, agent_id)
+            wrapper = LlamaIndexAgentAdapter(agent, agent_spec["agent_id"])
 
         else:
             raise ValueError(f"Unsupported framework: {framework}")
 
-        return [wrapper], {agent_id: wrapper}
+        return [wrapper], {agent_spec["agent_id"]: wrapper}
 
     def _setup_multi_agent(
         self,
@@ -413,8 +420,8 @@ class FiveADayBenchmark(Benchmark):
         temperature: float,
     ) -> tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
         """Setup multiple agents with orchestrator pattern."""
-        primary_agent_id = agent_data.get("primary_agent_id")
-        agents_specs = agent_data.get("agents", [])
+        primary_agent_id = agent_data["primary_agent_id"]
+        agents_specs = agent_data["agents"]
 
         if not primary_agent_id:
             raise ValueError("Multi-agent setup requires primary_agent_id")
@@ -422,6 +429,8 @@ class FiveADayBenchmark(Benchmark):
         primary_spec = next((a for a in agents_specs if a["agent_id"] == primary_agent_id), None)
         if not primary_spec:
             raise ValueError(f"Primary agent {primary_agent_id} not found in agents list")
+
+        specialist_specs = [a for a in agents_specs if a["agent_id"] != primary_agent_id]
 
         if framework == "smolagents":
             from smolagents import ToolCallingAgent, FinalAnswerTool
@@ -433,49 +442,31 @@ class FiveADayBenchmark(Benchmark):
             specialist_agents = []
             all_tools = environment.get_tools()
 
-            for agent_spec in agents_specs:
-                if agent_spec["agent_id"] == primary_agent_id:
-                    continue  # Skip primary agent
-
+            for agent_spec in specialist_specs:
                 # Get tools for this specialist
-                specialist_tool_names = agent_spec.get("tools", [])
-                if specialist_tool_names:
-                    # Filter tools by name
-                    specialist_tools = [t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names]
-                else:
-                    specialist_tools = []
-
+                specialist_tools = self._filter_tools(all_tools, agent_spec["tools"])
                 specialist_tools.append(FinalAnswerTool())
 
                 # Sanitize agent name to be a valid Python identifier
-                sanitized_name = agent_spec["agent_name"].replace(" ", "_").replace("-", "_")
-                if not sanitized_name[0].isalpha() and sanitized_name[0] != "_":
-                    sanitized_name = "_" + sanitized_name
+                sanitized_name = self._sanitize_name(agent_spec["agent_name"])
 
                 # Create specialist agent
                 specialist = ToolCallingAgent(
                     model=model,
                     tools=specialist_tools,
                     name=sanitized_name,
-                    description=agent_spec.get("agent_instruction", f"{agent_spec['agent_name']} specialist"),
-                    instructions=agent_spec.get("agent_instruction", ""),
+                    description=agent_spec["agent_instruction"],
+                    instructions=agent_spec["agent_instruction"],
                     verbosity_level=2,
                 )
                 specialist_agents.append(specialist)
 
             # Get primary agent tools (usually empty for orchestrators)
-            primary_tool_names = primary_spec.get("tools", [])
-            if primary_tool_names:
-                primary_tools = [t for t in all_tools if hasattr(t, "name") and t.name in primary_tool_names]
-            else:
-                primary_tools = []
-
+            primary_tools = self._filter_tools(all_tools, primary_spec["tools"])
             primary_tools.append(FinalAnswerTool())
 
             # Sanitize agent name to be a valid Python identifier
-            sanitized_primary_name = primary_spec["agent_name"].replace(" ", "_").replace("-", "_")
-            if not sanitized_primary_name[0].isalpha() and sanitized_primary_name[0] != "_":
-                sanitized_primary_name = "_" + sanitized_primary_name
+            sanitized_primary_name = self._sanitize_name(primary_spec["agent_name"])
 
             # Create primary orchestrator agent with managed_agents
             agent = ToolCallingAgent(
@@ -483,7 +474,7 @@ class FiveADayBenchmark(Benchmark):
                 tools=primary_tools,
                 managed_agents=specialist_agents if specialist_agents else None,
                 name=sanitized_primary_name,
-                instructions=primary_spec.get("agent_instruction", ""),
+                instructions=primary_spec["agent_instruction"],
                 verbosity_level=2,
             )
 
@@ -511,19 +502,12 @@ class FiveADayBenchmark(Benchmark):
 
             # Create specialist agent nodes
             specialist_nodes = {}
-            for agent_spec in agents_specs:
-                if agent_spec["agent_id"] == primary_agent_id:
-                    continue
-
+            for agent_spec in specialist_specs:
                 agent_id = agent_spec["agent_id"]
-                agent_instruction = agent_spec.get("agent_instruction", "")
-                specialist_tool_names = agent_spec.get("tools", [])
+                agent_instruction = agent_spec["agent_instruction"]
 
                 # Get tools for this specialist
-                if specialist_tool_names:
-                    specialist_tools = [t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names]
-                else:
-                    specialist_tools = []
+                specialist_tools = self._filter_tools(all_tools, agent_spec["tools"])
 
                 # Create specialist node function
                 specialist_model = model.bind_tools(specialist_tools) if specialist_tools else model
@@ -561,7 +545,7 @@ class FiveADayBenchmark(Benchmark):
                 )
 
             # Create orchestrator node with routing logic
-            primary_instruction = primary_spec.get("agent_instruction", "")
+            primary_instruction = primary_spec["agent_instruction"]
 
             def orchestrator_node(state: MultiAgentState):
                 messages = state["messages"]
@@ -625,20 +609,13 @@ class FiveADayBenchmark(Benchmark):
 
             # Create specialist agents
             specialist_agents_dict = {}
-            for agent_spec in agents_specs:
-                if agent_spec["agent_id"] == primary_agent_id:
-                    continue
-
+            for agent_spec in specialist_specs:
                 agent_id = agent_spec["agent_id"]
                 agent_name = agent_spec["agent_name"]
-                agent_instruction = agent_spec.get("agent_instruction", "")
-                specialist_tool_names = agent_spec.get("tools", [])
+                agent_instruction = agent_spec["agent_instruction"]
 
                 # Get tools for this specialist
-                if specialist_tool_names:
-                    specialist_tools = [t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names]
-                else:
-                    specialist_tools = []
+                specialist_tools = self._filter_tools(all_tools, agent_spec["tools"])
 
                 # Create specialist agent
                 specialist_agent = ReActAgent.from_tools(
@@ -683,10 +660,8 @@ class FiveADayBenchmark(Benchmark):
             orchestrator_tools = [make_handoff_tool(spec_id, spec_info) for spec_id, spec_info in specialist_agents_dict.items()]
 
             # Get primary agent tools (if any)
-            primary_tool_names = primary_spec.get("tools", [])
-            if primary_tool_names:
-                primary_tools = [t for t in all_tools if hasattr(t, "name") and t.name in primary_tool_names]
-                orchestrator_tools.extend(primary_tools)
+            primary_tools = self._filter_tools(all_tools, primary_spec["tools"])
+            orchestrator_tools.extend(primary_tools)
 
             # Create orchestrator agent with handoff tools
             orchestrator = ReActAgent.from_tools(
@@ -697,7 +672,7 @@ class FiveADayBenchmark(Benchmark):
             )
 
             # Set orchestrator system prompt
-            primary_instruction = primary_spec.get("agent_instruction", "")
+            primary_instruction = primary_spec["agent_instruction"]
             if primary_instruction:
                 orchestrator.update_prompts({"agent_worker:system_prompt": primary_instruction})
 
@@ -717,14 +692,12 @@ class FiveADayBenchmark(Benchmark):
 
     def setup_evaluators(self, environment, task, agents, user) -> Sequence[Evaluator]:
         """Create evaluators based on task's evaluation_data.evaluators list."""
-        evaluator_names = task.evaluation_data.get("evaluators", [])
-
-        if not evaluator_names:
+        if not task.evaluation_data["evaluators"]:
             return []
 
         # Dynamically instantiate evaluators
         evaluator_instances = []
-        for name in evaluator_names:
+        for name in task.evaluation_data["evaluators"]:
             # Get evaluator class from evaluators module
             evaluator_class = getattr(evaluators, name, None)
             if evaluator_class is None:
@@ -760,7 +733,7 @@ class FiveADayBenchmark(Benchmark):
         main_trace_dict = agent_traces.get("orchestrator") or next(iter(agent_traces.values()))
 
         # Extract messages and wrap in MessageHistory
-        messages = main_trace_dict.get("messages", [])
+        messages = main_trace_dict["messages"]
         message_history = MessageHistory(messages)
 
         # Run each evaluator
@@ -805,12 +778,11 @@ def load_tasks(data_file: str = "data/tasks.json", limit: Optional[int] = None, 
         tasks_data.append(
             Task(
                 query=task_dict["query"],
-                environment_data=task_dict.get("environment_data", {}),
-                evaluation_data=task_dict.get("evaluation_data", {}),
-                metadata=task_dict.get("metadata", {}),
+                environment_data=task_dict["environment_data"],
+                evaluation_data=task_dict["evaluation_data"],
+                metadata=task_dict["metadata"],
             )
         )
-
 
     print(f"Loaded {len(tasks_data)} tasks\n")
 
@@ -824,7 +796,7 @@ def load_agent_configs(
     specific_task_only: Optional[int] = None,
     model_id: Optional[str] = None,
     temperature: Optional[float] = None,
-    ) -> List[Dict[str, Any]]:
+) -> List[Dict[str, Any]]:
     """Load agent configurations from JSON file.
 
     Args:

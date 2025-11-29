@@ -56,12 +56,12 @@ class ArithmeticAccuracyEvaluator(Evaluator):
         - per_child_value_correct: boolean
         - arithmetic_score: float (0.0 to 1.0)
         """
-        
+
         try:
             response = call_llm_judge(prompt)
             response = response.replace("```json", "").replace("```", "").strip()
             result = json.loads(response)
-            
+
             return {
                 "total_value_correct": result.get("total_value_correct", False),
                 "per_child_value_correct": result.get("per_child_value_correct", False),

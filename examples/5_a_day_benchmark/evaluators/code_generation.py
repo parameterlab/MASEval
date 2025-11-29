@@ -68,7 +68,7 @@ class UnitTestEvaluator(Evaluator):
         """Execute code safely using RestrictedPython and return result."""
         # Compile with RestrictedPython
         compile_result = compile_restricted(code, "<evaluator>", "exec")
-        
+
         if hasattr(compile_result, "errors") and compile_result.errors:
             # Format errors properly - they can be tuples or strings
             error_msgs = []
@@ -78,9 +78,9 @@ class UnitTestEvaluator(Evaluator):
                 else:
                     error_msgs.append(str(err))
             raise SyntaxError("; ".join(error_msgs))
-        
+
         code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
-        
+
         # Safe execution environment
         safe_env = {
             **safe_globals,
@@ -89,7 +89,7 @@ class UnitTestEvaluator(Evaluator):
             "_getitem_": lambda obj, index: obj[index],
             "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
         }
-        
+
         exec(code_obj, safe_env)
 
         if function_name not in safe_env:
@@ -215,12 +215,12 @@ class CodeQualityEvaluator(Evaluator):
         - handles_edge_cases: boolean
         - code_quality_score: float (0.0 to 1.0)
         """
-        
+
         try:
             response = call_llm_judge(prompt)
             response = response.replace("```json", "").replace("```", "").strip()
             result = json.loads(response)
-            
+
             return {
                 "has_docstring": result.get("has_docstring", False),
                 "handles_edge_cases": result.get("handles_edge_cases", False),

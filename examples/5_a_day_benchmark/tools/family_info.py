@@ -19,10 +19,10 @@ class FamilyInfoTool(BaseTool):
         )
         super().__init__("family_info", description)
         self.children = family_data.get("children", [])
-        
+
         # Store apple shares owned
         apple_shares = family_data.get("apple_shares_owned", 0)
-        
+
         # Support both formal name and stock ticker
         self.assets = {
             "apple_shares": apple_shares,

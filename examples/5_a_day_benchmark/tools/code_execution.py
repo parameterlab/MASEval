@@ -18,7 +18,7 @@ class CodeExecutionTool(BaseTool):
         description = "Execute Python code safely. Actions: 'execute' (run Python code string), 'test' (run code against test cases)"
         super().__init__("python_executor", description)
         self.test_cases = test_cases or []
-        
+
         # Safe execution environment with all RestrictedPython guards
         self.safe_env = {
             **safe_globals,

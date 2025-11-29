@@ -31,10 +31,6 @@
     "task_description": "Stock inheritance calculation",
     "agent_type": "multi",
     "primary_agent_id": "orchestrator",
-    "model_config": {
-      "temperature": 0.7,
-      "max_tokens": 4096
-    },
     "agents": [
       {
         "agent_id": "orchestrator",
@@ -61,10 +57,6 @@
     "task_description": "Code generation (DP algorithm)",
     "agent_type": "multi",
     "primary_agent_id": "orchestrator",
-    "model_config": {
-      "temperature": 0.7,
-      "max_tokens": 4096
-    },
     "agents": [
       {
         "agent_id": "orchestrator",
@@ -85,10 +77,6 @@
     "task_description": "Calendar scheduling",
     "agent_type": "multi",
     "primary_agent_id": "orchestrator",
-    "model_config": {
-      "temperature": 0.7,
-      "max_tokens": 4096
-    },
     "agents": [
       {
         "agent_id": "orchestrator",
@@ -109,11 +97,6 @@
     "task_description": "Hotel search optimization",
     "agent_type": "multi",
     "primary_agent_id": "orchestrator",
-    "model_config": {
-      "model_id": "gemini-2.0-flash-exp",
-      "temperature": 0.7,
-      "max_tokens": 4096
-    },
     "agents": [
       {
         "agent_id": "orchestrator",

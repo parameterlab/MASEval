@@ -146,12 +146,7 @@ def call_llm_judge(prompt: str, model: str = "gemini/gemini-2.5-flash") -> str:
         The LLM's response
     """
     try:
-        response = completion(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            api_key=os.getenv("GOOGLE_API_KEY"),
-            temperature=0.0
-        )
+        response = completion(model=model, messages=[{"role": "user", "content": prompt}], api_key=os.getenv("GOOGLE_API_KEY"), temperature=0.0)
         content = response.choices[0].message.content
         return content if content else ""
     except Exception as e:
