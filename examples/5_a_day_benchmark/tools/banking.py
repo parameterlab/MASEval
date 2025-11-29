@@ -1,4 +1,11 @@
-"""Banking tool implementation."""
+"""Banking tool collection with shared state across sub-tools.
+
+Tools:
+- banking.get_balance: Get current account balance
+- banking.get_transactions: Get transaction history with optional date filtering
+- banking.get_transaction: Get specific transaction by ID
+- banking.get_asset: Get asset information by name
+"""
 
 from dataclasses import dataclass
 from typing import Any
@@ -27,8 +34,11 @@ class Transaction:
         }
 
 
-class BankingTool(BaseTool):
-    """Banking tool with transaction history, balance, and asset information."""
+class BankingState:
+    """Shared state for all banking tools.
+    
+    Maintains balance, transactions, and assets across all sub-tool invocations.
+    """
 
     def __init__(
         self,
@@ -36,21 +46,8 @@ class BankingTool(BaseTool):
         current_balance: float,
         assets_data: dict[str, Any] | None = None,
     ):
-        description = (
-            "Access bank account information and assets. "
-            "Actions: 'get_balance' (get current balance), 'get_transactions' (get transactions with optional start_date/end_date), "
-            "'get_transaction' (get transaction by transaction_id), "
-            "'get_asset' (requires asset_name parameter, e.g. asset_name='AAPL')"
-        )
-        super().__init__(
-            "banking",
-            description,
-            tool_args=["action", "transaction_id", "start_date", "end_date", "asset_name"],
-        )
         self.current_balance = current_balance
         self.transactions: list[Transaction] = []
-
-        # Store assets
         self.assets = assets_data or {}
 
         # Load transactions
@@ -65,34 +62,43 @@ class BankingTool(BaseTool):
                 )
             )
 
+
+class BankingGetBalanceTool(BaseTool):
+    """Get current account balance."""
+
+    def __init__(self, banking_state: BankingState):
+        super().__init__(
+            "banking.get_balance",
+            "Get current bank account balance",
+            tool_args=[],
+        )
+        self.state = banking_state
+
     def execute(self, **kwargs) -> ToolResult:
-        """Execute banking action."""
-        action = kwargs.get("action")
-
-        if action == "get_balance":
-            return self._get_balance()
-        elif action == "get_transactions":
-            return self._get_transactions(
-                start_date=kwargs.get("start_date"),
-                end_date=kwargs.get("end_date"),
-            )
-        elif action == "get_transaction":
-            return self._get_transaction(kwargs.get("transaction_id"))
-        elif action == "get_asset":
-            return self._get_asset(kwargs.get("asset_name"))
-        else:
-            return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
-
-    def _get_balance(self) -> ToolResult:
         """Get current account balance."""
         return ToolResult(
             success=True,
-            data={"balance": self.current_balance, "currency": "USD"},
+            data={"balance": self.state.current_balance, "currency": "USD"},
         )
 
-    def _get_transactions(self, start_date: str | None = None, end_date: str | None = None) -> ToolResult:
+
+class BankingGetTransactionsTool(BaseTool):
+    """Get transaction history with optional date filtering."""
+
+    def __init__(self, banking_state: BankingState):
+        super().__init__(
+            "banking.get_transactions",
+            "Get transaction history with optional start_date and end_date filters (YYYY-MM-DD format)",
+            tool_args=["start_date", "end_date"],
+        )
+        self.state = banking_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Get transaction history with optional date filtering."""
-        filtered = self.transactions
+        start_date = kwargs.get("start_date")
+        end_date = kwargs.get("end_date")
+        
+        filtered = self.state.transactions
 
         if start_date:
             filtered = [t for t in filtered if t.date >= start_date]
@@ -105,26 +111,84 @@ class BankingTool(BaseTool):
             metadata={"count": len(filtered)},
         )
 
-    def _get_transaction(self, transaction_id: str | None) -> ToolResult:
+
+class BankingGetTransactionTool(BaseTool):
+    """Get specific transaction by ID."""
+
+    def __init__(self, banking_state: BankingState):
+        super().__init__(
+            "banking.get_transaction",
+            "Get specific transaction details by transaction ID",
+            tool_args=["transaction_id"],
+        )
+        self.state = banking_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Get specific transaction by ID."""
+        transaction_id = kwargs.get("transaction_id")
+        
         if not transaction_id:
             return ToolResult(success=False, data=None, error="transaction_id is required")
 
-        for txn in self.transactions:
+        for txn in self.state.transactions:
             if txn.id == transaction_id:
                 return ToolResult(success=True, data=txn.to_dict())
 
         return ToolResult(success=False, data=None, error=f"Transaction {transaction_id} not found")
 
-    def _get_asset(self, asset_name: str | None) -> ToolResult:
+
+class BankingGetAssetTool(BaseTool):
+    """Get asset information by name."""
+
+    def __init__(self, banking_state: BankingState):
+        super().__init__(
+            "banking.get_asset",
+            "Get asset information by asset name (e.g., 'AAPL' for Apple stock shares)",
+            tool_args=["asset_name"],
+        )
+        self.state = banking_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Get asset information."""
+        asset_name = kwargs.get("asset_name")
+        
         if not asset_name:
             return ToolResult(success=False, data=None, error="asset_name is required")
 
-        if asset_name in self.assets:
+        if asset_name in self.state.assets:
             return ToolResult(
                 success=True,
-                data={"asset": asset_name, "value": self.assets[asset_name]},
+                data={"asset": asset_name, "value": self.state.assets[asset_name]},
             )
 
         return ToolResult(success=False, data=None, error=f"Asset {asset_name} not found")
+
+
+class BankingToolCollection:
+    """Banking tool collection factory.
+    
+    Creates a shared state and returns all banking sub-tools that share that state.
+    This ensures transaction history and balance are consistent across all operations.
+    
+    Usage:
+        collection = BankingToolCollection(transactions_data, balance, assets_data)
+        tools = collection.get_sub_tools()
+        # All tools share the same banking state
+    """
+
+    def __init__(
+        self,
+        transactions_data: list[dict[str, Any]],
+        current_balance: float,
+        assets_data: dict[str, Any] | None = None,
+    ):
+        self.state = BankingState(transactions_data, current_balance, assets_data)
+
+    def get_sub_tools(self) -> list[BaseTool]:
+        """Return all banking sub-tools with shared state."""
+        return [
+            BankingGetBalanceTool(self.state),
+            BankingGetTransactionsTool(self.state),
+            BankingGetTransactionTool(self.state),
+            BankingGetAssetTool(self.state),
+        ]

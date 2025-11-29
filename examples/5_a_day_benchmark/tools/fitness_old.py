@@ -1,11 +1,4 @@
-"""Fitness tracking tool collections with shared state.
-
-Tools:
-- running_app.get_activities: Get running/cardio activities with optional date filters
-- running_app.get_activity: Get specific activity by ID
-- gym_tracker.get_workouts: Get gym/strength workouts with optional date filters  
-- gym_tracker.get_workout: Get specific workout by ID
-"""
+"""Fitness tracking tools (running app and gym tracker)."""
 
 from dataclasses import dataclass
 from typing import Any
@@ -38,10 +31,15 @@ class Activity:
         return result
 
 
-class RunningAppState:
-    """Shared state for running app tools."""
+class RunningAppTool(BaseTool):
+    """Running and cardio activity tracker."""
 
     def __init__(self, activities_data: list[dict[str, Any]]):
+        super().__init__(
+            "running_app",
+            "Access running and cardio activities",
+            tool_args=["action", "start_date", "end_date", "activity_id"],
+        )
         self.activities: list[Activity] = []
 
         # Load activities
@@ -57,24 +55,23 @@ class RunningAppState:
                 )
             )
 
-
-class RunningAppGetActivitiesTool(BaseTool):
-    """Get running/cardio activities with optional date filters."""
-
-    def __init__(self, running_state: RunningAppState):
-        super().__init__(
-            "running_app.get_activities",
-            "Get running and cardio activities with optional start_date and end_date filters (YYYY-MM-DD)",
-            tool_args=["start_date", "end_date"],
-        )
-        self.state = running_state
-
     def execute(self, **kwargs) -> ToolResult:
+        """Execute running app action."""
+        action = kwargs.get("action")
+
+        if action == "get_activities":
+            return self._get_activities(
+                start_date=kwargs.get("start_date"),
+                end_date=kwargs.get("end_date"),
+            )
+        elif action == "get_activity":
+            return self._get_activity(kwargs.get("activity_id"))
+        else:
+            return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
+
+    def _get_activities(self, start_date: str | None = None, end_date: str | None = None) -> ToolResult:
         """Get activities in date range."""
-        start_date = kwargs.get("start_date")
-        end_date = kwargs.get("end_date")
-        
-        filtered = self.state.activities
+        filtered = self.activities
 
         if start_date:
             filtered = [a for a in filtered if a.date >= start_date]
@@ -89,50 +86,27 @@ class RunningAppGetActivitiesTool(BaseTool):
             },
         )
 
-
-class RunningAppGetActivityTool(BaseTool):
-    """Get specific activity by ID."""
-
-    def __init__(self, running_state: RunningAppState):
-        super().__init__(
-            "running_app.get_activity",
-            "Get specific running/cardio activity by ID",
-            tool_args=["activity_id"],
-        )
-        self.state = running_state
-
-    def execute(self, **kwargs) -> ToolResult:
+    def _get_activity(self, activity_id: str | None) -> ToolResult:
         """Get specific activity by ID."""
-        activity_id = kwargs.get("activity_id")
-        
         if not activity_id:
             return ToolResult(success=False, data=None, error="activity_id is required")
 
-        for activity in self.state.activities:
+        for activity in self.activities:
             if activity.id == activity_id:
                 return ToolResult(success=True, data=activity.to_dict())
 
         return ToolResult(success=False, data=None, error=f"Activity {activity_id} not found")
 
 
-class RunningAppToolCollection:
-    """Running app tool collection factory."""
-
-    def __init__(self, activities_data: list[dict[str, Any]]):
-        self.state = RunningAppState(activities_data)
-
-    def get_sub_tools(self) -> list[BaseTool]:
-        """Return all running app sub-tools."""
-        return [
-            RunningAppGetActivitiesTool(self.state),
-            RunningAppGetActivityTool(self.state),
-        ]
-
-
-class GymTrackerState:
-    """Shared state for gym tracker tools."""
+class GymTrackerTool(BaseTool):
+    """Gym and strength workout tracker."""
 
     def __init__(self, workouts_data: list[dict[str, Any]]):
+        super().__init__(
+            "gym_tracker",
+            "Access gym and strength workouts",
+            tool_args=["action", "start_date", "end_date", "workout_id"],
+        )
         self.workouts: list[Activity] = []
 
         # Load workouts
@@ -148,24 +122,23 @@ class GymTrackerState:
                 )
             )
 
-
-class GymTrackerGetWorkoutsTool(BaseTool):
-    """Get gym/strength workouts with optional date filters."""
-
-    def __init__(self, gym_state: GymTrackerState):
-        super().__init__(
-            "gym_tracker.get_workouts",
-            "Get gym and strength workouts with optional start_date and end_date filters (YYYY-MM-DD)",
-            tool_args=["start_date", "end_date"],
-        )
-        self.state = gym_state
-
     def execute(self, **kwargs) -> ToolResult:
+        """Execute gym tracker action."""
+        action = kwargs.get("action")
+
+        if action == "get_workouts":
+            return self._get_workouts(
+                start_date=kwargs.get("start_date"),
+                end_date=kwargs.get("end_date"),
+            )
+        elif action == "get_workout":
+            return self._get_workout(kwargs.get("workout_id"))
+        else:
+            return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
+
+    def _get_workouts(self, start_date: str | None = None, end_date: str | None = None) -> ToolResult:
         """Get workouts in date range."""
-        start_date = kwargs.get("start_date")
-        end_date = kwargs.get("end_date")
-        
-        filtered = self.state.workouts
+        filtered = self.workouts
 
         if start_date:
             filtered = [w for w in filtered if w.date >= start_date]
@@ -180,41 +153,13 @@ class GymTrackerGetWorkoutsTool(BaseTool):
             },
         )
 
-
-class GymTrackerGetWorkoutTool(BaseTool):
-    """Get specific workout by ID."""
-
-    def __init__(self, gym_state: GymTrackerState):
-        super().__init__(
-            "gym_tracker.get_workout",
-            "Get specific gym/strength workout by ID",
-            tool_args=["workout_id"],
-        )
-        self.state = gym_state
-
-    def execute(self, **kwargs) -> ToolResult:
+    def _get_workout(self, workout_id: str | None) -> ToolResult:
         """Get specific workout by ID."""
-        workout_id = kwargs.get("workout_id")
-        
         if not workout_id:
             return ToolResult(success=False, data=None, error="workout_id is required")
 
-        for workout in self.state.workouts:
+        for workout in self.workouts:
             if workout.id == workout_id:
                 return ToolResult(success=True, data=workout.to_dict())
 
         return ToolResult(success=False, data=None, error=f"Workout {workout_id} not found")
-
-
-class GymTrackerToolCollection:
-    """Gym tracker tool collection factory."""
-
-    def __init__(self, workouts_data: list[dict[str, Any]]):
-        self.state = GymTrackerState(workouts_data)
-
-    def get_sub_tools(self) -> list[BaseTool]:
-        """Return all gym tracker sub-tools."""
-        return [
-            GymTrackerGetWorkoutsTool(self.state),
-            GymTrackerGetWorkoutTool(self.state),
-        ]

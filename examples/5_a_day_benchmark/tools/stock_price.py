@@ -1,34 +1,23 @@
-"""Stock price tool implementation."""
+"""Stock price lookup tool - single purpose."""
 
 from .base import BaseTool, ToolResult
 
 
-class StockPriceTool(BaseTool):
-    """Stock price lookup tool with static data.
-
-    Provides stock price information for configured symbols.
-    """
+class StockPriceGetTool(BaseTool):
+    """Get stock price by symbol."""
 
     def __init__(self, price_data: dict[str, float]):
-        description = "Look up stock prices by symbol (e.g. 'AAPL', 'GOOGL')"
         super().__init__(
-            "stock_price",
-            description,
-            tool_args=["action", "symbol"],
+            "stock_price.get",
+            "Look up current stock price by symbol (e.g. 'AAPL', 'GOOGL')",
+            tool_args=["symbol"],
         )
         self.prices = price_data
 
     def execute(self, **kwargs) -> ToolResult:
-        """Execute stock price lookup."""
-        action = kwargs.get("action", "get_price")
-
-        if action == "get_price":
-            return self._get_price(kwargs.get("symbol"))
-        else:
-            return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
-
-    def _get_price(self, symbol: str | None) -> ToolResult:
         """Get stock price for symbol."""
+        symbol = kwargs.get("symbol")
+        
         if not symbol:
             return ToolResult(success=False, data=None, error="symbol is required")
 
@@ -44,3 +33,20 @@ class StockPriceTool(BaseTool):
             )
 
         return ToolResult(success=False, data=None, error=f"Symbol {symbol} not found")
+
+
+class StockPriceToolCollection:
+    """Stock price tool collection factory.
+    
+    Currently only contains one tool, but structured as a collection
+    for consistency with other tool patterns.
+    """
+
+    def __init__(self, price_data: dict[str, float]):
+        self.price_data = price_data
+
+    def get_sub_tools(self) -> list[BaseTool]:
+        """Return all stock price sub-tools."""
+        return [
+            StockPriceGetTool(self.price_data),
+        ]

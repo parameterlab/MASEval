@@ -1,4 +1,11 @@
-"""Email tool implementation."""
+"""Email tool collection with shared state across sub-tools.
+
+Tools:
+- email.get_inbox: List all emails in inbox
+- email.get: Read specific email by ID
+- email.send: Send an email
+- email.draft: Draft an email without sending
+"""
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -32,20 +39,13 @@ class EmailMessage:
         }
 
 
-class EmailTool(BaseTool):
-    """Email tool with inbox and sending capabilities."""
+class EmailState:
+    """Shared state for all email tools.
+    
+    Maintains inbox and sent emails across all sub-tool invocations.
+    """
 
     def __init__(self, inbox_data: list[dict[str, Any]]):
-        description = (
-            "Access and send emails. "
-            "Actions: 'get_inbox' (lists all emails), 'get_email' (read email by email_id), "
-            "'send_email' (send email with to, subject, body), 'draft_email' (draft email with to, subject, body)"
-        )
-        super().__init__(
-            "email",
-            description,
-            tool_args=["action", "to", "subject", "body", "email_id"],
-        )
         self.inbox: list[EmailMessage] = []
         self.sent: list[EmailMessage] = []
         self._next_id = len(inbox_data) + 1
@@ -64,51 +64,71 @@ class EmailTool(BaseTool):
                 )
             )
 
-    def execute(self, **kwargs) -> ToolResult:
-        """Execute email action."""
-        action = kwargs.get("action")
-        if action == "get_inbox":
-            return self._get_inbox()
-        elif action == "get_email":
-            return self._get_email(kwargs.get("email_id"))
-        elif action == "send_email":
-            return self._send_email(
-                to=kwargs.get("to"),
-                subject=kwargs.get("subject"),
-                body=kwargs.get("body"),
-            )
-        elif action == "draft_email":
-            return self._draft_email(
-                to=kwargs.get("to"),
-                subject=kwargs.get("subject"),
-                body=kwargs.get("body"),
-            )
-        else:
-            return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
 
-    def _get_inbox(self) -> ToolResult:
+class EmailGetInboxTool(BaseTool):
+    """Get all emails in inbox."""
+
+    def __init__(self, email_state: EmailState):
+        super().__init__(
+            "email.get_inbox",
+            "List all emails in the inbox",
+            tool_args=[],
+        )
+        self.state = email_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Get all emails in inbox."""
-        emails = [email.to_dict() for email in self.inbox]
+        emails = [email.to_dict() for email in self.state.inbox]
         return ToolResult(
             success=True,
             data=emails,
             metadata={"count": len(emails)},
         )
 
-    def _get_email(self, email_id: str | None) -> ToolResult:
+
+class EmailGetTool(BaseTool):
+    """Read a specific email by ID."""
+
+    def __init__(self, email_state: EmailState):
+        super().__init__(
+            "email.get",
+            "Read a specific email by ID",
+            tool_args=["email_id"],
+        )
+        self.state = email_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Get specific email by ID."""
+        email_id = kwargs.get("email_id")
+        
         if not email_id:
             return ToolResult(success=False, data=None, error="email_id is required")
 
-        for email in self.inbox:
+        for email in self.state.inbox:
             if email.id == email_id:
                 email.read = True
                 return ToolResult(success=True, data=email.to_dict())
 
         return ToolResult(success=False, data=None, error=f"Email {email_id} not found")
 
-    def _send_email(self, to: str | None, subject: str | None, body: str | None) -> ToolResult:
+
+class EmailSendTool(BaseTool):
+    """Send an email."""
+
+    def __init__(self, email_state: EmailState):
+        super().__init__(
+            "email.send",
+            "Send an email to a recipient",
+            tool_args=["to", "subject", "body"],
+        )
+        self.state = email_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Send an email."""
+        to = kwargs.get("to")
+        subject = kwargs.get("subject")
+        body = kwargs.get("body")
+        
         if not to or not subject or not body:
             return ToolResult(
                 success=False,
@@ -117,7 +137,7 @@ class EmailTool(BaseTool):
             )
 
         email = EmailMessage(
-            id=str(self._next_id),
+            id=str(self.state._next_id),
             from_address="me@example.com",
             to_address=to,
             subject=subject,
@@ -125,16 +145,32 @@ class EmailTool(BaseTool):
             timestamp=datetime.now().isoformat(),
             read=True,
         )
-        self._next_id += 1
-        self.sent.append(email)
+        self.state._next_id += 1
+        self.state.sent.append(email)
 
         return ToolResult(
             success=True,
             data={"status": "sent", "id": email.id, "to": to},
         )
 
-    def _draft_email(self, to: str | None, subject: str | None, body: str | None) -> ToolResult:
+
+class EmailDraftTool(BaseTool):
+    """Draft an email without sending."""
+
+    def __init__(self, email_state: EmailState):
+        super().__init__(
+            "email.draft",
+            "Draft an email without sending it",
+            tool_args=["to", "subject", "body"],
+        )
+        self.state = email_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Draft an email without sending."""
+        to = kwargs.get("to")
+        subject = kwargs.get("subject")
+        body = kwargs.get("body")
+        
         if not to or not subject or not body:
             return ToolResult(
                 success=False,
@@ -150,3 +186,28 @@ class EmailTool(BaseTool):
         }
 
         return ToolResult(success=True, data=draft)
+
+
+class EmailToolCollection:
+    """Email tool collection factory.
+    
+    Creates a shared state and returns all email sub-tools that share that state.
+    This ensures sent emails are visible across all email operations.
+    
+    Usage:
+        collection = EmailToolCollection(inbox_data)
+        tools = collection.get_sub_tools()
+        # All tools share the same inbox and sent folder
+    """
+
+    def __init__(self, inbox_data: list[dict[str, Any]]):
+        self.state = EmailState(inbox_data)
+
+    def get_sub_tools(self) -> list[BaseTool]:
+        """Return all email sub-tools with shared state."""
+        return [
+            EmailGetInboxTool(self.state),
+            EmailGetTool(self.state),
+            EmailSendTool(self.state),
+            EmailDraftTool(self.state),
+        ]

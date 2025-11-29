@@ -1,8 +1,23 @@
-# AGENT INSTRUCTIONS
+# Five-A-Day Benchmark - Agent Instructions
+
+## General Agent Instructions
 
 You are modifying a **static, self-contained example** that exists only to showcase the flexibility of the `maseval` library.
 
 This code is **pre-release** and **intentionally simple**. Educational clarity is more important than robustness or feature completeness.
+
+## CRITICAL: CHANGELOG Context Awareness
+
+**DO NOT update the main repository CHANGELOG.md with implementation details from work within this example.**
+
+The main `/CHANGELOG.md` is for tracking changes **between PRs and releases**, not internal implementation details within a single PR or example. When working on this benchmark:
+
+- ❌ DO NOT add entries like "Refactored tools in Five-A-Day" or "Fixed bug in Five-A-Day tool X"
+- ❌ DO NOT document internal iterations, bug fixes, or refactorings done during development
+- ✅ DO update the main CHANGELOG only when this entire example is being added/modified in a PR that affects the published library
+- ✅ DO document significant changes in this local `examples/5_a_day_benchmark/AGENTS.md` or README if needed
+
+**Why?** If a feature is being introduced in PR #10, all the work to implement it correctly is part of that PR's scope. The CHANGELOG should say "Added Five-A-Day benchmark (PR #10)", not list every internal implementation detail. Think of the bigger picture: what matters to users consuming releases, not what happened during development.
 
 ---
 

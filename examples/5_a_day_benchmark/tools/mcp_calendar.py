@@ -1,7 +1,12 @@
-"""MCP Calendar Tool - Model Context Protocol Integration
+"""MCP Calendar Tool Collection - Model Context Protocol Integration
 
 Demonstrates MCP integration by wrapping calendar operations as framework-agnostic tools.
 Shows how maseval enables agents to work with external systems via standardized protocols.
+
+Tools:
+- mcp_calendar.get_events: Get events in date range
+- mcp_calendar.check_availability: Check if time slot is available
+- mcp_calendar.add_event: Add new event to calendar
 """
 
 from typing import Any, Dict
@@ -9,94 +14,138 @@ from typing import Any, Dict
 from .base import BaseTool, ToolResult
 
 
-class MCPCalendarTool(BaseTool):
-    """Calendar tool demonstrating MCP protocol integration."""
+class MCPCalendarState:
+    """Shared state for MCP calendar tools."""
 
     def __init__(self, name: str, calendar_data: Dict[str, Any]):
-        """Initialize MCP calendar tool.
-
-        Args:
-            name: Tool name (e.g., "my_calendar_mcp", "other_calendar_mcp")
-            calendar_data: Calendar events dict with "events" list
-        """
-        description = f"Access {name} via MCP. Supports: get_events, check_availability, add_event"
-        super().__init__(
-            name,
-            description,
-            tool_args=[
-                "action",
-                "start_date",
-                "end_date",
-                "date",
-                "start_time",
-                "end_time",
-                "title",
-                "description",
-            ],
-        )
+        self.name = name
         self.calendar_data = calendar_data
 
+
+class MCPCalendarGetEventsTool(BaseTool):
+    """Get events in date range via MCP."""
+
+    def __init__(self, mcp_state: MCPCalendarState):
+        super().__init__(
+            f"{mcp_state.name}.get_events",
+            f"Get events from {mcp_state.name} calendar with optional start_date and end_date filters (YYYY-MM-DD)",
+            tool_args=["start_date", "end_date"],
+        )
+        self.state = mcp_state
+
     def execute(self, **kwargs) -> ToolResult:
-        """Execute calendar operation via MCP protocol pattern."""
-        action = kwargs.get("action")
-        if not action:
-            return ToolResult(success=False, data=None, error="Missing 'action' parameter")
-
+        """Get events in date range."""
+        start_date = kwargs.get("start_date", "")
+        end_date = kwargs.get("end_date", "")
+        
         try:
-            if action == "get_events":
-                result = self._mcp_get_events(kwargs.get("start_date", ""), kwargs.get("end_date", ""))
-            elif action == "check_availability":
-                result = self._mcp_check_availability(
-                    kwargs.get("date", ""),
-                    kwargs.get("start_time", ""),
-                    kwargs.get("end_time", ""),
-                )
-            elif action == "add_event":
-                result = self._mcp_add_event(
-                    kwargs.get("date", ""),
-                    kwargs.get("start_time", ""),
-                    kwargs.get("end_time", ""),
-                    kwargs.get("title", ""),
-                    kwargs.get("description", ""),
-                )
+            events = self.state.calendar_data.get("events", [])
+            if start_date and end_date:
+                filtered = [e for e in events if start_date <= e["date"] <= end_date]
+            elif start_date:
+                filtered = [e for e in events if e["date"] >= start_date]
+            elif end_date:
+                filtered = [e for e in events if e["date"] <= end_date]
             else:
-                return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
-
-            return ToolResult(success=True, data=result, metadata={"mcp": True, "action": action})
-
+                filtered = events
+                
+            return ToolResult(
+                success=True,
+                data={"events": filtered, "count": len(filtered)},
+                metadata={"mcp": True, "action": "get_events"}
+            )
         except Exception as e:
             return ToolResult(success=False, data=None, error=str(e))
 
-    def _mcp_get_events(self, start_date: str, end_date: str) -> Dict[str, Any]:
-        """Get events in date range."""
-        events = self.calendar_data.get("events", [])
-        if start_date and end_date:
-            filtered = [e for e in events if start_date <= e["date"] <= end_date]
-        elif start_date:
-            filtered = [e for e in events if e["date"] >= start_date]
-        elif end_date:
-            filtered = [e for e in events if e["date"] <= end_date]
-        else:
-            filtered = events
-        return {"events": filtered, "count": len(filtered)}
 
-    def _mcp_check_availability(self, date: str, start_time: str, end_time: str) -> Dict[str, Any]:
+class MCPCalendarCheckAvailabilityTool(BaseTool):
+    """Check if time slot is available via MCP."""
+
+    def __init__(self, mcp_state: MCPCalendarState):
+        super().__init__(
+            f"{mcp_state.name}.check_availability",
+            f"Check if time slot is available in {mcp_state.name} calendar (requires date, start_time, end_time in HH:MM format)",
+            tool_args=["date", "start_time", "end_time"],
+        )
+        self.state = mcp_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Check if time slot is available."""
-        events = self.calendar_data.get("events", [])
-        conflicts = [e for e in events if e["date"] == date and not (end_time <= e["start_time"] or start_time >= e["end_time"])]
-        return {"available": len(conflicts) == 0, "conflicts": conflicts}
+        date = kwargs.get("date", "")
+        start_time = kwargs.get("start_time", "")
+        end_time = kwargs.get("end_time", "")
+        
+        try:
+            events = self.state.calendar_data.get("events", [])
+            conflicts = [
+                e for e in events 
+                if e["date"] == date and not (end_time <= e["start_time"] or start_time >= e["end_time"])
+            ]
+            
+            return ToolResult(
+                success=True,
+                data={"available": len(conflicts) == 0, "conflicts": conflicts},
+                metadata={"mcp": True, "action": "check_availability"}
+            )
+        except Exception as e:
+            return ToolResult(success=False, data=None, error=str(e))
 
-    def _mcp_add_event(self, date: str, start_time: str, end_time: str, title: str, description: str = "") -> Dict[str, Any]:
+
+class MCPCalendarAddEventTool(BaseTool):
+    """Add new event to calendar via MCP."""
+
+    def __init__(self, mcp_state: MCPCalendarState):
+        super().__init__(
+            f"{mcp_state.name}.add_event",
+            f"Add new event to {mcp_state.name} calendar (requires date, start_time, end_time, title; optional description)",
+            tool_args=["date", "start_time", "end_time", "title", "description"],
+        )
+        self.state = mcp_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Add a new event to calendar."""
-        if not all([date, start_time, end_time, title]):
-            raise ValueError("Missing required fields: date, start_time, end_time, title")
+        date = kwargs.get("date", "")
+        start_time = kwargs.get("start_time", "")
+        end_time = kwargs.get("end_time", "")
+        title = kwargs.get("title", "")
+        description = kwargs.get("description", "")
+        
+        try:
+            if not all([date, start_time, end_time, title]):
+                return ToolResult(
+                    success=False,
+                    data=None,
+                    error="Missing required fields: date, start_time, end_time, title"
+                )
 
-        event = {
-            "date": date,
-            "start_time": start_time,
-            "end_time": end_time,
-            "title": title,
-            "description": description,
-        }
-        self.calendar_data.setdefault("events", []).append(event)
-        return {"success": True, "event": event}
+            event = {
+                "date": date,
+                "start_time": start_time,
+                "end_time": end_time,
+                "title": title,
+                "description": description,
+            }
+            self.state.calendar_data.setdefault("events", []).append(event)
+            
+            return ToolResult(
+                success=True,
+                data={"success": True, "event": event},
+                metadata={"mcp": True, "action": "add_event"}
+            )
+        except Exception as e:
+            return ToolResult(success=False, data=None, error=str(e))
+
+
+class MCPCalendarToolCollection:
+    """MCP Calendar tool collection factory."""
+
+    def __init__(self, name: str, calendar_data: Dict[str, Any]):
+        self.state = MCPCalendarState(name, calendar_data)
+
+    def get_sub_tools(self) -> list[BaseTool]:
+        """Return all MCP calendar sub-tools."""
+        return [
+            MCPCalendarGetEventsTool(self.state),
+            MCPCalendarCheckAvailabilityTool(self.state),
+            MCPCalendarAddEventTool(self.state),
+        ]

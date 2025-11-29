@@ -1,4 +1,4 @@
-"""Calculator tool - single purpose mathematical evaluation."""
+"""Calculator tool using RestrictedPython for safe code execution."""
 
 import math
 
@@ -7,14 +7,17 @@ from RestrictedPython import compile_restricted, safe_globals
 from .base import BaseTool, ToolResult
 
 
-class CalculatorCalculateTool(BaseTool):
-    """Perform safe mathematical calculations."""
+class CalculatorTool(BaseTool):
+    """Calculator tool for mathematical computations using RestrictedPython."""
 
     def __init__(self):
+        description = (
+            "Perform mathematical calculations. Actions: 'calculate' (evaluate expression with math functions like sqrt, sin, cos, log, etc.)"
+        )
         super().__init__(
-            "calculator.calculate",
-            "Evaluate mathematical expressions with functions like sqrt, sin, cos, log, etc.",
-            tool_args=["expression"],
+            "calculator",
+            description,
+            tool_args=["action", "expression"],
         )
 
         # Safe globals with math functions
@@ -55,9 +58,16 @@ class CalculatorCalculateTool(BaseTool):
         }
 
     def execute(self, **kwargs) -> ToolResult:
+        """Execute calculation."""
+        action = kwargs.get("action", "calculate")
+
+        if action == "calculate":
+            return self._calculate(kwargs.get("expression"))
+        else:
+            return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
+
+    def _calculate(self, expression: str | None) -> ToolResult:
         """Evaluate a mathematical expression safely."""
-        expression = kwargs.get("expression")
-        
         if not expression:
             return ToolResult(success=False, data=None, error="expression is required")
 
@@ -90,20 +100,3 @@ class CalculatorCalculateTool(BaseTool):
             return ToolResult(success=False, data=None, error="Numerical overflow")
         except Exception as e:
             return ToolResult(success=False, data=None, error=f"Calculation error: {str(e)}")
-
-
-class CalculatorToolCollection:
-    """Calculator tool collection factory.
-    
-    Currently only contains one tool, but structured as a collection
-    for consistency with other tool patterns.
-    """
-
-    def __init__(self):
-        pass
-
-    def get_sub_tools(self) -> list[BaseTool]:
-        """Return all calculator sub-tools."""
-        return [
-            CalculatorCalculateTool(),
-        ]

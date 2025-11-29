@@ -29,17 +29,17 @@ from maseval.core.callbacks.result_logger import FileResultLogger
 
 # Import tool implementations
 from tools import (
-    EmailTool,
-    BankingTool,
-    CalculatorTool,
-    CodeExecutionTool,
-    FamilyInfoTool,
-    StockPriceTool,
-    CalendarTool,
-    RunningAppTool,
-    GymTrackerTool,
-    HotelSearchTool,
-    MCPCalendarTool,
+    EmailToolCollection,
+    BankingToolCollection,
+    CalculatorToolCollection,
+    CodeExecutionToolCollection,
+    FamilyInfoToolCollection,
+    StockPriceToolCollection,
+    CalendarToolCollection,
+    RunningAppToolCollection,
+    GymTrackerToolCollection,
+    HotelSearchToolCollection,
+    MCPCalendarToolCollection,
 )
 
 # Import all evaluators dynamically
@@ -174,33 +174,33 @@ class FiveADayEnvironment(Environment):
         """
         tools_list = []
 
-        # Map tool names to tool classes and their initialization data
+        # Map tool names to tool collection classes and their initialization data
         tool_mapping = {
-            "email": (EmailTool, lambda: (self.state["email_inbox"],)),
+            "email": (EmailToolCollection, lambda: (self.state["email_inbox"],)),
             "banking": (
-                BankingTool,
+                BankingToolCollection,
                 lambda: (
                     self.state["banking"]["bank_transactions"],
                     self.state["banking"]["current_balance"],
                     self.state["banking"]["assets"],
                 ),
             ),
-            "calculator": (CalculatorTool, lambda: ()),
-            "python_executor": (CodeExecutionTool, lambda: (self.state["test_cases"],)),
-            "family_info": (FamilyInfoTool, lambda: (self.state["family_info"],)),
-            "stock_price": (StockPriceTool, lambda: (self.state["stock_price_lookup"],)),
-            "websearch": (StockPriceTool, lambda: (self.state["stock_price_lookup"],)),
-            "calendar": (CalendarTool, lambda: ("my_calendar", self.state["my_calendar_availability"])),
-            "running_app": (RunningAppTool, lambda: (self.state["running_activities"],)),
-            "gym_tracker": (GymTrackerTool, lambda: (self.state["gym_activities"],)),
-            "hotel_search": (HotelSearchTool, lambda: (self.state["hotels"],)),
+            "calculator": (CalculatorToolCollection, lambda: ()),
+            "python_executor": (CodeExecutionToolCollection, lambda: (self.state["test_cases"],)),
+            "family_info": (FamilyInfoToolCollection, lambda: (self.state["family_info"],)),
+            "stock_price": (StockPriceToolCollection, lambda: (self.state["stock_price_lookup"],)),
+            "websearch": (StockPriceToolCollection, lambda: (self.state["stock_price_lookup"],)),
+            "calendar": (CalendarToolCollection, lambda: ("my_calendar", self.state["my_calendar_availability"])),
+            "running_app": (RunningAppToolCollection, lambda: (self.state["running_activities"],)),
+            "gym_tracker": (GymTrackerToolCollection, lambda: (self.state["gym_activities"],)),
+            "hotel_search": (HotelSearchToolCollection, lambda: (self.state["hotels"],)),
             # MCP calendar tools
             "my_calendar_mcp": (
-                MCPCalendarTool,
+                MCPCalendarToolCollection,
                 lambda: ("my_calendar_mcp", self._get_mcp_calendar_data("my_calendar_availability")),
             ),
             "other_calendar_mcp": (
-                MCPCalendarTool,
+                MCPCalendarToolCollection,
                 lambda: ("other_calendar_mcp", self._get_mcp_calendar_data("other_calendar")),
             ),
         }
@@ -210,15 +210,24 @@ class FiveADayEnvironment(Environment):
                 ToolClass, get_init_args = tool_mapping[tool_name]
                 init_args = get_init_args()
 
-                # Create base tool instance
+                # Create tool collection instance
                 if isinstance(init_args, tuple):
-                    base_tool = ToolClass(*init_args)
+                    tool_instance = ToolClass(*init_args)
                 else:
-                    base_tool = ToolClass(init_args)
+                    tool_instance = ToolClass(init_args)
 
-                # Convert to framework-specific tool
-                framework_tool = self._convert_tool(base_tool)
-                tools_list.append(framework_tool)
+                # Check if it's a collection with get_sub_tools method
+                if hasattr(tool_instance, 'get_sub_tools'):
+                    # Get all sub-tools from the collection
+                    base_tools = tool_instance.get_sub_tools()
+                else:
+                    # Legacy single tool
+                    base_tools = [tool_instance]
+
+                # Convert each base tool to framework-specific tool
+                for base_tool in base_tools:
+                    framework_tool = self._convert_tool(base_tool)
+                    tools_list.append(framework_tool)
 
         return tools_list
 

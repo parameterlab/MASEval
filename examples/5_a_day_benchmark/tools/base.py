@@ -228,7 +228,7 @@ class SmolagentsToolAdapter(TraceableMixin, ConfigurableMixin):
         class DynamicSmolagentsTool(SmolagentsTool):
             name = base_tool.name
             description = base_tool.description
-            # Use specific tool arguments
+            # Use specific tool arguments (excluding 'action' which is smolagents internal)
             inputs = base_tool.tool_args
             output_type = "string"
             skip_forward_signature_validation = True
@@ -236,11 +236,14 @@ class SmolagentsToolAdapter(TraceableMixin, ConfigurableMixin):
             def __init__(self):  # noqa: N807
                 super().__init__()
 
-            def forward(self, action: str, **kwargs) -> str:  # noqa: N807
-                """Execute the base tool and return string result."""
+            def forward(self, **kwargs) -> str:  # noqa: N807
+                """Execute the base tool and return string result.
+                
+                No action parameter - each tool does one specific thing.
+                Smolagents passes all tool arguments directly to forward().
+                """
                 # Filter out None values from kwargs
                 filtered_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-                filtered_kwargs["action"] = action
                 result = base_tool(**filtered_kwargs)
                 if result.success:
                     return str(result.data)

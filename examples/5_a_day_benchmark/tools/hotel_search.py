@@ -1,51 +1,41 @@
-"""Hotel search tool for optimization task."""
+"""Hotel search tool collection.
+
+Tools:
+- hotel_search.search: Search hotels by criteria (price, distance, wifi)
+- hotel_search.get: Get specific hotel by ID
+- hotel_search.get_all: Get all available hotels
+"""
 
 from typing import Any
 
 from .base import BaseTool, ToolResult
 
 
-class HotelSearchTool(BaseTool):
-    """Hotel search and retrieval tool."""
+class HotelSearchState:
+    """Shared state for hotel search tools."""
 
     def __init__(self, hotels_data: list[dict[str, Any]]):
-        description = (
-            "Search and retrieve hotel information. "
-            "Actions: 'search' (filter hotels by max_price, max_distance, min_wifi), "
-            "'get_hotel' (get hotel by hotel_id), 'get_all' (get all hotels)"
-        )
-        super().__init__(
-            "hotel_search",
-            description,
-            tool_args=["action", "max_price", "max_distance", "min_wifi", "hotel_id"],
-        )
         self.hotels = hotels_data
 
+
+class HotelSearchSearchTool(BaseTool):
+    """Search hotels by criteria."""
+
+    def __init__(self, hotel_state: HotelSearchState):
+        super().__init__(
+            "hotel_search.search",
+            "Search hotels with optional filters: max_price (per night), max_distance (km to venue), min_wifi (Mbps speed)",
+            tool_args=["max_price", "max_distance", "min_wifi"],
+        )
+        self.state = hotel_state
+
     def execute(self, **kwargs) -> ToolResult:
-        """Execute hotel search action."""
-        action = kwargs.get("action", "search")
-
-        if action == "search":
-            return self._search_hotels(
-                max_price=kwargs.get("max_price"),
-                max_distance=kwargs.get("max_distance"),
-                min_wifi=kwargs.get("min_wifi"),
-            )
-        elif action == "get_hotel":
-            return self._get_hotel(kwargs.get("hotel_id"))
-        elif action == "get_all":
-            return self._get_all_hotels()
-        else:
-            return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
-
-    def _search_hotels(
-        self,
-        max_price: float | None = None,
-        max_distance: float | None = None,
-        min_wifi: int | None = None,
-    ) -> ToolResult:
         """Search hotels with filters."""
-        filtered = self.hotels
+        max_price = kwargs.get("max_price")
+        max_distance = kwargs.get("max_distance")
+        min_wifi = kwargs.get("min_wifi")
+        
+        filtered = self.state.hotels
 
         if max_price is not None:
             filtered = [h for h in filtered if h["price_per_night"] <= max_price]
@@ -59,20 +49,61 @@ class HotelSearchTool(BaseTool):
             data={"hotels": filtered, "count": len(filtered)},
         )
 
-    def _get_hotel(self, hotel_id: str | None) -> ToolResult:
+
+class HotelSearchGetTool(BaseTool):
+    """Get specific hotel by ID."""
+
+    def __init__(self, hotel_state: HotelSearchState):
+        super().__init__(
+            "hotel_search.get",
+            "Get specific hotel details by hotel ID",
+            tool_args=["hotel_id"],
+        )
+        self.state = hotel_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Get specific hotel by ID."""
+        hotel_id = kwargs.get("hotel_id")
+        
         if not hotel_id:
             return ToolResult(success=False, data=None, error="hotel_id is required")
 
-        for hotel in self.hotels:
+        for hotel in self.state.hotels:
             if hotel["id"] == hotel_id:
                 return ToolResult(success=True, data=hotel)
 
         return ToolResult(success=False, data=None, error=f"Hotel {hotel_id} not found")
 
-    def _get_all_hotels(self) -> ToolResult:
+
+class HotelSearchGetAllTool(BaseTool):
+    """Get all available hotels."""
+
+    def __init__(self, hotel_state: HotelSearchState):
+        super().__init__(
+            "hotel_search.get_all",
+            "Get all available hotels without any filters",
+            tool_args=[],
+        )
+        self.state = hotel_state
+
+    def execute(self, **kwargs) -> ToolResult:
         """Get all available hotels."""
         return ToolResult(
             success=True,
-            data={"hotels": self.hotels, "count": len(self.hotels)},
+            data={"hotels": self.state.hotels, "count": len(self.state.hotels)},
         )
+
+
+class HotelSearchToolCollection:
+    """Hotel search tool collection factory."""
+
+    def __init__(self, hotels_data: list[dict[str, Any]]):
+        self.state = HotelSearchState(hotels_data)
+
+    def get_sub_tools(self) -> list[BaseTool]:
+        """Return all hotel search sub-tools."""
+        return [
+            HotelSearchSearchTool(self.state),
+            HotelSearchGetTool(self.state),
+            HotelSearchGetAllTool(self.state),
+        ]

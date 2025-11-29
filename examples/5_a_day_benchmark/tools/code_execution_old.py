@@ -1,9 +1,4 @@
-"""Code execution tool collection using RestrictedPython.
-
-Tools:
-- python_executor.execute: Run Python code and see output
-- python_executor.test: Run code against test cases
-"""
+"""Code execution tool using RestrictedPython for safe execution."""
 
 from typing import Any
 
@@ -14,13 +9,16 @@ from RestrictedPython.Guards import guarded_iter_unpack_sequence
 from .base import BaseTool, ToolResult
 
 
-class CodeExecutionState:
-    """Shared state for code execution tools.
-    
-    Maintains test cases and safe execution environment.
-    """
+class CodeExecutionTool(BaseTool):
+    """Python code execution with RestrictedPython sandbox."""
 
     def __init__(self, test_cases: list[dict[str, Any]] | None = None):
+        description = "Execute Python code safely. Actions: 'execute' (run Python code string), 'test' (run code against test cases)"
+        super().__init__(
+            "python_executor",
+            description,
+            tool_args=["action", "code"],
+        )
         self.test_cases = test_cases or []
 
         # Safe execution environment with all RestrictedPython guards
@@ -35,22 +33,19 @@ class CodeExecutionState:
             "__metaclass__": type,
         }
 
-
-class PythonExecutorExecuteTool(BaseTool):
-    """Execute Python code and return output."""
-
-    def __init__(self, code_state: CodeExecutionState):
-        super().__init__(
-            "python_executor.execute",
-            "Execute Python code safely and see the output (use print() to display results)",
-            tool_args=["code"],
-        )
-        self.state = code_state
-
     def execute(self, **kwargs) -> ToolResult:
+        """Execute code action."""
+        action = kwargs.get("action", "execute")
+
+        if action == "execute":
+            return self._execute_code(kwargs.get("code"))
+        elif action == "test":
+            return self._test_code(kwargs.get("code"))
+        else:
+            return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
+
+    def _execute_code(self, code: str | None) -> ToolResult:
         """Execute Python code and return output."""
-        code = kwargs.get("code")
-        
         if not code:
             return ToolResult(success=False, data=None, error="code is required")
 
@@ -59,7 +54,7 @@ class PythonExecutorExecuteTool(BaseTool):
             compile_result = compile_restricted(code, "<string>", "exec")
 
             if hasattr(compile_result, "errors") and compile_result.errors:
-                # Format errors properly
+                # Format errors properly - they can be tuples or strings
                 error_msgs = []
                 for err in compile_result.errors:
                     if isinstance(err, tuple):
@@ -75,7 +70,7 @@ class PythonExecutorExecuteTool(BaseTool):
             code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
 
             # Execute with RestrictedPython environment
-            exec_globals = self.state.safe_env.copy()
+            exec_globals = self.safe_env.copy()
             exec(code_obj, exec_globals)
 
             # Get output from PrintCollector
@@ -96,26 +91,12 @@ class PythonExecutorExecuteTool(BaseTool):
                 error=f"Execution error: {str(e)}",
             )
 
-
-class PythonExecutorTestTool(BaseTool):
-    """Run code against test cases."""
-
-    def __init__(self, code_state: CodeExecutionState):
-        super().__init__(
-            "python_executor.test",
-            "Execute Python code and run it against test cases to verify correctness",
-            tool_args=["code"],
-        )
-        self.state = code_state
-
-    def execute(self, **kwargs) -> ToolResult:
+    def _test_code(self, code: str | None) -> ToolResult:
         """Execute code and run test cases."""
-        code = kwargs.get("code")
-        
         if not code:
             return ToolResult(success=False, data=None, error="code is required")
 
-        if not self.state.test_cases:
+        if not self.test_cases:
             return ToolResult(
                 success=False,
                 data=None,
@@ -127,6 +108,7 @@ class PythonExecutorTestTool(BaseTool):
             compile_result = compile_restricted(code, "<string>", "exec")
 
             if hasattr(compile_result, "errors") and compile_result.errors:
+                # Format errors properly - they can be tuples or strings
                 error_msgs = []
                 for err in compile_result.errors:
                     if isinstance(err, tuple):
@@ -142,7 +124,7 @@ class PythonExecutorTestTool(BaseTool):
             code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
 
             # Execute code to define functions
-            exec_globals = self.state.safe_env.copy()
+            exec_globals = self.safe_env.copy()
             exec(code_obj, exec_globals)
 
             # Find the main function (assume it's the first non-builtin function)
@@ -165,7 +147,7 @@ class PythonExecutorTestTool(BaseTool):
             test_results = []
             all_passed = True
 
-            for i, test_case in enumerate(self.state.test_cases):
+            for i, test_case in enumerate(self.test_cases):
                 test_input = test_case["input"]
                 expected_output = test_case["expected_output"]
 
@@ -215,24 +197,3 @@ class PythonExecutorTestTool(BaseTool):
                 data=None,
                 error=f"Test execution error: {str(e)}",
             )
-
-
-class CodeExecutionToolCollection:
-    """Code execution tool collection factory.
-    
-    Creates a shared state with test cases and returns code execution sub-tools.
-    
-    Usage:
-        collection = CodeExecutionToolCollection(test_cases)
-        tools = collection.get_sub_tools()
-    """
-
-    def __init__(self, test_cases: list[dict[str, Any]] | None = None):
-        self.state = CodeExecutionState(test_cases)
-
-    def get_sub_tools(self) -> list[BaseTool]:
-        """Return all code execution sub-tools."""
-        return [
-            PythonExecutorExecuteTool(self.state),
-            PythonExecutorTestTool(self.state),
-        ]

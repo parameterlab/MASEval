@@ -1,37 +1,41 @@
-"""Family information tool."""
+"""Family information tool - single purpose."""
 
 from typing import Any
 
 from .base import BaseTool, ToolResult
 
 
-class FamilyInfoTool(BaseTool):
-    """Family information lookup tool.
-
-    Provides access to family member information and asset ownership data.
-    """
+class FamilyInfoGetChildrenTool(BaseTool):
+    """Get list of children from family information."""
 
     def __init__(self, family_data: dict[str, Any]):
-        description = "Access family information. Actions: 'get_children' (get list of children)"
         super().__init__(
-            "family_info",
-            description,
-            tool_args=["action"],
+            "family_info.get_children",
+            "Get list of children with their names and ages",
+            tool_args=[],
         )
         self.children = family_data.get("children", [])
 
     def execute(self, **kwargs) -> ToolResult:
-        """Execute family info action."""
-        action = kwargs.get("action")
-
-        if action == "get_children":
-            return self._get_children()
-        else:
-            return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
-
-    def _get_children(self) -> ToolResult:
         """Get list of children."""
         return ToolResult(
             success=True,
             data={"children": self.children, "count": len(self.children)},
         )
+
+
+class FamilyInfoToolCollection:
+    """Family information tool collection factory.
+    
+    Currently only contains one tool, but structured as a collection
+    for consistency and future extensibility.
+    """
+
+    def __init__(self, family_data: dict[str, Any]):
+        self.family_data = family_data
+
+    def get_sub_tools(self) -> list[BaseTool]:
+        """Return all family info sub-tools."""
+        return [
+            FamilyInfoGetChildrenTool(self.family_data),
+        ]
