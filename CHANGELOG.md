@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   - Supports async workflow execution with proper event loop handling
 
+- Added a new example: The `5_a_day_benchmark` (PR: #10)
+
 - The `logs` property inside `SmolAgentAdapter` and `LanggraphAgentAdapter` are now properly filled. (PR: #3)
 
 ### Changed
