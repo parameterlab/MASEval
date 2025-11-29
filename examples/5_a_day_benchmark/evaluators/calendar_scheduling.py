@@ -1,11 +1,9 @@
-"""Task 3 Evaluators: Calendar Scheduling (MCP).
+"""Evaluators for Task 3: Calendar Scheduling (MCP).
 
 Task: User asks to find meeting times with Roger Bannister by checking both calendars.
 Success criteria: Agent correctly identifies overlapping available time slots.
 """
 
-import re
-from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from maseval import Evaluator, Environment, Task, User, MessageHistory
@@ -15,6 +13,7 @@ from .utils import extract_tool_calls, extract_assistant_response
 class SchedulingAccuracyEvaluator(Evaluator):
     """Evaluates if agent correctly identified overlapping calendar slots.
     
+    Evaluation type: Slot matching
     Measures: Did the agent successfully find the available meeting times?
     """
 
@@ -30,7 +29,6 @@ class SchedulingAccuracyEvaluator(Evaluator):
             return {
                 "overlapping_slots_found": 0,
                 "all_overlaps_identified": False,
-                "no_false_positives": True,
                 "scheduling_precision": 0.0,
                 "error": "No assistant response found"
             }
@@ -38,55 +36,47 @@ class SchedulingAccuracyEvaluator(Evaluator):
         # Check for each expected slot
         found_slots = []
         for slot in self.expected_slots:
-            slot_date = slot["date"]
-            slot_start = slot["start"]
-            slot_end = slot["end"]
-            
-            # Check if this slot is mentioned
-            date_mentioned = slot_date in full_response or slot_date.replace("-", "/") in full_response
-            
-            # Extract date variations (12-02, 12/02, December 2, etc.)
-            date_parts = slot_date.split("-")
-            if len(date_parts) == 3:
-                month_day = f"{date_parts[1]}-{date_parts[2]}"  # 12-02
-                month_day_slash = f"{date_parts[1]}/{date_parts[2]}"  # 12/02
-                
-                date_mentioned = date_mentioned or month_day in full_response or month_day_slash in full_response
-            
-            time_mentioned = slot_start in full_response or slot_end in full_response
-            
-            # Convert times for alternative formats
-            start_12hr = self._convert_to_12hr(slot_start)
-            end_12hr = self._convert_to_12hr(slot_end)
-            time_mentioned = time_mentioned or start_12hr in full_response or end_12hr in full_response
-            
-            if date_mentioned and time_mentioned:
+            if self._slot_mentioned(slot, full_response):
                 found_slots.append(slot)
         
-        # Calculate metrics
         slots_found = len(found_slots)
         all_found = slots_found == len(self.expected_slots)
-        
-        # Check for false positives (suggested times that don't match expected slots)
-        # For simplicity, if agent found the right count, assume no false positives
-        no_false_positives = True  # Could be enhanced with more sophisticated parsing
-        
-        # F1-like precision score
-        if len(self.expected_slots) > 0:
-            recall = slots_found / len(self.expected_slots)
-            precision = 1.0 if no_false_positives else 0.5
-            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-        else:
-            f1_score = 0.0
+        precision = slots_found / len(self.expected_slots) if self.expected_slots else 0.0
         
         return {
             "overlapping_slots_found": slots_found,
             "total_expected_slots": len(self.expected_slots),
             "all_overlaps_identified": all_found,
-            "no_false_positives": no_false_positives,
-            "scheduling_precision": f1_score,
+            "scheduling_precision": precision,
             "found_slot_details": found_slots
         }
+
+    def _slot_mentioned(self, slot: Dict[str, str], response: str) -> bool:
+        """Check if a time slot is mentioned in the response."""
+        slot_date = slot["date"]
+        slot_start = slot["start"]
+        slot_end = slot["end"]
+        
+        # Check for date in various formats
+        date_mentioned = (
+            slot_date in response or 
+            slot_date.replace("-", "/") in response
+        )
+        
+        # Extract date variations (12-02, 12/02, December 2, etc.)
+        date_parts = slot_date.split("-")
+        if len(date_parts) == 3:
+            month_day = f"{date_parts[1]}-{date_parts[2]}"
+            month_day_slash = f"{date_parts[1]}/{date_parts[2]}"
+            date_mentioned = date_mentioned or month_day in response or month_day_slash in response
+        
+        # Check for times in 24hr or 12hr formats
+        time_mentioned = slot_start in response or slot_end in response
+        start_12hr = self._convert_to_12hr(slot_start)
+        end_12hr = self._convert_to_12hr(slot_end)
+        time_mentioned = time_mentioned or start_12hr in response or end_12hr in response
+        
+        return date_mentioned and time_mentioned
 
     def _convert_to_12hr(self, time_24hr: str) -> str:
         """Convert 24hr time to 12hr format."""
@@ -109,8 +99,8 @@ class SchedulingAccuracyEvaluator(Evaluator):
 class MCPIntegrationEvaluator(Evaluator):
     """Evaluates if agent properly used MCP calendar tools.
     
+    Evaluation type: Tool validation
     Measures: Did the agent access both calendars to find overlaps?
-    Note: This focuses on task success (finding overlaps), not MCP protocol itself.
     """
 
     def __init__(self, task: Task, environment: Environment, user: Optional[User] = None):
@@ -122,21 +112,16 @@ class MCPIntegrationEvaluator(Evaluator):
         
         # Check if both calendars were accessed
         my_calendar_used = any("my_calendar" in str(tool).lower() for tool in tools_used)
-        other_calendar_used = any("other_calendar" in str(tool).lower() or "roger" in str(tool).lower() for tool in tools_used)
+        other_calendar_used = any(
+            "other_calendar" in str(tool).lower() or "roger" in str(tool).lower() 
+            for tool in tools_used
+        )
         
         used_both_calendars = my_calendar_used and other_calendar_used
-        
-        # Count calls
-        my_calendar_calls = sum(1 for tool in tools_used if "my_calendar" in str(tool).lower())
-        other_calendar_calls = sum(1 for tool in tools_used if "other_calendar" in str(tool).lower() or "roger" in str(tool).lower())
-        
-        # Calculate score
         score = 1.0 if used_both_calendars else 0.0
         
         return {
             "used_both_calendars": used_both_calendars,
-            "my_calendar_calls": my_calendar_calls,
-            "other_calendar_calls": other_calendar_calls,
             "mcp_integration_score": score,
             "tools_used": tools_used
         }
@@ -145,6 +130,7 @@ class MCPIntegrationEvaluator(Evaluator):
 class ConstraintSatisfactionEvaluator(Evaluator):
     """Evaluates logical correctness of scheduling constraints.
     
+    Evaluation type: Logic validation
     Measures: Did the agent understand that overlapping means BOTH people are free?
     """
 
@@ -172,7 +158,6 @@ class ConstraintSatisfactionEvaluator(Evaluator):
             for slot in self.expected_slots
         )
         
-        # Score based on understanding and reasonableness
         score = (int(understands_overlap) + int(suggested_reasonable)) / 2.0
         
         return {

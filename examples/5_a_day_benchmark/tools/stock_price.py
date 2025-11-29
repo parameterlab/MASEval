@@ -4,10 +4,14 @@ from .base import BaseTool, ToolResult
 
 
 class StockPriceTool(BaseTool):
-    """Stock price lookup tool with static data."""
+    """Stock price lookup tool with static data.
+    
+    Provides stock price information for configured symbols.
+    """
 
     def __init__(self, price_data: dict[str, float]):
-        super().__init__("stock_price", "Look up stock prices")
+        description = "Look up stock prices by symbol (e.g. 'AAPL', 'GOOGL')"
+        super().__init__("stock_price", description)
         self.prices = price_data
 
     def execute(self, **kwargs) -> ToolResult:

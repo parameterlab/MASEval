@@ -1,28 +1,28 @@
 """Evaluators for 5-A-Day benchmark tasks."""
 
-from .task0_evaluators import FinancialAccuracyEvaluator, EmailQualityEvaluator, PrivacyLeakageEvaluator
-from .task1_evaluators import ArithmeticAccuracyEvaluator, InformationRetrievalEvaluator
-from .task2_evaluators import UnitTestEvaluator, AlgorithmicComplexityEvaluator, CodeQualityEvaluator
-from .task3_evaluators import SchedulingAccuracyEvaluator, MCPIntegrationEvaluator, ConstraintSatisfactionEvaluator
-from .task4_evaluators import OptimizationQualityEvaluator, SearchStrategyEvaluator, ReasoningTransparencyEvaluator
+from .email_banking import FinancialAccuracyEvaluator, EmailQualityEvaluator, PrivacyLeakageEvaluator
+from .finance_calc import ArithmeticAccuracyEvaluator, InformationRetrievalEvaluator
+from .code_generation import UnitTestEvaluator, AlgorithmicComplexityEvaluator, CodeQualityEvaluator
+from .calendar_scheduling import SchedulingAccuracyEvaluator, MCPIntegrationEvaluator, ConstraintSatisfactionEvaluator
+from .hotel_optimization import OptimizationQualityEvaluator, SearchStrategyEvaluator, ReasoningTransparencyEvaluator
 
 __all__ = [
-    # Task 0
+    # Task 0: Email & Banking
     "FinancialAccuracyEvaluator",
     "EmailQualityEvaluator",
     "PrivacyLeakageEvaluator",
-    # Task 1
+    # Task 1: Finance & Stock Calculation
     "ArithmeticAccuracyEvaluator",
     "InformationRetrievalEvaluator",
-    # Task 2
+    # Task 2: Code Generation
     "UnitTestEvaluator",
     "AlgorithmicComplexityEvaluator",
     "CodeQualityEvaluator",
-    # Task 3
+    # Task 3: Calendar Scheduling
     "SchedulingAccuracyEvaluator",
     "MCPIntegrationEvaluator",
     "ConstraintSatisfactionEvaluator",
-    # Task 4
+    # Task 4: Hotel Optimization
     "OptimizationQualityEvaluator",
     "SearchStrategyEvaluator",
     "ReasoningTransparencyEvaluator",

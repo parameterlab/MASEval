@@ -1,26 +1,21 @@
 """
-5-A-Day Benchmark - Framework-Agnostic Tool Benchmarking
+5-A-Day Benchmark - Framework-Agnostic Agent Evaluation
 
-This benchmark tests LLM agents on diverse tool usage tasks with framework-agnostic tools
-that can be converted to smolagents, langgraph, or llamaindex formats.
-
-Spirit & Design Philosophy:
-- Educational: Clear, well-documented example showcasing maseval library capabilities
-- Not overcomplicated: Simple, readable code that demonstrates patterns without excess abstraction
-- Diverse tools: Mix of standard tools (email, banking) and modern protocols (MCP calendar)
-- Diverse evaluations: 7 evaluation types (assertion, code execution, tool validation, optimization, 
-  privacy, static analysis, pattern matching) measuring different aspects of agent performance
-- Realistic but not production: Demonstrates real-world scenarios with appropriate simplifications
-- Library showcase: Highlights maseval's Environment, Task, Evaluator, and AgentAdapter abstractions
-- Independent task setup: Each of 5 tasks is self-contained with its own tools, data, and evaluators
-- Single vs multi-agent: Demonstrates both patterns - simple single-agent and orchestrator+specialist
-  multi-agent configurations for the same tasks
+Educational example showcasing the maseval library through 5 diverse evaluation tasks.
+Demonstrates framework-agnostic tools, multiple evaluation types, and single vs multi-agent patterns.
 
 Key Features:
-- Framework-agnostic BaseTools with conversion methods
-- Environment loaded from tasks.json with tool instantiation
-- Supports: smolagents, langgraph, llamaindex
-- Diverse tool types: Email, Banking, Calculator, Code Execution, Search, etc.
+- Framework-agnostic BaseTools with conversion methods for smolagents, langgraph, llamaindex
+- 7 evaluation types: unit tests, LLM judges, optimization, pattern matching, static analysis
+- Environment loaded from tasks.json with automatic tool instantiation
+- Both single-agent and orchestrator+specialist multi-agent configurations
+
+Tasks:
+0. Email & Banking: Verify payment and draft email (financial accuracy, privacy)
+1. Finance Calculation: Calculate stock inheritance split (arithmetic, tool validation)
+2. Code Generation: Implement DP algorithm (unit tests, complexity analysis, quality)
+3. Calendar Scheduling: Find meeting overlaps using MCP (slot matching, logic validation)
+4. Hotel Optimization: Select best hotel by criteria (ranking, search strategy, reasoning)
 """
 
 import json
@@ -56,7 +51,11 @@ import evaluators
 
 
 class FiveADayEnvironment(Environment):
-    """Environment that creates tools from task data and converts them to framework-specific types."""
+    """Environment that creates tools from task data and converts them to framework-specific types.
+    
+    Loads tool specifications from tasks.json, instantiates the appropriate tool classes
+    with task-specific data, and converts them to the target framework (smolagents, langgraph, llamaindex).
+    """
 
     def __init__(self, task_data: Dict[str, Any], framework: str = "smolagents", callbacks=None):
         """Initialize environment with framework specification.
@@ -102,7 +101,7 @@ class FiveADayEnvironment(Environment):
     def create_tools(self) -> list:
         """Create tool instances from environment_data and convert to framework-specific types.
 
-        The base Environment class will store tools in self._tools_dict for tracing.
+        The base Environment class stores tools in self._tools_dict for tracing.
 
         Returns:
             List of framework-specific tool objects (smolagents Tool, LangChain StructuredTool, etc.)
@@ -180,13 +179,24 @@ class FiveADayEnvironment(Environment):
 
 
 class FiveADayBenchmark(Benchmark):
-    """5-A-Day benchmark with framework-agnostic tools."""
+    """5-A-Day benchmark with framework-agnostic tools.
+    
+    Demonstrates the maseval library through 5 diverse tasks with different evaluation approaches.
+    Supports single-agent and multi-agent (orchestrator+specialist) configurations.
+    """
 
     def setup_environment(self, agent_data: Dict[str, Any], task: Task) -> Environment:
         """Create environment from task data.
 
         Loads tools based on task.environment_data and converts them to the
         framework specified in agent_data.
+        
+        Args:
+            agent_data: Agent configuration including framework specification
+            task: Task containing environment_data, query, and evaluation_data
+            
+        Returns:
+            FiveADayEnvironment with framework-specific tools
         """
         framework = agent_data.get("framework", "smolagents")
 

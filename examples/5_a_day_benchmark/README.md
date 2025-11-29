@@ -1,285 +1,198 @@
 # 5-A-Day Benchmark
 
-A framework-agnostic benchmark for testing LLM agents on diverse tool usage tasks. Tests agents across 5 different scenarios requiring various combinations of tool interactions.
+An educational example demonstrating **maseval** through 5 diverse agent evaluation tasks. Shows how the library handles different tool types, evaluation approaches, and agent configurations.
 
-## Quick Start
+## What This Example Shows
+
+See maseval's key features in action:
+
+1. **Environment** - Loads task data and instantiates framework-agnostic tools
+2. **Framework Adapters** - Same tools work with smolagents, langgraph, llamaindex
+3. **Task Structure** - JSON-based task definitions with queries, test data, and evaluation criteria
+4. **Evaluation Types** - 7 different evaluator approaches (unit tests, LLM judges, optimization, etc.)
+5. **Agent Patterns** - Single-agent vs multi-agent orchestrator configurations
+6. **Message Tracing** - Full conversation history captured for evaluation
+
+## Running the Example
 
 ```bash
-# Run the benchmark
+# Run all 5 tasks with smolagents
 python five_a_day_benchmark.py
 
-# Try the MCP demo
-python demo_mcp.py
+# Run first 2 tasks only
+python five_a_day_benchmark.py 2
+
+# Try multi-agent orchestrator pattern
+python five_a_day_benchmark.py --config multiagent
+
+# Use langgraph instead
+python five_a_day_benchmark.py langgraph
 ```
 
-## Configuration
+Results saved to `results/` as JSONL with traces and evaluation scores.
 
-Edit variables at the top of `five_a_day_benchmark.py`:
+## The 5 Tasks
+
+### Task 0: Email & Banking
+
+Agent verifies tenant payment and drafts confirmation email.
+
+**Tools:** Email, Banking  
+**Evaluators:** Financial accuracy (assertion), email quality (LLM judge), privacy leakage (pattern matching)  
+**Shows:** Multi-tool coordination, numerical validation, privacy checking
+
+### Task 1: Financial Calculations
+
+Agent calculates stock inheritance split among children.
+
+**Tools:** Family info, Stock prices, Calculator  
+**Evaluators:** Arithmetic accuracy (numerical), information retrieval (tool validation)  
+**Shows:** Multi-step reasoning, data lookup, computation verification
+
+### Task 2: Code Generation
+
+Agent implements house robber dynamic programming algorithm.
+
+**Tools:** Python code executor  
+**Evaluators:** Unit tests (execution), complexity analysis (static), code quality (heuristics)  
+**Shows:** Generated code evaluation, test harness integration, AST analysis
+
+### Task 3: Calendar Scheduling
+
+Agent finds overlapping free time slots across two calendars.
+
+**Tools:** MCP Calendar (Model Context Protocol pattern)  
+**Evaluators:** Slot matching, MCP integration, constraint logic  
+**Shows:** Constraint solving, modern protocol patterns, logical validation
+
+### Task 4: Hotel Optimization
+
+Agent selects best hotel based on weighted criteria (distance, WiFi, price).
+
+**Tools:** Hotel search, Calculator  
+**Evaluators:** Optimization quality (ranking), search strategy, reasoning transparency  
+**Shows:** Multi-criteria optimization, scoring, explanation evaluation
+
+## How It Works
+
+### 1. Environment Creates Tools
+
+`FiveADayEnvironment` reads `tasks.json` and instantiates tools with test data:
 
 ```python
-framework = "smolagents"    # or "langgraph", "llamaindex"
-config_type = "single"      # or "multi" for multi-agent
-limit = None               # or integer to limit number of tasks
+class FiveADayEnvironment(Environment):
+    def create_tools(self) -> list:
+        # Read tool names from task: ["email", "banking"]
+        # Instantiate: EmailTool(inbox_data), BankingTool(transactions)
+        # Convert to framework: base_tool.to_smolagents()
+        return framework_specific_tools
 ```
 
-## Features
+### 2. Framework-Agnostic Tools
 
-- **Framework-Agnostic Tools**: All tools are implemented as `BaseTool` classes that can be converted to any supported framework
-- **Multiple Frameworks**: Supports smolagents, langgraph, and llamaindex (via conversion methods)
-- **MCP Integration**: Demonstrates Model Context Protocol (MCP) for standardized tool access - see `demo_mcp.py` and `tools/MCP_README.md`
-- **Task-Specific Configurations**: Each of the 5 tasks has dedicated single-agent and multi-agent configurations
-- **Diverse Tool Types**: Email, Banking, Calculator, Code Execution, Search, Calendar, Fitness tracking, and more
-- **Multi-Agent Support**: Orchestrator + specialist pattern for complex task decomposition (smolagents)
+Tools inherit from `BaseTool` with automatic framework conversion:
 
-## Architecture
+```python
+class EmailTool(BaseTool):
+    def execute(self, action: str, **kwargs) -> ToolResult:
+        if action == "get_inbox":
+            return ToolResult(success=True, data=self.inbox)
+        # ...
 
-### Tool System
-
-All tools inherit from `BaseTool` (in `tools/base.py`) which provides:
-
-- Framework-agnostic `execute()` method
-- Conversion methods: `to_smolagents()`, `to_langgraph()`, `to_llamaindex()`
-- Tracing and configuration support via maseval mixins
-
-**Available Tools:**
-
-1. **EmailTool** - Send emails and check inbox
-2. **BankingTool** - Check balance and transaction history
-3. **CalculatorTool** - Safe expression evaluation (RestrictedPython)
-4. **CodeExecutionTool** - Execute Python code with test cases
-5. **FamilyInfoTool** - Query family member information
-6. **StockPriceTool** - Look up stock prices
-7. **CalendarTool** - Check calendar availability
-8. **RunningAppTool** - Track running activities
-9. **GymTrackerTool** - Track gym workouts
-10. **HotelSearchTool** - Search and score hotels
-11. **MCPCalendarTool** - Calendar access using Model Context Protocol pattern
-
-**MCP Integration:** Task 3 showcases calendar coordination via MCP (Model Context Protocol), demonstrating how maseval works with standardized protocols for external tool access. Run `python demo_mcp.py` to see it in action, or see `tools/MCP_README.md` for implementation details.
-
-### Task Configurations
-
-Each task (0-4) has two configuration files:
-
-- `data/singleagent.json` - Single agent with all tools
-- `data/multiagent.json` - Orchestrator + specialist agents
-
-**Task 0: Email & Banking**
-
-- Tools: email, banking
-- Single: "Email and Banking Assistant"
-- Multi: orchestrator + banking_specialist + email_specialist
-
-**Task 1: Financial Calculations**
-
-- Tools: family_info, stock_price, calculator
-- Single: "Financial Planning Assistant"
-- Multi: orchestrator + data_specialist + calc_specialist
-
-**Task 2: Code Generation**
-
-- Tools: python_executor
-- Single: "Python Code Generator"
-- Multi: orchestrator + code_specialist
-
-**Task 3: Calendar Scheduling (MCP Demo)**
-
-- Tools: my_calendar_mcp, other_calendar_mcp
-- Single: "Scheduling Assistant"
-- Multi: orchestrator + calendar_specialist
-- Demonstrates Model Context Protocol for multi-calendar coordination
-
-**Task 4: Hotel Optimization**
-
-- Tools: hotel_search, calculator
-- Single: "Hotel Search Optimizer"
-- Multi: orchestrator + search_specialist + optimization_specialist
-
-## Usage
-
-### Basic Usage
-
-```bash
-# Run with smolagents (default), single-agent config, 1 task
-python five_a_day_benchmark.py smolagents 1
-
-# Run with langgraph, single-agent config, all tasks
-python five_a_day_benchmark.py langgraph
-
-# Run with multi-agent config
-python five_a_day_benchmark.py smolagents 1 --config multiagent
-
-# Run all tasks with multi-agent config
-python five_a_day_benchmark.py smolagents --config multiagent
+# Works with any framework
+smolagents_tool = email_tool.to_smolagents()
+langgraph_tool = email_tool.to_langgraph()
 ```
 
-### Command Line Arguments
+### 3. Task Definitions
 
-```
-python five_a_day_benchmark.py <framework> [limit] [--config <type>]
+Tasks in `tasks.json` specify everything needed:
 
-framework: smolagents | langgraph | llamaindex
-limit: Number of tasks to run (1-5), omit for all
---config: singleagent | multiagent (default: singleagent)
-```
-
-### Examples
-
-```bash
-# Compare single vs multi-agent on task 0
-python five_a_day_benchmark.py smolagents 1 --config singleagent
-python five_a_day_benchmark.py smolagents 1 --config multiagent
-
-# Test langgraph with all tasks
-python five_a_day_benchmark.py langgraph --config singleagent
-
-# Run first 3 tasks with multi-agent setup
-python five_a_day_benchmark.py smolagents 3 --config multiagent
+```json
+{
+  "query": "Check my transactions and draft email to Sarah...",
+  "environment_data": {
+    "tools": ["email", "banking"],
+    "email_inbox": [...],
+    "bank_transactions": [...]
+  },
+  "evaluation_data": {
+    "expected_deposit_amount": 2000,
+    "evaluators": ["FinancialAccuracyEvaluator", "EmailQualityEvaluator"]
+  }
+}
 ```
 
-## File Structure
+### 4. Evaluation Approaches
+
+Seven evaluator types demonstrated:
+
+- **Assertion**: Check exact values (amounts, counts)
+- **Unit Tests**: Execute generated code against test cases
+- **LLM Judge**: Assess quality, reasoning, explanations
+- **Optimization**: Compare to mathematically optimal solution
+- **Pattern Matching**: Detect unwanted patterns (privacy leaks)
+- **Static Analysis**: Analyze code structure (complexity, patterns)
+- **Tool Validation**: Verify correct tool usage and data retrieval
+
+Each evaluator receives the full message trace and returns metrics.
+
+### 5. Agent Adapters
+
+Unified interface across frameworks:
+
+```python
+# Wrap framework-specific agents
+adapter = SmolAgentAdapter(smolagents_agent, "agent_id")
+adapter = LangGraphAgentAdapter(langgraph_graph, "agent_id")
+
+# Unified execution
+result = adapter.run(task.query)
+trace = adapter.get_messages()  # Full conversation history
+```
+
+### 6. Single vs Multi-Agent
+
+**Single**: One agent with all tools
+
+**Multi**: Orchestrator + specialists
+
+- Orchestrator coordinates task
+- Specialists have tool subsets
+- Shows delegation patterns (smolagents only)
+
+## Project Structure
 
 ```
 5_a_day_benchmark/
-├── five_a_day_benchmark.py       # Main benchmark orchestration
-├── tools/
-│   ├── __init__.py               # Exports all tools
-│   ├── base.py                   # BaseTool + framework adapters
-│   ├── email.py                  # EmailTool implementation
-│   ├── banking.py                # BankingTool implementation
-│   ├── calculator.py             # CalculatorTool (RestrictedPython)
-│   ├── code_execution.py         # CodeExecutionTool
-│   ├── family_info.py            # FamilyInfoTool
-│   ├── stock_price.py            # StockPriceTool
-│   ├── calendar.py               # CalendarTool
-│   ├── running_app.py            # RunningAppTool
-│   ├── gym_tracker.py            # GymTrackerTool
-│   └── hotel_search.py           # HotelSearchTool
-├── data/
-│   ├── tasks.json                # 5 benchmark tasks
-│   ├── singleagent.json          # Single-agent configs (5 tasks)
-│   └── multiagent.json           # Multi-agent configs (5 tasks)
-├── results/                      # Benchmark outputs (auto-created)
-└── README.md                     # This file
+├── five_a_day_benchmark.py       # Benchmark implementation
+├── tools/                        # Framework-agnostic tools
+│   ├── base.py                   # BaseTool + framework converters
+│   ├── email.py                  # Email inbox/sending
+│   ├── banking.py                # Transaction lookup
+│   ├── calculator.py             # Safe math evaluation
+│   ├── code_execution.py         # Python runner with tests
+│   └── ...
+├── evaluators/                   # Task-specific evaluators
+│   ├── email_banking.py          # Task 0 evaluators
+│   ├── finance_calc.py           # Task 1 evaluators
+│   ├── code_generation.py        # Task 2 evaluators
+│   └── ...
+└── data/
+    ├── tasks.json                # 5 task definitions
+    ├── singleagent.json          # Single-agent configs
+    └── multiagent.json           # Multi-agent configs
 ```
 
-## Implementation Notes
+## Key Takeaways
 
-### Framework Conversion Pattern
+**For maseval users**, this example shows:
 
-Tools use composition-based adapters to avoid `__call__` conflicts:
+- How to structure benchmarks with Environment, Task, Evaluator
+- How to make tools work across agent frameworks
+- Different evaluation approaches for different task types
+- How message tracing enables diverse evaluation metrics
+- Pattern for single vs multi-agent comparison
 
-```python
-class BaseTool(ABC, TraceableMixin, ConfigurableMixin):
-    def to_smolagents(self):
-        return SmolagentsToolAdapter(self)
-
-    def to_langgraph(self):
-        return LangGraphToolAdapter(self)
-
-    def to_llamaindex(self):
-        return LlamaIndexToolAdapter(self)
-```
-
-### Multi-Agent Architecture
-
-Smolagents supports multi-agent via `managed_agents`:
-
-- Orchestrator agent coordinates specialists
-- Each specialist has subset of tools
-- Orchestrator delegates tasks to specialists
-
-LangGraph and LlamaIndex multi-agent support is TODO.
-
-### Environment Loading
-
-`FiveADayEnvironment` loads tools from `tasks.json`:
-
-1. Reads `environment_data.tools` list
-2. Instantiates tool classes with task-specific data
-3. Converts to framework-specific types
-4. Returns tools for agent setup
-
-### Task-Specific Configs
-
-Each task has tailored agent instructions and tool assignments:
-
-- Configs are arrays (5 items, one per task)
-- `load_agent_config(task_id)` retrieves task-specific config
-- Framework selection is separate from agent config
-
-## Requirements
-
-**Core Dependencies:**
-
-- maseval
-- RestrictedPython (8.1+)
-
-**Framework Dependencies:**
-
-- smolagents (for smolagents support)
-- langgraph, langchain-google-genai (for langgraph support)
-- llama-index-core, llama-index-llms-openai-like (for llamaindex support - TODO)
-
-**Environment Variables:**
-
-- `GOOGLE_API_KEY` - Required for Gemini models
-
-## Development
-
-### Adding New Tools
-
-1. Create tool class inheriting from `BaseTool`
-2. Implement `execute()` method
-3. Add to `tools/__init__.py` exports
-4. Add to tool_mapping in `FiveADayEnvironment.create_tools()`
-5. Update task configurations as needed
-
-### Adding New Tasks
-
-1. Add task to `data/tasks.json` with environment_data and evaluation_data
-2. Add single-agent config to `data/singleagent.json`
-3. Add multi-agent config to `data/multiagent.json`
-4. Ensure task_id matches array index
-
-### Testing
-
-```bash
-# Check linting
-ruff check examples/5_a_day_benchmark/
-
-# Auto-fix linting issues
-ruff check --fix examples/5_a_day_benchmark/
-
-# Format code
-ruff format examples/5_a_day_benchmark/
-
-# Test tool instantiation
-python -c "from tools import EmailTool; print(EmailTool([]).execute())"
-
-# Test config loading
-python -c "from five_a_day_benchmark import load_agent_config; print(load_agent_config(0))"
-```
-
-## Future Work
-
-- [ ] Implement evaluators based on evaluation_data
-- [ ] Add LlamaIndex support (adapter + multi-agent)
-- [ ] Add LangGraph multi-agent support
-- [ ] Add more diverse tool types
-- [ ] Expand to 10+ tasks
-- [ ] Add visualization of tool usage patterns
-- [ ] Benchmark latency and token usage
-
-## License
-
-See main repository LICENSE file.
-
-# TODO
-
-- run entire benchmark
-- change pattern of loading environment. more automatic.
-- implement langgraph and llamaindex
-- update evaluators with existing evaluators
-- add more unit tests
--
+**Requirements:** maseval, RestrictedPython, smolagents, langgraph, langchain-google-genai  
+**Environment:** Set `GOOGLE_API_KEY` for Gemini models
