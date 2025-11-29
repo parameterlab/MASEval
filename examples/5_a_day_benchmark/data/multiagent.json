@@ -1,0 +1,145 @@
+[
+  {
+    "task_id": 0,
+    "task_description": "Email + Banking coordination",
+    "agent_type": "multi",
+    "primary_agent_id": "orchestrator",
+    "model_config": {
+      "model_id": "gemini-2.0-flash-exp",
+      "temperature": 0.7,
+      "max_tokens": 4096
+    },
+    "agents": [
+      {
+        "agent_id": "orchestrator",
+        "agent_name": "Task Orchestrator",
+        "agent_instruction": "You coordinate the email and banking specialists to confirm payment receipt. Delegate to the banking specialist to verify transactions, then to the email specialist to draft the response. Synthesize their outputs into a complete confirmation.",
+        "tools": []
+      },
+      {
+        "agent_id": "banking_specialist",
+        "agent_name": "Banking Specialist",
+        "agent_instruction": "You verify banking transactions. Check for specific deposits and payments, calculate totals, and report findings clearly.",
+        "tools": ["banking"]
+      },
+      {
+        "agent_id": "email_specialist",
+        "agent_name": "Email Specialist",
+        "agent_instruction": "You handle email operations. Read emails, draft professional responses, and manage inbox. Be friendly and professional in all communications.",
+        "tools": ["email"]
+      }
+    ]
+  },
+  {
+    "task_id": 1,
+    "task_description": "Stock inheritance calculation",
+    "agent_type": "multi",
+    "primary_agent_id": "orchestrator",
+    "model_config": {
+      "model_id": "gemini-2.0-flash-exp",
+      "temperature": 0.7,
+      "max_tokens": 4096
+    },
+    "agents": [
+      {
+        "agent_id": "orchestrator",
+        "agent_name": "Financial Planning Orchestrator",
+        "agent_instruction": "You coordinate data retrieval and calculation specialists. First get family info and stock prices, then delegate calculation. Present the final inheritance breakdown clearly.",
+        "tools": []
+      },
+      {
+        "agent_id": "data_specialist",
+        "agent_name": "Data Retrieval Specialist",
+        "agent_instruction": "You retrieve family information and stock prices. Provide complete, accurate data for calculations.",
+        "tools": ["family_info", "stock_price"]
+      },
+      {
+        "agent_id": "calc_specialist",
+        "agent_name": "Calculation Specialist",
+        "agent_instruction": "You perform financial calculations. Calculate total value, per-child amounts, and verify all arithmetic. Show your work step by step.",
+        "tools": ["calculator"]
+      }
+    ]
+  },
+  {
+    "task_id": 2,
+    "task_description": "Code generation (DP algorithm)",
+    "agent_type": "multi",
+    "primary_agent_id": "orchestrator",
+    "model_config": {
+      "model_id": "gemini-2.0-flash-exp",
+      "temperature": 0.7,
+      "max_tokens": 4096
+    },
+    "agents": [
+      {
+        "agent_id": "orchestrator",
+        "agent_name": "Code Development Orchestrator",
+        "agent_instruction": "You coordinate the code generation specialist. Review the generated code and test results, ensure it meets requirements and passes all test cases.",
+        "tools": []
+      },
+      {
+        "agent_id": "code_specialist",
+        "agent_name": "Algorithm Specialist",
+        "agent_instruction": "You are an expert in dynamic programming algorithms. Write clean, efficient Python code for the house robber problem. Test thoroughly against all test cases and explain your solution.",
+        "tools": ["python_executor"]
+      }
+    ]
+  },
+  {
+    "task_id": 3,
+    "task_description": "Calendar scheduling",
+    "agent_type": "multi",
+    "primary_agent_id": "orchestrator",
+    "model_config": {
+      "model_id": "gemini-2.0-flash-exp",
+      "temperature": 0.7,
+      "max_tokens": 4096
+    },
+    "agents": [
+      {
+        "agent_id": "orchestrator",
+        "agent_name": "Scheduling Orchestrator",
+        "agent_instruction": "You coordinate calendar access to find meeting times. Analyze availability from all calendars and identify optimal overlapping slots.",
+        "tools": []
+      },
+      {
+        "agent_id": "calendar_specialist",
+        "agent_name": "Calendar Specialist",
+        "agent_instruction": "You access and analyze calendar availability. Find free slots and overlapping times across multiple calendars.",
+        "tools": ["calendar"]
+      }
+    ]
+  },
+  {
+    "task_id": 4,
+    "task_description": "Hotel search optimization",
+    "agent_type": "multi",
+    "primary_agent_id": "orchestrator",
+    "model_config": {
+      "model_id": "gemini-2.0-flash-exp",
+      "temperature": 0.7,
+      "max_tokens": 4096
+    },
+    "agents": [
+      {
+        "agent_id": "orchestrator",
+        "agent_name": "Travel Planning Orchestrator",
+        "agent_instruction": "You coordinate hotel search and optimization. Delegate searching and scoring to specialists, then present the best recommendation with justification.",
+        "tools": []
+      },
+      {
+        "agent_id": "search_specialist",
+        "agent_name": "Hotel Search Specialist",
+        "agent_instruction": "You search and filter hotels based on criteria. Apply filters for price, distance, and WiFi speed.",
+        "tools": ["hotel_search"]
+      },
+      {
+        "agent_id": "optimization_specialist",
+        "agent_name": "Optimization Specialist",
+        "agent_instruction": "You calculate optimal hotel choices using the weighted scoring formula: score = (1 - distance/5.0) * 0.4 + (wifi/500) * 0.35 + (1 - price/279) * 0.25. Rank hotels by score and explain your recommendations.",
+        "tools": ["calculator"]
+      }
+    ]
+  }
+]
