@@ -13,10 +13,7 @@ class CodeExecutionTool(BaseTool):
     """Python code execution with RestrictedPython sandbox."""
 
     def __init__(self, test_cases: list[dict[str, Any]] | None = None):
-        description = (
-            "Execute Python code safely. "
-            "Actions: 'execute' (run Python code string), 'test' (run code against test cases)"
-        )
+        description = "Execute Python code safely. Actions: 'execute' (run Python code string), 'test' (run code against test cases)"
         super().__init__("python_executor", description)
         self.test_cases = test_cases or []
 
@@ -74,7 +71,7 @@ class CodeExecutionTool(BaseTool):
             compile_result = compile_restricted(code, "<string>", "exec")
 
             # Check if it's a CompileResult object with errors attribute
-            if hasattr(compile_result, 'errors') and compile_result.errors:
+            if hasattr(compile_result, "errors") and compile_result.errors:
                 return ToolResult(
                     success=False,
                     data=None,
@@ -82,7 +79,7 @@ class CodeExecutionTool(BaseTool):
                 )
 
             # Get the code object
-            code_obj = compile_result.code if hasattr(compile_result, 'code') else compile_result
+            code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
 
             # Capture stdout
             old_stdout = sys.stdout
@@ -131,7 +128,7 @@ class CodeExecutionTool(BaseTool):
             compile_result = compile_restricted(code, "<string>", "exec")
 
             # Check if it's a CompileResult object with errors attribute
-            if hasattr(compile_result, 'errors') and compile_result.errors:
+            if hasattr(compile_result, "errors") and compile_result.errors:
                 return ToolResult(
                     success=False,
                     data=None,
@@ -139,7 +136,7 @@ class CodeExecutionTool(BaseTool):
                 )
 
             # Get the code object
-            code_obj = compile_result.code if hasattr(compile_result, 'code') else compile_result
+            code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
 
             # Execute code to define functions
             exec_globals = self.safe_env.copy()

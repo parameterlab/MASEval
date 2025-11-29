@@ -5,7 +5,7 @@ from .base import BaseTool, ToolResult
 
 class StockPriceTool(BaseTool):
     """Stock price lookup tool with static data.
-    
+
     Provides stock price information for configured symbols.
     """
 

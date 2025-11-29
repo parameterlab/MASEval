@@ -52,7 +52,7 @@ import evaluators
 
 class FiveADayEnvironment(Environment):
     """Environment that creates tools from task data and converts them to framework-specific types.
-    
+
     Loads tool specifications from tasks.json, instantiates the appropriate tool classes
     with task-specific data, and converts them to the target framework (smolagents, langgraph, llamaindex).
     """
@@ -162,7 +162,7 @@ class FiveADayEnvironment(Environment):
             adapter = base_tool.to_smolagents()
             # Return the actual tool, not the adapter
             # The adapter has a .tool attribute with the smolagents Tool instance
-            return adapter.tool if hasattr(adapter, 'tool') else adapter
+            return adapter.tool if hasattr(adapter, "tool") else adapter
         elif self.framework == "langgraph":
             adapter = base_tool.to_langgraph()
             # LangGraph adapter already returns the StructuredTool directly
@@ -180,7 +180,7 @@ class FiveADayEnvironment(Environment):
 
 class FiveADayBenchmark(Benchmark):
     """5-A-Day benchmark with framework-agnostic tools.
-    
+
     Demonstrates the maseval library through 5 diverse tasks with different evaluation approaches.
     Supports single-agent and multi-agent (orchestrator+specialist) configurations.
     """
@@ -190,11 +190,11 @@ class FiveADayBenchmark(Benchmark):
 
         Loads tools based on task.environment_data and converts them to the
         framework specified in agent_data.
-        
+
         Args:
             agent_data: Agent configuration including framework specification
             task: Task containing environment_data, query, and evaluation_data
-            
+
         Returns:
             FiveADayEnvironment with framework-specific tools
         """
@@ -242,7 +242,7 @@ class FiveADayBenchmark(Benchmark):
         agent_id = agent_spec.get("agent_id", "main_agent")
         agent_name = agent_spec.get("agent_name", "5-a-day-agent")
         agent_instruction = agent_spec.get("agent_instruction", "")
-        
+
         # Sanitize agent name to be a valid Python identifier for smolagents
         # Replace spaces and special chars with underscores, ensure it starts with letter/underscore
         sanitized_name = agent_name.replace(" ", "_").replace("-", "_")
@@ -392,9 +392,7 @@ class FiveADayBenchmark(Benchmark):
                 specialist_tool_names = agent_spec.get("tools", [])
                 if specialist_tool_names:
                     # Filter tools by name
-                    specialist_tools = [
-                        t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names
-                    ]
+                    specialist_tools = [t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names]
                 else:
                     specialist_tools = []
 
@@ -446,7 +444,7 @@ class FiveADayBenchmark(Benchmark):
 
         elif framework == "langgraph":
             from langchain_google_genai import ChatGoogleGenerativeAI
-            from langchain_core.messages import SystemMessage, HumanMessage
+            from langchain_core.messages import SystemMessage
             from langgraph.graph import StateGraph, END
             from typing_extensions import TypedDict
             from typing import Literal
@@ -464,7 +462,7 @@ class FiveADayBenchmark(Benchmark):
                 next_agent: str
 
             all_tools = environment.get_tools()
-            
+
             # Create specialist agent nodes
             specialist_nodes = {}
             for agent_spec in agents_specs:
@@ -477,25 +475,24 @@ class FiveADayBenchmark(Benchmark):
 
                 # Get tools for this specialist
                 if specialist_tool_names:
-                    specialist_tools = [
-                        t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names
-                    ]
+                    specialist_tools = [t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names]
                 else:
                     specialist_tools = []
 
                 # Create specialist node function
                 specialist_model = model.bind_tools(specialist_tools) if specialist_tools else model
-                
+
                 def make_specialist_node(spec_model, spec_instruction, spec_tools, spec_name):
                     def specialist_node(state: MultiAgentState):
                         messages = state["messages"]
                         # Add system message with specialist instruction
                         if spec_instruction and not any(isinstance(m, SystemMessage) for m in messages):
                             messages = [SystemMessage(content=spec_instruction)] + messages
-                        
+
                         # If there are tools, use tool calling workflow
                         if spec_tools:
-                            from langgraph.prebuilt import ToolNode, tools_condition
+                            from langgraph.prebuilt import ToolNode
+
                             response = spec_model.invoke(messages)
                             # Check if tools were called
                             if hasattr(response, "tool_calls") and response.tool_calls:
@@ -510,18 +507,19 @@ class FiveADayBenchmark(Benchmark):
                         else:
                             response = spec_model.invoke(messages)
                             return {"messages": [response], "next_agent": "orchestrator"}
+
                     return specialist_node
-                
+
                 specialist_nodes[agent_id] = make_specialist_node(
                     specialist_model, agent_instruction, specialist_tools, agent_spec["agent_name"]
                 )
 
             # Create orchestrator node with routing logic
             primary_instruction = primary_spec.get("agent_instruction", "")
-            
+
             def orchestrator_node(state: MultiAgentState):
                 messages = state["messages"]
-                
+
                 # Add system message with orchestrator instruction
                 if primary_instruction and not any(isinstance(m, SystemMessage) for m in messages):
                     orchestrator_prompt = (
@@ -530,7 +528,7 @@ class FiveADayBenchmark(Benchmark):
                         "Analyze the query and decide which specialist to call next, or provide a final answer."
                     )
                     messages = [SystemMessage(content=orchestrator_prompt)] + messages
-                
+
                 response = model.invoke(messages)
                 return {"messages": [response], "next_agent": "__end__"}
 
@@ -543,24 +541,22 @@ class FiveADayBenchmark(Benchmark):
 
             # Build the multi-agent graph
             workflow = StateGraph(MultiAgentState)
-            
+
             # Add orchestrator node
             workflow.add_node("orchestrator", orchestrator_node)
-            
+
             # Add specialist nodes
             for agent_id, node_fn in specialist_nodes.items():
                 workflow.add_node(agent_id, node_fn)
-            
+
             # Set orchestrator as entry point
             workflow.set_entry_point("orchestrator")
-            
+
             # Add conditional edges from orchestrator to specialists
             workflow.add_conditional_edges(
-                "orchestrator",
-                route_to_specialist,
-                {agent_id: agent_id for agent_id in specialist_nodes.keys()} | {"__end__": END}
+                "orchestrator", route_to_specialist, {agent_id: agent_id for agent_id in specialist_nodes.keys()} | {"__end__": END}
             )
-            
+
             # Add edges from specialists back to orchestrator
             for agent_id in specialist_nodes.keys():
                 workflow.add_edge(agent_id, "orchestrator")
@@ -585,7 +581,7 @@ class FiveADayBenchmark(Benchmark):
             )
 
             all_tools = environment.get_tools()
-            
+
             # Create specialist agents
             specialist_agents_dict = {}
             for agent_spec in agents_specs:
@@ -599,9 +595,7 @@ class FiveADayBenchmark(Benchmark):
 
                 # Get tools for this specialist
                 if specialist_tool_names:
-                    specialist_tools = [
-                        t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names
-                    ]
+                    specialist_tools = [t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names]
                 else:
                     specialist_tools = []
 
@@ -626,7 +620,7 @@ class FiveADayBenchmark(Benchmark):
             # Create handoff tools that delegate to specialist agents
             def make_handoff_tool(specialist_id: str, specialist_info: dict):
                 def handoff_to_specialist(task: str) -> str:
-                    f"""Delegate task to {specialist_info['name']}.
+                    f"""Delegate task to {specialist_info["name"]}.
                     
                     Args:
                         task: The task description for the specialist
@@ -637,7 +631,7 @@ class FiveADayBenchmark(Benchmark):
                     specialist_agent = specialist_info["agent"]
                     response = specialist_agent.chat(task)
                     return str(response)
-                
+
                 return FunctionTool.from_defaults(
                     fn=handoff_to_specialist,
                     name=f"ask_{specialist_id}",
@@ -645,10 +639,7 @@ class FiveADayBenchmark(Benchmark):
                 )
 
             # Create handoff tools for orchestrator
-            orchestrator_tools = [
-                make_handoff_tool(spec_id, spec_info)
-                for spec_id, spec_info in specialist_agents_dict.items()
-            ]
+            orchestrator_tools = [make_handoff_tool(spec_id, spec_info) for spec_id, spec_info in specialist_agents_dict.items()]
 
             # Get primary agent tools (if any)
             primary_tool_names = primary_spec.get("tools", [])
@@ -686,10 +677,10 @@ class FiveADayBenchmark(Benchmark):
     def setup_evaluators(self, environment, task, agents, user) -> Sequence[Evaluator]:
         """Create evaluators based on task's evaluation_data.evaluators list."""
         evaluator_names = task.evaluation_data.get("evaluators", [])
-        
+
         if not evaluator_names:
             return []
-        
+
         # Dynamically instantiate evaluators
         evaluator_instances = []
         for name in evaluator_names:
@@ -697,10 +688,10 @@ class FiveADayBenchmark(Benchmark):
             evaluator_class = getattr(evaluators, name, None)
             if evaluator_class is None:
                 raise ValueError(f"Evaluator '{name}' not found in evaluators module")
-            
+
             # Instantiate with standard arguments
             evaluator_instances.append(evaluator_class(task, environment, user))
-        
+
         return evaluator_instances
 
     def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment) -> Any:
@@ -717,24 +708,20 @@ class FiveADayBenchmark(Benchmark):
     ) -> List[Dict[str, Any]]:
         """Evaluate agent performance."""
         results = []
-        
+
         # Get the main agent's trace from the agents dict in traces
         agent_traces = traces.get("agents", {})
         if not agent_traces:
             # No agent traces found
-            return [{
-                "evaluator": "system",
-                "error": "No agent traces found",
-                "success": False
-            }]
-        
+            return [{"evaluator": "system", "error": "No agent traces found", "success": False}]
+
         # Get the first agent's trace (for single agent) or orchestrator trace (for multi-agent)
         main_trace_dict = agent_traces.get("orchestrator") or next(iter(agent_traces.values()))
-        
+
         # Extract messages and wrap in MessageHistory
         messages = main_trace_dict.get("messages", [])
         message_history = MessageHistory(messages)
-        
+
         # Run each evaluator
         for evaluator in evaluators:
             try:
@@ -742,12 +729,8 @@ class FiveADayBenchmark(Benchmark):
                 eval_result["evaluator"] = evaluator.__class__.__name__
                 results.append(eval_result)
             except Exception as e:
-                results.append({
-                    "evaluator": evaluator.__class__.__name__,
-                    "error": str(e),
-                    "success": False
-                })
-        
+                results.append({"evaluator": evaluator.__class__.__name__, "error": str(e), "success": False})
+
         return results
 
 
@@ -791,7 +774,10 @@ def load_tasks(data_file: str = "data/tasks.json", limit: Optional[int] = None, 
 
 
 def load_agent_configs(
-    config_file: str = "data/singleagent.json", framework: str = "smolagents", limit: Optional[int] = None, specific_task_only: Optional[int] = None
+    config_file: str = "data/singleagent.json",
+    framework: str = "smolagents",
+    limit: Optional[int] = None,
+    specific_task_only: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Load agent configurations from JSON file.
 
@@ -811,7 +797,7 @@ def load_agent_configs(
 
     if limit is not None and specific_task_only is not None:
         raise ValueError("Cannot specify both limit and specific_task_only")
-    
+
     # Filter by specific task if specified
     configs_data = []
     for config_idx, config in enumerate(configs[:limit] if limit else configs):
@@ -849,7 +835,7 @@ if __name__ == "__main__":
     # Load tasks and agent configs
     tasks = load_tasks(limit=limit, specific_task_only=specific_task_only)
     agent_configs = load_agent_configs(config_file=config_file, framework=framework, limit=limit, specific_task_only=specific_task_only)
-    
+
     print(f"Loaded {len(tasks)} tasks\n")
 
     # Setup output directory
@@ -857,17 +843,17 @@ if __name__ == "__main__":
 
     # Create logger callback
     logger = FileResultLogger(
-        output_dir=str(output_dir), 
+        output_dir=str(output_dir),
         filename_pattern=f"{framework}_{config_type}agent_{{timestamp}}.jsonl",
-        validate_on_completion=False  # Disable validation warnings
+        validate_on_completion=False,  # Disable validation warnings
     )
 
     # Run benchmark with all tasks - the Benchmark class handles the task loop
     benchmark = FiveADayBenchmark(
-        agent_data=agent_configs, 
+        agent_data=agent_configs,
         callbacks=[logger],
         fail_on_task_error=True,  # Enable strict mode for debugging
-        fail_on_evaluation_error=True
+        fail_on_evaluation_error=True,
     )
     results = benchmark.run(tasks=tasks)
 

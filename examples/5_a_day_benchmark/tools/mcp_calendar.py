@@ -4,7 +4,6 @@ Demonstrates MCP integration by wrapping calendar operations as framework-agnost
 Shows how maseval enables agents to work with external systems via standardized protocols.
 """
 
-import json
 from typing import Any, Dict
 
 from .base import BaseTool, ToolResult
@@ -32,9 +31,7 @@ class MCPCalendarTool(BaseTool):
 
         try:
             if action == "get_events":
-                result = self._mcp_get_events(
-                    kwargs.get("start_date", ""), kwargs.get("end_date", "")
-                )
+                result = self._mcp_get_events(kwargs.get("start_date", ""), kwargs.get("end_date", ""))
             elif action == "check_availability":
                 result = self._mcp_check_availability(
                     kwargs.get("date", ""),
@@ -73,17 +70,10 @@ class MCPCalendarTool(BaseTool):
     def _mcp_check_availability(self, date: str, start_time: str, end_time: str) -> Dict[str, Any]:
         """Check if time slot is available."""
         events = self.calendar_data.get("events", [])
-        conflicts = [
-            e
-            for e in events
-            if e["date"] == date
-            and not (end_time <= e["start_time"] or start_time >= e["end_time"])
-        ]
+        conflicts = [e for e in events if e["date"] == date and not (end_time <= e["start_time"] or start_time >= e["end_time"])]
         return {"available": len(conflicts) == 0, "conflicts": conflicts}
 
-    def _mcp_add_event(
-        self, date: str, start_time: str, end_time: str, title: str, description: str = ""
-    ) -> Dict[str, Any]:
+    def _mcp_add_event(self, date: str, start_time: str, end_time: str, title: str, description: str = "") -> Dict[str, Any]:
         """Add a new event to calendar."""
         if not all([date, start_time, end_time, title]):
             raise ValueError("Missing required fields: date, start_time, end_time, title")

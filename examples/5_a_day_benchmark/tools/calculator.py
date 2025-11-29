@@ -12,8 +12,7 @@ class CalculatorTool(BaseTool):
 
     def __init__(self):
         description = (
-            "Perform mathematical calculations. "
-            "Actions: 'calculate' (evaluate expression with math functions like sqrt, sin, cos, log, etc.)"
+            "Perform mathematical calculations. Actions: 'calculate' (evaluate expression with math functions like sqrt, sin, cos, log, etc.)"
         )
         super().__init__("calculator", description)
 
@@ -73,7 +72,7 @@ class CalculatorTool(BaseTool):
             compile_result = compile_restricted(expression, "<calculator>", "eval")
 
             # Check if it's a CompileResult object with errors attribute
-            if hasattr(compile_result, 'errors') and compile_result.errors:
+            if hasattr(compile_result, "errors") and compile_result.errors:
                 return ToolResult(
                     success=False,
                     data=None,
@@ -81,7 +80,7 @@ class CalculatorTool(BaseTool):
                 )
 
             # Get the code object
-            code_obj = compile_result.code if hasattr(compile_result, 'code') else compile_result
+            code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
 
             # Execute with restricted globals
             result = eval(code_obj, self.safe_env, {})

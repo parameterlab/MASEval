@@ -73,9 +73,7 @@ def create_calendar_server(calendar_name: str, calendar_data: dict[str, Any]) ->
         return {"available": len(conflicts) == 0, "conflicts": conflicts}
 
     @mcp.tool()
-    def add_event(
-        date: str, start_time: str, end_time: str, title: str, description: str = ""
-    ) -> dict[str, Any]:
+    def add_event(date: str, start_time: str, end_time: str, title: str, description: str = "") -> dict[str, Any]:
         """Add a new event to the calendar.
 
         Args:

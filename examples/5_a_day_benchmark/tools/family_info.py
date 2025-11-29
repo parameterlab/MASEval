@@ -7,7 +7,7 @@ from .base import BaseTool, ToolResult
 
 class FamilyInfoTool(BaseTool):
     """Family information lookup tool.
-    
+
     Provides access to family member information and asset ownership data.
     """
 
