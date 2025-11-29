@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Consistent naming of agent `adapter` over `wrapper` (PR: #3)
+- Fixed model configuration handling in `5_a_day_benchmark` example: `load_agent_configs` now properly constructs `model_config` dict from argparse arguments instead of requiring it in JSON config files (PR: #10)
 
 ### Removed
 

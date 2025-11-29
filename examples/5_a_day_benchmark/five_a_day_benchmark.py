@@ -804,9 +804,11 @@ def load_agent_configs(
         framework: Target framework ('smolagents', 'langgraph', 'llamaindex')
         limit: Optional limit on number of configs to load (must match number of tasks)
         specific_task_only: Optional index to load only a specific config (must match specific task)
+        model_id: Model identifier to inject into config
+        temperature: Model temperature to inject into config
 
     Returns:
-        List of agent configuration dictionaries with framework added
+        List of agent configuration dictionaries with framework and model_config added
     """
     config_path = Path(__file__).parent / config_file
 
@@ -823,9 +825,11 @@ def load_agent_configs(
             continue
         # Add framework to config
         config["framework"] = framework
-        # Inject model_id and temperature here
-        config["model_id"] = model_id
-        config["temperature"] = temperature
+        # Create model_config from argparse arguments
+        config["model_config"] = {
+            "model_id": model_id,
+            "temperature": temperature,
+        }
         configs_data.append(config)
 
     return configs_data
@@ -837,6 +841,21 @@ def load_agent_configs(
 
 
 if __name__ == "__main__":
+
+    from langfuse import get_client
+    from openinference.instrumentation.smolagents import SmolagentsInstrumentor
+
+    SmolagentsInstrumentor().instrument()
+
+    langfuse = get_client()
+    
+    # Verify connection
+    if langfuse.auth_check():
+        print("Langfuse client is authenticated and ready!")
+    else:
+        print("Authentication failed. Please check your credentials and host.")
+        exit(1)
+
     args = parser.parse_args()
 
     print("Running 5-A-Day Benchmark")
