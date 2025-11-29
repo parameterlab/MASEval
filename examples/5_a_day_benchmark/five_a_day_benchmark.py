@@ -319,10 +319,32 @@ class FiveADayBenchmark(Benchmark):
             wrapper = LangGraphAgentAdapter(graph, agent_id)
 
         elif framework == "llamaindex":
-            # TODO: Implement llamaindex support
-            # Requires: llama-index-core, llama-index-llms-openai-like
-            # Need to implement LlamaIndexAgentAdapter in maseval.interface.agents.llamaindex
-            raise NotImplementedError("llamaindex framework support is not yet implemented")
+            from llama_index.core.agent import ReActAgent
+            from llama_index.llms.litellm import LiteLLM
+
+            # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
+            model = LiteLLM(
+                model=f"gemini/{model_id}",
+                api_key=os.getenv("GOOGLE_API_KEY"),
+                temperature=temperature,
+            )
+
+            # Create ReActAgent with tools
+            agent = ReActAgent.from_tools(
+                tools=tools,
+                llm=model,
+                verbose=True,
+                max_iterations=10,
+            )
+
+            # Set system prompt if provided
+            if agent_instruction:
+                agent.update_prompts({"agent_worker:system_prompt": agent_instruction})
+
+            # Wrap in adapter
+            from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
+
+            wrapper = LlamaIndexAgentAdapter(agent, agent_id)
 
         else:
             raise ValueError(f"Unsupported framework: {framework}")
@@ -423,13 +445,234 @@ class FiveADayBenchmark(Benchmark):
             wrapper = SmolAgentAdapter(agent, primary_agent_id)
 
         elif framework == "langgraph":
-            # TODO: Implement multi-agent for langgraph
-            # LangGraph multi-agent requires more complex graph setup with sub-graphs
-            raise NotImplementedError("Multi-agent setup for langgraph is not yet implemented")
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            from langchain_core.messages import SystemMessage, HumanMessage
+            from langgraph.graph import StateGraph, END
+            from typing_extensions import TypedDict
+            from typing import Literal
+
+            # Create LangChain model
+            model = ChatGoogleGenerativeAI(
+                model=model_id,
+                google_api_key=os.getenv("GOOGLE_API_KEY"),
+                temperature=temperature,
+            )
+
+            # Define state for multi-agent graph
+            class MultiAgentState(TypedDict):
+                messages: List[Any]
+                next_agent: str
+
+            all_tools = environment.get_tools()
+            
+            # Create specialist agent nodes
+            specialist_nodes = {}
+            for agent_spec in agents_specs:
+                if agent_spec["agent_id"] == primary_agent_id:
+                    continue
+
+                agent_id = agent_spec["agent_id"]
+                agent_instruction = agent_spec.get("agent_instruction", "")
+                specialist_tool_names = agent_spec.get("tools", [])
+
+                # Get tools for this specialist
+                if specialist_tool_names:
+                    specialist_tools = [
+                        t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names
+                    ]
+                else:
+                    specialist_tools = []
+
+                # Create specialist node function
+                specialist_model = model.bind_tools(specialist_tools) if specialist_tools else model
+                
+                def make_specialist_node(spec_model, spec_instruction, spec_tools, spec_name):
+                    def specialist_node(state: MultiAgentState):
+                        messages = state["messages"]
+                        # Add system message with specialist instruction
+                        if spec_instruction and not any(isinstance(m, SystemMessage) for m in messages):
+                            messages = [SystemMessage(content=spec_instruction)] + messages
+                        
+                        # If there are tools, use tool calling workflow
+                        if spec_tools:
+                            from langgraph.prebuilt import ToolNode, tools_condition
+                            response = spec_model.invoke(messages)
+                            # Check if tools were called
+                            if hasattr(response, "tool_calls") and response.tool_calls:
+                                # Execute tools
+                                tool_node = ToolNode(spec_tools)
+                                tool_results = tool_node.invoke({"messages": [response]})
+                                # Get final response after tool execution
+                                final_messages = messages + [response] + tool_results["messages"]
+                                final_response = spec_model.invoke(final_messages)
+                                return {"messages": [final_response], "next_agent": "orchestrator"}
+                            return {"messages": [response], "next_agent": "orchestrator"}
+                        else:
+                            response = spec_model.invoke(messages)
+                            return {"messages": [response], "next_agent": "orchestrator"}
+                    return specialist_node
+                
+                specialist_nodes[agent_id] = make_specialist_node(
+                    specialist_model, agent_instruction, specialist_tools, agent_spec["agent_name"]
+                )
+
+            # Create orchestrator node with routing logic
+            primary_instruction = primary_spec.get("agent_instruction", "")
+            
+            def orchestrator_node(state: MultiAgentState):
+                messages = state["messages"]
+                
+                # Add system message with orchestrator instruction
+                if primary_instruction and not any(isinstance(m, SystemMessage) for m in messages):
+                    orchestrator_prompt = (
+                        f"{primary_instruction}\n\n"
+                        f"Available specialists: {', '.join(specialist_nodes.keys())}\n"
+                        "Analyze the query and decide which specialist to call next, or provide a final answer."
+                    )
+                    messages = [SystemMessage(content=orchestrator_prompt)] + messages
+                
+                response = model.invoke(messages)
+                return {"messages": [response], "next_agent": "__end__"}
+
+            # Router function to decide next agent
+            def route_to_specialist(state: MultiAgentState) -> Literal["orchestrator", "__end__"] | str:
+                next_agent = state.get("next_agent", "__end__")
+                if next_agent == "__end__":
+                    return END
+                return next_agent
+
+            # Build the multi-agent graph
+            workflow = StateGraph(MultiAgentState)
+            
+            # Add orchestrator node
+            workflow.add_node("orchestrator", orchestrator_node)
+            
+            # Add specialist nodes
+            for agent_id, node_fn in specialist_nodes.items():
+                workflow.add_node(agent_id, node_fn)
+            
+            # Set orchestrator as entry point
+            workflow.set_entry_point("orchestrator")
+            
+            # Add conditional edges from orchestrator to specialists
+            workflow.add_conditional_edges(
+                "orchestrator",
+                route_to_specialist,
+                {agent_id: agent_id for agent_id in specialist_nodes.keys()} | {"__end__": END}
+            )
+            
+            # Add edges from specialists back to orchestrator
+            for agent_id in specialist_nodes.keys():
+                workflow.add_edge(agent_id, "orchestrator")
+
+            graph = workflow.compile()
+
+            # Wrap in adapter
+            from maseval.interface.agents.langgraph import LangGraphAgentAdapter
+
+            wrapper = LangGraphAgentAdapter(graph, primary_agent_id)
 
         elif framework == "llamaindex":
-            # TODO: Implement multi-agent for llamaindex
-            raise NotImplementedError("Multi-agent setup for llamaindex is not yet implemented")
+            from llama_index.core.agent import ReActAgent
+            from llama_index.llms.litellm import LiteLLM
+            from llama_index.core.tools import FunctionTool
+
+            # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
+            model = LiteLLM(
+                model=f"gemini/{model_id}",
+                api_key=os.getenv("GOOGLE_API_KEY"),
+                temperature=temperature,
+            )
+
+            all_tools = environment.get_tools()
+            
+            # Create specialist agents
+            specialist_agents_dict = {}
+            for agent_spec in agents_specs:
+                if agent_spec["agent_id"] == primary_agent_id:
+                    continue
+
+                agent_id = agent_spec["agent_id"]
+                agent_name = agent_spec["agent_name"]
+                agent_instruction = agent_spec.get("agent_instruction", "")
+                specialist_tool_names = agent_spec.get("tools", [])
+
+                # Get tools for this specialist
+                if specialist_tool_names:
+                    specialist_tools = [
+                        t for t in all_tools if hasattr(t, "name") and t.name in specialist_tool_names
+                    ]
+                else:
+                    specialist_tools = []
+
+                # Create specialist agent
+                specialist_agent = ReActAgent.from_tools(
+                    tools=specialist_tools,
+                    llm=model,
+                    verbose=True,
+                    max_iterations=10,
+                )
+
+                # Set system prompt if provided
+                if agent_instruction:
+                    specialist_agent.update_prompts({"agent_worker:system_prompt": agent_instruction})
+
+                specialist_agents_dict[agent_id] = {
+                    "agent": specialist_agent,
+                    "name": agent_name,
+                    "description": agent_instruction,
+                }
+
+            # Create handoff tools that delegate to specialist agents
+            def make_handoff_tool(specialist_id: str, specialist_info: dict):
+                def handoff_to_specialist(task: str) -> str:
+                    f"""Delegate task to {specialist_info['name']}.
+                    
+                    Args:
+                        task: The task description for the specialist
+                    
+                    Returns:
+                        The specialist's response
+                    """
+                    specialist_agent = specialist_info["agent"]
+                    response = specialist_agent.chat(task)
+                    return str(response)
+                
+                return FunctionTool.from_defaults(
+                    fn=handoff_to_specialist,
+                    name=f"ask_{specialist_id}",
+                    description=f"Delegate to {specialist_info['name']}: {specialist_info['description']}",
+                )
+
+            # Create handoff tools for orchestrator
+            orchestrator_tools = [
+                make_handoff_tool(spec_id, spec_info)
+                for spec_id, spec_info in specialist_agents_dict.items()
+            ]
+
+            # Get primary agent tools (if any)
+            primary_tool_names = primary_spec.get("tools", [])
+            if primary_tool_names:
+                primary_tools = [t for t in all_tools if hasattr(t, "name") and t.name in primary_tool_names]
+                orchestrator_tools.extend(primary_tools)
+
+            # Create orchestrator agent with handoff tools
+            orchestrator = ReActAgent.from_tools(
+                tools=orchestrator_tools,
+                llm=model,
+                verbose=True,
+                max_iterations=15,
+            )
+
+            # Set orchestrator system prompt
+            primary_instruction = primary_spec.get("agent_instruction", "")
+            if primary_instruction:
+                orchestrator.update_prompts({"agent_worker:system_prompt": primary_instruction})
+
+            # Wrap orchestrator in adapter
+            from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
+
+            wrapper = LlamaIndexAgentAdapter(orchestrator, primary_agent_id)
 
         else:
             raise ValueError(f"Unsupported framework: {framework}")

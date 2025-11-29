@@ -16,17 +16,23 @@ See maseval's key features in action:
 ## Running the Example
 
 ```bash
-# Run all 5 tasks with smolagents
-python five_a_day_benchmark.py
+# Set your Google API key (required for Gemini models)
+export GOOGLE_API_KEY="your-api-key-here"
 
-# Run first 2 tasks only
-python five_a_day_benchmark.py 2
+# Run with smolagents (default)
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py
 
-# Try multi-agent orchestrator pattern
-python five_a_day_benchmark.py --config multiagent
+# Run with LangGraph
+# Edit framework variable in the file to "langgraph"
 
-# Use langgraph instead
-python five_a_day_benchmark.py langgraph
+# Run with LlamaIndex
+# Edit framework variable in the file to "llamaindex"
+
+# Run specific task only (e.g., task 0)
+# Edit specific_task_only variable in the file to 0
+
+# Run with multi-agent orchestrator pattern
+# Edit config_type variable in the file to "multi"
 ```
 
 Results saved to `results/` as JSONL with traces and evaluation scores.
@@ -159,7 +165,10 @@ trace = adapter.get_messages()  # Full conversation history
 
 - Orchestrator coordinates task
 - Specialists have tool subsets
-- Shows delegation patterns (smolagents only)
+- Shows delegation patterns across all frameworks:
+  - **smolagents**: Uses `managed_agents`
+  - **langgraph**: Uses supervisor pattern with conditional routing
+  - **llamaindex**: Uses handoff pattern with tool delegation
 
 ## Project Structure
 
@@ -194,5 +203,5 @@ trace = adapter.get_messages()  # Full conversation history
 - How message tracing enables diverse evaluation metrics
 - Pattern for single vs multi-agent comparison
 
-**Requirements:** maseval, RestrictedPython, smolagents, langgraph, langchain-google-genai  
+**Requirements:** maseval, RestrictedPython, smolagents, langgraph, langchain-google-genai, llama-index-core, llama-index-llms-litellm, litellm  
 **Environment:** Set `GOOGLE_API_KEY` for Gemini models
