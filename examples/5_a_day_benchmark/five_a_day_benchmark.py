@@ -18,6 +18,7 @@ Tasks:
 4. Hotel Optimization: Select best hotel by criteria (ranking, search strategy, reasoning)
 """
 
+import argparse
 import json
 import os
 from typing import Any, Dict, List, Optional, Sequence
@@ -43,6 +44,71 @@ from tools import (
 
 # Import all evaluators dynamically
 import evaluators
+
+# ============================================================================
+# Parse command-line arguments
+# ============================================================================
+parser = argparse.ArgumentParser(
+    description="5-A-Day Benchmark - Framework-Agnostic Agent Evaluation",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument(
+    "--framework", type=str, default="smolagents", choices=["smolagents", "langgraph", "llamaindex"], help="Agent framework to use"
+)
+parser.add_argument(
+    "--config-type", type=str, default="single", choices=["single", "multi"], help="Agent configuration type (single-agent or multi-agent)"
+)
+parser.add_argument("--limit", type=int, default=None, help="Number of tasks to run (default: all tasks)")
+parser.add_argument("--task", type=int, default=None, help="Run only a specific task by index (default: all tasks)")
+parser.add_argument("--model-id", type=str, default="gemini-2.5-flash-lite", help="Model identifier to use")
+parser.add_argument("--temperature", type=float, default=0.7, help="Model temperature")
+
+
+# ============================================================================
+# Global Model Factory
+# ============================================================================
+
+
+def get_model(model_id: str, framework: str, temperature: float = 0.7):
+    """Get a model instance for the specified framework.
+
+    Args:
+        model_id: Model identifier (e.g., 'gemini-2.0-flash-exp')
+        framework: Target framework ('smolagents', 'langgraph', 'llamaindex')
+        temperature: Model temperature (default: 0.7)
+
+    Returns:
+        Framework-specific model instance
+    """
+    if framework == "smolagents":
+        from smolagents import OpenAIServerModel
+
+        return OpenAIServerModel(
+            model_id=model_id,
+            api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
+            api_key=os.getenv("GOOGLE_API_KEY"),
+        )
+
+    elif framework == "langgraph":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        return ChatGoogleGenerativeAI(
+            model=model_id,
+            google_api_key=os.getenv("GOOGLE_API_KEY"),
+            temperature=temperature,
+        )
+
+    elif framework == "llamaindex":
+        from llama_index.llms.litellm import LiteLLM
+
+        return LiteLLM(
+            model=f"gemini/{model_id}",
+            api_key=os.getenv("GOOGLE_API_KEY"),
+            temperature=temperature,
+        )
+
+    else:
+        raise ValueError(f"Unsupported framework: {framework}")
 
 
 # ============================================================================
@@ -250,14 +316,10 @@ class FiveADayBenchmark(Benchmark):
             sanitized_name = "_" + sanitized_name
 
         if framework == "smolagents":
-            from smolagents import ToolCallingAgent, OpenAIServerModel
+            from smolagents import ToolCallingAgent
 
             # Create smolagents model
-            model = OpenAIServerModel(
-                model_id=model_id,
-                api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
-                api_key=os.getenv("GOOGLE_API_KEY"),
-            )
+            model = get_model(model_id, framework, temperature)
 
             # Create agent
             agent = ToolCallingAgent(
@@ -274,22 +336,18 @@ class FiveADayBenchmark(Benchmark):
             wrapper = SmolAgentAdapter(agent, agent_id)
 
         elif framework == "langgraph":
-            from langchain_google_genai import ChatGoogleGenerativeAI
             from langchain_core.messages import SystemMessage
             from langgraph.graph import StateGraph, END
+            from langgraph.graph.message import add_messages
             from langgraph.prebuilt import ToolNode, tools_condition
-            from typing_extensions import TypedDict
+            from typing_extensions import TypedDict, Annotated
 
             # Create LangChain model
-            model = ChatGoogleGenerativeAI(
-                model=model_id,
-                google_api_key=os.getenv("GOOGLE_API_KEY"),
-                temperature=temperature,
-            )
+            model = get_model(model_id, framework, temperature)
 
             # Create agent graph
             class AgentState(TypedDict):
-                messages: List[Any]
+                messages: Annotated[List[Any], add_messages]
 
             llm_with_tools = model.bind_tools(tools)
 
@@ -320,14 +378,9 @@ class FiveADayBenchmark(Benchmark):
 
         elif framework == "llamaindex":
             from llama_index.core.agent import ReActAgent
-            from llama_index.llms.litellm import LiteLLM
 
             # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
-            model = LiteLLM(
-                model=f"gemini/{model_id}",
-                api_key=os.getenv("GOOGLE_API_KEY"),
-                temperature=temperature,
-            )
+            model = get_model(model_id, framework, temperature)
 
             # Create ReActAgent with tools
             agent = ReActAgent.from_tools(
@@ -371,14 +424,10 @@ class FiveADayBenchmark(Benchmark):
             raise ValueError(f"Primary agent {primary_agent_id} not found in agents list")
 
         if framework == "smolagents":
-            from smolagents import ToolCallingAgent, OpenAIServerModel, FinalAnswerTool
+            from smolagents import ToolCallingAgent, FinalAnswerTool
 
             # Create smolagents model
-            model = OpenAIServerModel(
-                model_id=model_id,
-                api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
-                api_key=os.getenv("GOOGLE_API_KEY"),
-            )
+            model = get_model(model_id, framework, temperature)
 
             # Create specialist agents
             specialist_agents = []
@@ -408,6 +457,7 @@ class FiveADayBenchmark(Benchmark):
                     model=model,
                     tools=specialist_tools,
                     name=sanitized_name,
+                    description=agent_spec.get("agent_instruction", f"{agent_spec['agent_name']} specialist"),
                     instructions=agent_spec.get("agent_instruction", ""),
                     verbosity_level=2,
                 )
@@ -443,22 +493,18 @@ class FiveADayBenchmark(Benchmark):
             wrapper = SmolAgentAdapter(agent, primary_agent_id)
 
         elif framework == "langgraph":
-            from langchain_google_genai import ChatGoogleGenerativeAI
             from langchain_core.messages import SystemMessage
             from langgraph.graph import StateGraph, END
-            from typing_extensions import TypedDict
+            from langgraph.graph.message import add_messages
+            from typing_extensions import TypedDict, Annotated
             from typing import Literal
 
             # Create LangChain model
-            model = ChatGoogleGenerativeAI(
-                model=model_id,
-                google_api_key=os.getenv("GOOGLE_API_KEY"),
-                temperature=temperature,
-            )
+            model = get_model(model_id, framework, temperature)
 
             # Define state for multi-agent graph
             class MultiAgentState(TypedDict):
-                messages: List[Any]
+                messages: Annotated[List[Any], add_messages]
                 next_agent: str
 
             all_tools = environment.get_tools()
@@ -570,15 +616,10 @@ class FiveADayBenchmark(Benchmark):
 
         elif framework == "llamaindex":
             from llama_index.core.agent import ReActAgent
-            from llama_index.llms.litellm import LiteLLM
             from llama_index.core.tools import FunctionTool
 
             # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
-            model = LiteLLM(
-                model=f"gemini/{model_id}",
-                api_key=os.getenv("GOOGLE_API_KEY"),
-                temperature=temperature,
-            )
+            model = get_model(model_id, framework, temperature)
 
             all_tools = environment.get_tools()
 
@@ -816,25 +857,35 @@ def load_agent_configs(
 
 
 if __name__ == "__main__":
-    # ============================================================================
-    # Configuration - Edit these variables to change behavior
-    # ============================================================================
-    framework = "smolagents"  # Options: "smolagents", "langgraph", "llamaindex"
-    config_type = "single"  # Options: "single", "multi"
-    limit = None  # Number of tasks to run (None = all tasks)
-    specific_task_only = None  # Run only a specific task by index (None = all tasks)
+    args = parser.parse_args()
 
-    config_file = f"data/{config_type}agent.json"
+    framework = args.framework
+    config_type = args.config_type
+    limit = args.limit
+    specific_task_only = args.task
+    model_id = args.model_id
+    temperature = args.temperature
+
+    config_file = f"data/{args.config_type}agent.json"
 
     print("Running 5-A-Day Benchmark")
-    print(f"Framework: {framework}")
-    print(f"Config: {config_type}agent")
+    print(f"Framework: {args.framework}")
+    print(f"Config: {args.config_type}agent")
+    print(f"Model: {model_id}")
+    print(f"Temperature: {temperature}")
     print(f"Task limit: {limit or 'all'}")
     print(f"Specific task: {specific_task_only if specific_task_only is not None else 'all'}\n")
 
     # Load tasks and agent configs
     tasks = load_tasks(limit=limit, specific_task_only=specific_task_only)
-    agent_configs = load_agent_configs(config_file=config_file, framework=framework, limit=limit, specific_task_only=specific_task_only)
+    agent_configs = load_agent_configs(config_file=config_file, framework=args.framework, limit=limit, specific_task_only=specific_task_only)
+
+    # Update agent configs with model_id and temperature from CLI args
+    for config in agent_configs:
+        if "model_config" not in config:
+            config["model_config"] = {}
+        config["model_config"]["model_id"] = model_id
+        config["model_config"]["temperature"] = temperature
 
     print(f"Loaded {len(tasks)} tasks\n")
 

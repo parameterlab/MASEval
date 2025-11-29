@@ -1,10 +1,12 @@
-"""Code execution tool using RestrictedPython."""
+"""Code execution tool using RestrictedPython for safe execution."""
 
 import sys
 from io import StringIO
 from typing import Any
 
-from RestrictedPython import compile_restricted, safe_globals
+from RestrictedPython import compile_restricted, safe_globals, limited_builtins
+from RestrictedPython.PrintCollector import PrintCollector
+from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
 from .base import BaseTool, ToolResult
 
@@ -16,38 +18,17 @@ class CodeExecutionTool(BaseTool):
         description = "Execute Python code safely. Actions: 'execute' (run Python code string), 'test' (run code against test cases)"
         super().__init__("python_executor", description)
         self.test_cases = test_cases or []
-
-        # Safe execution environment
+        
+        # Safe execution environment with all RestrictedPython guards
         self.safe_env = {
             **safe_globals,
-            "__builtins__": {
-                # Basic types
-                "int": int,
-                "float": float,
-                "str": str,
-                "bool": bool,
-                "list": list,
-                "dict": dict,
-                "tuple": tuple,
-                "set": set,
-                "range": range,
-                "len": len,
-                "enumerate": enumerate,
-                "zip": zip,
-                # Utilities
-                "abs": abs,
-                "min": min,
-                "max": max,
-                "sum": sum,
-                "round": round,
-                "sorted": sorted,
-                "reversed": reversed,
-                "print": print,
-                # Constants
-                "True": True,
-                "False": False,
-                "None": None,
-            },
+            "__builtins__": limited_builtins,
+            "_print_": PrintCollector,
+            "_getattr_": getattr,
+            "_getitem_": lambda obj, index: obj[index],
+            "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
+            "__name__": "restricted_module",
+            "__metaclass__": type,
         }
 
     def execute(self, **kwargs) -> ToolResult:
@@ -67,42 +48,39 @@ class CodeExecutionTool(BaseTool):
             return ToolResult(success=False, data=None, error="code is required")
 
         try:
-            # Compile the code
+            # Compile the code with RestrictedPython
             compile_result = compile_restricted(code, "<string>", "exec")
 
-            # Check if it's a CompileResult object with errors attribute
             if hasattr(compile_result, "errors") and compile_result.errors:
+                # Format errors properly - they can be tuples or strings
+                error_msgs = []
+                for err in compile_result.errors:
+                    if isinstance(err, tuple):
+                        error_msgs.append(str(err[0]) if err else "Unknown error")
+                    else:
+                        error_msgs.append(str(err))
                 return ToolResult(
                     success=False,
                     data=None,
-                    error=f"Syntax errors: {', '.join(compile_result.errors)}",
+                    error=f"Syntax errors: {'; '.join(error_msgs)}",
                 )
 
-            # Get the code object
             code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
 
-            # Capture stdout
-            old_stdout = sys.stdout
-            sys.stdout = output_buffer = StringIO()
+            # Execute with RestrictedPython environment
+            exec_globals = self.safe_env.copy()
+            exec(code_obj, exec_globals)
 
-            try:
-                # Execute code
-                exec_globals = self.safe_env.copy()
-                exec(code_obj, exec_globals, {})
+            # Get output from PrintCollector
+            output = exec_globals.get("printed", "")
 
-                # Get output
-                output = output_buffer.getvalue()
-
-                return ToolResult(
-                    success=True,
-                    data={
-                        "output": output.strip() if output else None,
-                        "status": "completed",
-                    },
-                )
-
-            finally:
-                sys.stdout = old_stdout
+            return ToolResult(
+                success=True,
+                data={
+                    "output": output.strip() if output else None,
+                    "status": "completed",
+                },
+            )
 
         except Exception as e:
             return ToolResult(
@@ -124,23 +102,28 @@ class CodeExecutionTool(BaseTool):
             )
 
         try:
-            # Compile the code
+            # Compile the code with RestrictedPython
             compile_result = compile_restricted(code, "<string>", "exec")
 
-            # Check if it's a CompileResult object with errors attribute
             if hasattr(compile_result, "errors") and compile_result.errors:
+                # Format errors properly - they can be tuples or strings
+                error_msgs = []
+                for err in compile_result.errors:
+                    if isinstance(err, tuple):
+                        error_msgs.append(str(err[0]) if err else "Unknown error")
+                    else:
+                        error_msgs.append(str(err))
                 return ToolResult(
                     success=False,
                     data=None,
-                    error=f"Syntax errors: {', '.join(compile_result.errors)}",
+                    error=f"Syntax errors: {'; '.join(error_msgs)}",
                 )
 
-            # Get the code object
             code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
 
             # Execute code to define functions
             exec_globals = self.safe_env.copy()
-            exec(code_obj, exec_globals, {})
+            exec(code_obj, exec_globals)
 
             # Find the main function (assume it's the first non-builtin function)
             func_name = None

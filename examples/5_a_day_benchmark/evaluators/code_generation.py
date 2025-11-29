@@ -7,6 +7,9 @@ Success criteria: Generated code passes unit tests and uses optimal algorithm.
 import ast
 from typing import Any, Dict, Optional
 
+from RestrictedPython import compile_restricted, safe_globals, limited_builtins
+from RestrictedPython.Guards import guarded_iter_unpack_sequence
+
 from maseval import Evaluator, Environment, Task, User, MessageHistory
 from .utils import extract_python_code
 
@@ -61,14 +64,37 @@ class UnitTestEvaluator(Evaluator):
         }
 
     def _execute_code(self, code: str, function_name: str, test_input: Any) -> Any:
-        """Execute code and return result."""
-        namespace = {}
-        exec(code, namespace)
+        """Execute code safely using RestrictedPython and return result."""
+        # Compile with RestrictedPython
+        compile_result = compile_restricted(code, "<evaluator>", "exec")
+        
+        if hasattr(compile_result, "errors") and compile_result.errors:
+            # Format errors properly - they can be tuples or strings
+            error_msgs = []
+            for err in compile_result.errors:
+                if isinstance(err, tuple):
+                    error_msgs.append(str(err[0]) if err else "Unknown error")
+                else:
+                    error_msgs.append(str(err))
+            raise SyntaxError("; ".join(error_msgs))
+        
+        code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
+        
+        # Safe execution environment
+        safe_env = {
+            **safe_globals,
+            "__builtins__": limited_builtins,
+            "_getattr_": getattr,
+            "_getitem_": lambda obj, index: obj[index],
+            "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
+        }
+        
+        exec(code_obj, safe_env)
 
-        if function_name not in namespace:
+        if function_name not in safe_env:
             raise ValueError(f"Function '{function_name}' not found in code")
 
-        return namespace[function_name](test_input)
+        return safe_env[function_name](test_input)
 
 
 class AlgorithmicComplexityEvaluator(Evaluator):

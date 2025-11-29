@@ -15,12 +15,18 @@ class FamilyInfoTool(BaseTool):
         description = (
             "Access family information and assets. "
             "Actions: 'get_children' (get list of children), "
-            "'get_asset' (requires asset_name parameter, e.g. asset_name='apple_shares')"
+            "'get_asset' (requires asset_name parameter, e.g. asset_name='apple_shares' or 'AAPL')"
         )
         super().__init__("family_info", description)
         self.children = family_data.get("children", [])
+        
+        # Store apple shares owned
+        apple_shares = family_data.get("apple_shares_owned", 0)
+        
+        # Support both formal name and stock ticker
         self.assets = {
-            "apple_shares": family_data.get("apple_shares_owned", 0),
+            "apple_shares": apple_shares,
+            "AAPL": apple_shares,  # Also accept stock ticker
         }
 
     def execute(self, **kwargs) -> ToolResult:
