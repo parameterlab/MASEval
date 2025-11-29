@@ -2127,6 +2127,19 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-litellm"
+version = "0.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "litellm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d2/3e/b7b5a8e3461f5ba0cb40e8ea175d64332a4ae15d877b91058fbb6a25045b/langchain_litellm-0.3.2.tar.gz", hash = "sha256:65f44ca723f660f853f6c31f82107dd87ec0ca11be842d149300a06e23cc0c4e", size = 12282, upload-time = "2025-11-20T13:23:32.808Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6b/03/62a912fbb2139ffbc1d02ef25cd1af3d1063e318be7f4b509f3d94552f9d/langchain_litellm-0.3.2-py3-none-any.whl", hash = "sha256:93b764021eab1d4a419769dd973cf973671c2e9a7e6084c105699657933b24c9", size = 12985, upload-time = "2025-11-20T13:23:31.994Z" },
+]
+
+[[package]]
 name = "langchain-text-splitters"
 version = "0.3.11"
 source = { registry = "https://pypi.org/simple" }
@@ -2470,6 +2483,7 @@ all = [
     { name = "jupyter" },
     { name = "langchain" },
     { name = "langchain-google-genai" },
+    { name = "langchain-litellm" },
     { name = "langfuse" },
     { name = "langgraph" },
     { name = "litellm" },
@@ -2494,6 +2508,7 @@ examples = [
     { name = "jupyter" },
     { name = "langchain" },
     { name = "langchain-google-genai" },
+    { name = "langchain-litellm" },
     { name = "langfuse" },
     { name = "langgraph" },
     { name = "litellm" },
@@ -2615,6 +2630,8 @@ requires-dist = [
     { name = "langchain", marker = "extra == 'examples'", specifier = ">=0.3.27" },
     { name = "langchain-google-genai", marker = "extra == 'all'", specifier = ">=2.1.12" },
     { name = "langchain-google-genai", marker = "extra == 'examples'", specifier = ">=2.1.12" },
+    { name = "langchain-litellm", marker = "extra == 'all'", specifier = ">=0.1.0" },
+    { name = "langchain-litellm", marker = "extra == 'examples'", specifier = ">=0.1.0" },
     { name = "langfuse", marker = "extra == 'all'", specifier = ">=3.3.4" },
     { name = "langfuse", marker = "extra == 'examples'", specifier = ">=3.3.4" },
     { name = "langfuse", marker = "extra == 'langfuse'", specifier = ">=3.3.4" },

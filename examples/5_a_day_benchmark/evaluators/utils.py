@@ -1,8 +1,10 @@
 """Shared utility functions for evaluators."""
 
 import re
+import os
 from typing import List, Optional
 
+from litellm import completion
 from maseval import MessageHistory
 
 
@@ -131,3 +133,27 @@ def check_amount_in_text(amount: float, text: str) -> bool:
         True if amount found in any common format
     """
     return str(int(amount)) in text or f"${int(amount)}" in text or f"{int(amount):,}" in text or f"${int(amount):,}" in text
+
+
+def call_llm_judge(prompt: str, model: str = "gemini/gemini-2.5-flash") -> str:
+    """Call LLM to evaluate a response.
+
+    Args:
+        prompt: The evaluation prompt
+        model: The model to use (default: gemini/gemini-2.5-flash)
+
+    Returns:
+        The LLM's response
+    """
+    try:
+        response = completion(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            api_key=os.getenv("GOOGLE_API_KEY"),
+            temperature=0.0
+        )
+        content = response.choices[0].message.content
+        return content if content else ""
+    except Exception as e:
+        print(f"Error calling LLM judge: {e}")
+        return ""

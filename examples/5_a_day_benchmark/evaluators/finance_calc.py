@@ -6,15 +6,16 @@ Success criteria: Agent correctly calculates total value and per-child amount.
 
 import re
 from typing import Any, Dict, Optional
+import json
 
 from maseval import Evaluator, Environment, Task, User, MessageHistory
-from .utils import extract_assistant_response, extract_tool_calls, check_amount_in_text
+from .utils import extract_assistant_response, extract_tool_calls, call_llm_judge
 
 
 class ArithmeticAccuracyEvaluator(Evaluator):
     """Evaluates arithmetic correctness of stock value calculations.
 
-    Evaluation type: Numerical comparison with tolerance
+    Evaluation type: LLM-as-judge
     Measures: Did the agent correctly calculate the total stock value and per-child split?
     """
 
@@ -37,38 +38,50 @@ class ArithmeticAccuracyEvaluator(Evaluator):
         expected_total = self.ground_truth["total_value"]
         expected_per_child = self.ground_truth["value_per_child"]
 
-        # Extract numbers from response
-        numbers = re.findall(r"\$?[\d,]+\.?\d*", full_response)
-        numbers = [float(n.replace("$", "").replace(",", "")) for n in numbers]
-
-        # Check if expected values appear (with small tolerance for floating point)
-        tolerance = 1.0
-
-        total_found = any(abs(n - expected_total) < tolerance for n in numbers)
-        per_child_found = any(abs(n - expected_per_child) < tolerance for n in numbers)
-
-        # Also check string matching for exact values
-        total_str_found = check_amount_in_text(expected_total, full_response)
-        per_child_str_found = check_amount_in_text(expected_per_child, full_response)
-
-        total_correct = total_found or total_str_found
-        per_child_correct = per_child_found or per_child_str_found
-
-        score = (int(total_correct) + int(per_child_correct)) / 2.0
-
-        return {
-            "total_value_correct": total_correct,
-            "per_child_value_correct": per_child_correct,
-            "arithmetic_score": score,
-            "expected_total_value": expected_total,
-            "expected_per_child_value": expected_per_child,
-        }
+        prompt = f"""
+        You are evaluating an AI agent's financial calculation.
+        
+        Expected Values:
+        - Total Value: {expected_total}
+        - Value Per Child: {expected_per_child}
+        
+        Agent Response:
+        "{full_response}"
+        
+        Did the agent correctly calculate and state these values?
+        Allow for minor formatting differences (e.g., $1,000 vs 1000).
+        
+        Return a JSON object with:
+        - total_value_correct: boolean
+        - per_child_value_correct: boolean
+        - arithmetic_score: float (0.0 to 1.0)
+        """
+        
+        try:
+            response = call_llm_judge(prompt)
+            response = response.replace("```json", "").replace("```", "").strip()
+            result = json.loads(response)
+            
+            return {
+                "total_value_correct": result.get("total_value_correct", False),
+                "per_child_value_correct": result.get("per_child_value_correct", False),
+                "arithmetic_score": result.get("arithmetic_score", 0.0),
+                "expected_total_value": expected_total,
+                "expected_per_child_value": expected_per_child,
+            }
+        except Exception as e:
+            return {
+                "total_value_correct": False,
+                "per_child_value_correct": False,
+                "arithmetic_score": 0.0,
+                "error": f"LLM evaluation failed: {str(e)}",
+            }
 
 
 class InformationRetrievalEvaluator(Evaluator):
     """Evaluates if agent retrieved necessary information from tools.
 
-    Evaluation type: Tool validation
+    Evaluation type: Tool validation (Deterministic)
     Measures: Did the agent use the appropriate tools to gather required data?
     """
 
@@ -82,7 +95,6 @@ class InformationRetrievalEvaluator(Evaluator):
 
         # Check for required tools
         stock_price_retrieved = any("stock_price" in str(t).lower() or "StockPriceTool" in str(t) for t in tools_used)
-
         family_info_retrieved = any("family_info" in str(t).lower() or "FamilyInfoTool" in str(t) for t in tools_used)
 
         # Check if correct stock symbol was used (AAPL)

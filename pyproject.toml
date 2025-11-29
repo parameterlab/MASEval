@@ -41,6 +41,7 @@ examples = [
     "datasets>=4.0.0",
     "google-genai>=1.37.0",
     "langchain>=0.3.27",
+    "langchain-litellm>=0.1.0",
     "langchain-google-genai>=2.1.12",
     "langgraph>=0.6.0",
     "langfuse>=3.3.4",
@@ -80,6 +81,7 @@ all = [
     # Examples dependencies
     "datasets>=4.0.0",
     "langchain>=0.3.27",
+    "langchain-litellm>=0.1.0",
     "langchain-google-genai>=2.1.12",
     "addict>=2.4.0",
     "deepdiff>=8.6.1",

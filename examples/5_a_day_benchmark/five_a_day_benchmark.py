@@ -73,7 +73,7 @@ def get_model(model_id: str, framework: str, temperature: float = 0.7):
     """Get a model instance for the specified framework.
 
     Args:
-        model_id: Model identifier (e.g., 'gemini-2.0-flash-exp')
+        model_id: Model identifier (e.g., 'gemini-2.5-flash')
         framework: Target framework ('smolagents', 'langgraph', 'llamaindex')
         temperature: Model temperature (default: 0.7)
 
@@ -81,20 +81,20 @@ def get_model(model_id: str, framework: str, temperature: float = 0.7):
         Framework-specific model instance
     """
     if framework == "smolagents":
-        from smolagents import OpenAIServerModel
+        from smolagents import LiteLLMModel
 
-        return OpenAIServerModel(
-            model_id=model_id,
-            api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
+        return LiteLLMModel(
+            model_id=f"gemini/{model_id}",
             api_key=os.getenv("GOOGLE_API_KEY"),
+            temperature=temperature,
         )
 
     elif framework == "langgraph":
-        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_litellm import ChatLiteLLM
 
-        return ChatGoogleGenerativeAI(
-            model=model_id,
-            google_api_key=os.getenv("GOOGLE_API_KEY"),
+        return ChatLiteLLM(
+            model=f"gemini/{model_id}",
+            api_key=os.getenv("GOOGLE_API_KEY"),
             temperature=temperature,
         )
 

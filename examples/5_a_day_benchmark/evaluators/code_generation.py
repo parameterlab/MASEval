@@ -5,13 +5,14 @@ Success criteria: Generated code passes unit tests and uses optimal algorithm.
 """
 
 import ast
+import json
 from typing import Any, Dict, Optional
 
 from RestrictedPython import compile_restricted, safe_globals, limited_builtins
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
 from maseval import Evaluator, Environment, Task, User, MessageHistory
-from .utils import extract_python_code
+from .utils import extract_python_code, call_llm_judge
 
 
 class UnitTestEvaluator(Evaluator):
@@ -182,7 +183,7 @@ class AlgorithmicComplexityEvaluator(Evaluator):
 class CodeQualityEvaluator(Evaluator):
     """Evaluates code quality and style.
 
-    Evaluation type: LLM-as-judge (simplified heuristics here)
+    Evaluation type: LLM-as-judge
     Measures: Is the code well-written, documented, and handles edge cases?
     """
 
@@ -196,13 +197,39 @@ class CodeQualityEvaluator(Evaluator):
         if not code:
             return {"has_docstring": False, "handles_edge_cases": False, "code_quality_score": 0.0}
 
-        # Check for docstring or comments
-        has_docstring = '"""' in code or "'''" in code or "# " in code
-
-        # Check for edge case handling
-        handles_edge_cases = "if not" in code or "if len(" in code or "== 0" in code or "== []" in code
-
-        checks = [has_docstring, handles_edge_cases]
-        score = sum(checks) / len(checks)
-
-        return {"has_docstring": has_docstring, "handles_edge_cases": handles_edge_cases, "code_quality_score": score}
+        prompt = f"""
+        You are a senior software engineer evaluating Python code quality.
+        
+        Code Snippet:
+        ```python
+        {code}
+        ```
+        
+        Evaluate the following:
+        1. Does it have a docstring or meaningful comments?
+        2. Does it handle edge cases (e.g., empty input, invalid types)?
+        3. Is the variable naming and structure clean and pythonic?
+        
+        Return a JSON object with:
+        - has_docstring: boolean
+        - handles_edge_cases: boolean
+        - code_quality_score: float (0.0 to 1.0)
+        """
+        
+        try:
+            response = call_llm_judge(prompt)
+            response = response.replace("```json", "").replace("```", "").strip()
+            result = json.loads(response)
+            
+            return {
+                "has_docstring": result.get("has_docstring", False),
+                "handles_edge_cases": result.get("handles_edge_cases", False),
+                "code_quality_score": result.get("code_quality_score", 0.0),
+            }
+        except Exception as e:
+            return {
+                "has_docstring": False,
+                "handles_edge_cases": False,
+                "code_quality_score": 0.0,
+                "error": f"LLM evaluation failed: {str(e)}",
+            }

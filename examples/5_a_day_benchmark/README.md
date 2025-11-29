@@ -23,16 +23,19 @@ export GOOGLE_API_KEY="your-api-key-here"
 uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py
 
 # Run with LangGraph
-# Edit framework variable in the file to "langgraph"
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework langgraph
 
 # Run with LlamaIndex
-# Edit framework variable in the file to "llamaindex"
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework llamaindex
 
 # Run specific task only (e.g., task 0)
-# Edit specific_task_only variable in the file to 0
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --task 0
 
 # Run with multi-agent orchestrator pattern
-# Edit config_type variable in the file to "multi"
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --config-type multi
+
+# Specify model (default: gemini-2.5-flash)
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --model-id gemini-2.5-flash
 ```
 
 Results saved to `results/` as JSONL with traces and evaluation scores.
