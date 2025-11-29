@@ -23,13 +23,42 @@ class CodeExecutionState:
     def __init__(self, test_cases: list[dict[str, Any]] | None = None):
         self.test_cases = test_cases or []
 
+        # Build safe builtins with common functions needed for algorithm problems
+        safe_builtins = {
+            **limited_builtins,
+            'len': len,
+            'max': max,
+            'min': min,
+            'sum': sum,
+            'abs': abs,
+            'all': all,
+            'any': any,
+            'enumerate': enumerate,
+            'zip': zip,
+            'sorted': sorted,
+            'reversed': reversed,
+            'map': map,
+            'filter': filter,
+            'int': int,
+            'float': float,
+            'str': str,
+            'bool': bool,
+            'dict': dict,
+            'set': set,
+            'list': list,
+            'tuple': tuple,
+            'range': range,
+            'print': print,
+        }
+
         # Safe execution environment with all RestrictedPython guards
         self.safe_env = {
             **safe_globals,
-            "__builtins__": limited_builtins,
+            "__builtins__": safe_builtins,
             "_print_": PrintCollector,
             "_getattr_": getattr,
             "_getitem_": lambda obj, index: obj[index],
+            "_getiter_": iter,
             "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
             "__name__": "restricted_module",
             "__metaclass__": type,

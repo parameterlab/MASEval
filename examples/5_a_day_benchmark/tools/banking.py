@@ -138,12 +138,12 @@ class BankingGetTransactionTool(BaseTool):
 
 
 class BankingGetAssetTool(BaseTool):
-    """Get asset information by name."""
+    """Get number of shares owned for a stock ticker."""
 
     def __init__(self, banking_state: BankingState):
         super().__init__(
             "banking.get_asset",
-            "Get asset information by asset name (e.g., 'AAPL' for Apple stock shares)",
+            "Get the number of shares you own for a stock ticker symbol (e.g., 'AAPL' returns how many Apple shares you own)",
             tool_args=["asset_name"],
         )
         self.state = banking_state

@@ -29,7 +29,7 @@ ARG_SCHEMAS = {
     "code": {"type": "string", "description": "Python code to execute", "nullable": True},
     "person": {"type": "string", "description": "Person name", "nullable": True},
     "relationship": {"type": "string", "description": "Relationship type", "nullable": True},
-    "asset_name": {"type": "string", "description": "Asset name (e.g., apple_shares)", "nullable": True},
+    "asset_name": {"type": "string", "description": "Asset ticker symbol (e.g., AAPL, GOOGL)", "nullable": True},
     "symbol": {"type": "string", "description": "Stock symbol (e.g., AAPL)", "nullable": True},
     "ticker": {"type": "string", "description": "Stock ticker symbol", "nullable": True},
     "date": {"type": "string", "description": "Date (YYYY-MM-DD)", "nullable": True},
