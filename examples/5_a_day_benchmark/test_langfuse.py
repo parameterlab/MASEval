@@ -4,9 +4,9 @@ import os
 from langfuse import get_client
 
 from smolagents import LiteLLMModel
- 
+
 langfuse = get_client()
- 
+
 # Verify connection
 if langfuse.auth_check():
     print("Langfuse client is authenticated and ready!")
@@ -15,9 +15,8 @@ else:
     exit(1)
 
 
-
 from openinference.instrumentation.smolagents import SmolagentsInstrumentor
- 
+
 SmolagentsInstrumentor().instrument()
 
 from smolagents import (
@@ -25,10 +24,12 @@ from smolagents import (
     ToolCallingAgent,
     WebSearchTool,
     VisitWebpageTool,
-    InferenceClientModel,
 )
 
-model = LiteLLMModel( model_id="gemini/gemini-2.5-flash", api_key=os.environ["GOOGLE_API_KEY"], ) 
+model = LiteLLMModel(
+    model_id="gemini/gemini-2.5-flash",
+    api_key=os.environ["GOOGLE_API_KEY"],
+)
 
 search_agent = ToolCallingAgent(
     tools=[WebSearchTool(), VisitWebpageTool()],

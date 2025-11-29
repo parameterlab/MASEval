@@ -12,22 +12,13 @@ class FamilyInfoTool(BaseTool):
     """
 
     def __init__(self, family_data: dict[str, Any]):
-        description = (
-            "Access family information and assets. "
-            "Actions: 'get_children' (get list of children), "
-            "'get_asset' (requires asset_name parameter, e.g. asset_name='apple_shares' or 'AAPL')"
+        description = "Access family information. Actions: 'get_children' (get list of children)"
+        super().__init__(
+            "family_info",
+            description,
+            tool_args=["action"],
         )
-        super().__init__("family_info", description)
         self.children = family_data.get("children", [])
-
-        # Store apple shares owned
-        apple_shares = family_data.get("apple_shares_owned", 0)
-
-        # Support both formal name and stock ticker
-        self.assets = {
-            "apple_shares": apple_shares,
-            "AAPL": apple_shares,  # Also accept stock ticker
-        }
 
     def execute(self, **kwargs) -> ToolResult:
         """Execute family info action."""
@@ -35,8 +26,6 @@ class FamilyInfoTool(BaseTool):
 
         if action == "get_children":
             return self._get_children()
-        elif action == "get_asset":
-            return self._get_asset(kwargs.get("asset_name"))
         else:
             return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
 
@@ -46,16 +35,3 @@ class FamilyInfoTool(BaseTool):
             success=True,
             data={"children": self.children, "count": len(self.children)},
         )
-
-    def _get_asset(self, asset_name: str | None) -> ToolResult:
-        """Get asset information."""
-        if not asset_name:
-            return ToolResult(success=False, data=None, error="asset_name is required")
-
-        if asset_name in self.assets:
-            return ToolResult(
-                success=True,
-                data={"asset": asset_name, "value": self.assets[asset_name]},
-            )
-
-        return ToolResult(success=False, data=None, error=f"Asset {asset_name} not found")

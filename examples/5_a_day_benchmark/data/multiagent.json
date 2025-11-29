@@ -35,7 +35,7 @@
       {
         "agent_id": "orchestrator",
         "agent_name": "Financial Planning Orchestrator",
-        "agent_instruction": "You coordinate data retrieval and calculation specialists. First get family info and stock prices, then delegate calculation. Present the final inheritance breakdown clearly.",
+        "agent_instruction": "You coordinate data retrieval, banking, and calculation specialists. First get family info, assets, and stock prices, then delegate calculation. Present the final inheritance breakdown clearly.",
         "tools": []
       },
       {
@@ -43,6 +43,12 @@
         "agent_name": "Data Retrieval Specialist",
         "agent_instruction": "You retrieve family information and stock prices. Provide complete, accurate data for calculations.",
         "tools": ["family_info", "stock_price"]
+      },
+      {
+        "agent_id": "banking_specialist",
+        "agent_name": "Banking Specialist",
+        "agent_instruction": "You verify banking assets. Check for specific assets like apple shares.",
+        "tools": ["banking"]
       },
       {
         "agent_id": "calc_specialist",

@@ -14,7 +14,11 @@ class CalculatorTool(BaseTool):
         description = (
             "Perform mathematical calculations. Actions: 'calculate' (evaluate expression with math functions like sqrt, sin, cos, log, etc.)"
         )
-        super().__init__("calculator", description)
+        super().__init__(
+            "calculator",
+            description,
+            tool_args=["action", "expression"],
+        )
 
         # Safe globals with math functions
         self.safe_env = {

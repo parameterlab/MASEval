@@ -1,7 +1,5 @@
 """Code execution tool using RestrictedPython for safe execution."""
 
-import sys
-from io import StringIO
 from typing import Any
 
 from RestrictedPython import compile_restricted, safe_globals, limited_builtins
@@ -16,7 +14,11 @@ class CodeExecutionTool(BaseTool):
 
     def __init__(self, test_cases: list[dict[str, Any]] | None = None):
         description = "Execute Python code safely. Actions: 'execute' (run Python code string), 'test' (run code against test cases)"
-        super().__init__("python_executor", description)
+        super().__init__(
+            "python_executor",
+            description,
+            tool_args=["action", "code"],
+        )
         self.test_cases = test_cases or []
 
         # Safe execution environment with all RestrictedPython guards

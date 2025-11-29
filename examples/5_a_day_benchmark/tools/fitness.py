@@ -35,7 +35,11 @@ class RunningAppTool(BaseTool):
     """Running and cardio activity tracker."""
 
     def __init__(self, activities_data: list[dict[str, Any]]):
-        super().__init__("running_app", "Access running and cardio activities")
+        super().__init__(
+            "running_app",
+            "Access running and cardio activities",
+            tool_args=["action", "start_date", "end_date", "activity_id"],
+        )
         self.activities: list[Activity] = []
 
         # Load activities
@@ -98,7 +102,11 @@ class GymTrackerTool(BaseTool):
     """Gym and strength workout tracker."""
 
     def __init__(self, workouts_data: list[dict[str, Any]]):
-        super().__init__("gym_tracker", "Access gym and strength workouts")
+        super().__init__(
+            "gym_tracker",
+            "Access gym and strength workouts",
+            tool_args=["action", "start_date", "end_date", "workout_id"],
+        )
         self.workouts: list[Activity] = []
 
         # Load workouts

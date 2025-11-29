@@ -21,7 +21,11 @@ class CalendarTool(BaseTool):
     """Calendar tool with availability and event management."""
 
     def __init__(self, calendar_id: str, availability_data: dict[str, list[dict[str, str]]]):
-        super().__init__(f"calendar_{calendar_id}", f"Access {calendar_id} calendar")
+        super().__init__(
+            f"calendar_{calendar_id}",
+            f"Access {calendar_id} calendar",
+            tool_args=["action", "start_date", "end_date", "date"],
+        )
         self.calendar_id = calendar_id
         self.availability: dict[str, list[TimeSlot]] = {}
 

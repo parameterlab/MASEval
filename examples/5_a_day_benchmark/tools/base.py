@@ -15,6 +15,44 @@ from maseval.core.tracing import TraceableMixin
 from maseval.core.config import ConfigurableMixin
 
 
+# Common argument schemas for tools
+ARG_SCHEMAS = {
+    "action": {"type": "string", "description": "Action to perform", "nullable": False},
+    "to": {"type": "string", "description": "Recipient email address", "nullable": True},
+    "subject": {"type": "string", "description": "Email subject", "nullable": True},
+    "body": {"type": "string", "description": "Email body or message content", "nullable": True},
+    "email_id": {"type": "string", "description": "Email ID", "nullable": True},
+    "transaction_id": {"type": "string", "description": "Transaction ID", "nullable": True},
+    "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD)", "nullable": True},
+    "end_date": {"type": "string", "description": "End date (YYYY-MM-DD)", "nullable": True},
+    "expression": {"type": "string", "description": "Mathematical expression", "nullable": True},
+    "code": {"type": "string", "description": "Python code to execute", "nullable": True},
+    "person": {"type": "string", "description": "Person name", "nullable": True},
+    "relationship": {"type": "string", "description": "Relationship type", "nullable": True},
+    "asset_name": {"type": "string", "description": "Asset name (e.g., apple_shares)", "nullable": True},
+    "symbol": {"type": "string", "description": "Stock symbol (e.g., AAPL)", "nullable": True},
+    "ticker": {"type": "string", "description": "Stock ticker symbol", "nullable": True},
+    "date": {"type": "string", "description": "Date (YYYY-MM-DD)", "nullable": True},
+    "time": {"type": "string", "description": "Time (HH:MM)", "nullable": True},
+    "duration": {"type": "integer", "description": "Duration in minutes", "nullable": True},
+    "activity_type": {"type": "string", "description": "Type of activity", "nullable": True},
+    "location": {"type": "string", "description": "Location", "nullable": True},
+    "budget": {"type": "number", "description": "Budget amount", "nullable": True},
+    "checkin": {"type": "string", "description": "Check-in date", "nullable": True},
+    "checkout": {"type": "string", "description": "Check-out date", "nullable": True},
+    "activity_id": {"type": "string", "description": "Activity ID", "nullable": True},
+    "workout_id": {"type": "string", "description": "Workout ID", "nullable": True},
+    "max_price": {"type": "number", "description": "Maximum price", "nullable": True},
+    "max_distance": {"type": "number", "description": "Maximum distance", "nullable": True},
+    "min_wifi": {"type": "integer", "description": "Minimum wifi rating", "nullable": True},
+    "hotel_id": {"type": "string", "description": "Hotel ID", "nullable": True},
+    "start_time": {"type": "string", "description": "Start time (HH:MM)", "nullable": True},
+    "end_time": {"type": "string", "description": "End time (HH:MM)", "nullable": True},
+    "title": {"type": "string", "description": "Event title", "nullable": True},
+    "description": {"type": "string", "description": "Event description", "nullable": True},
+}
+
+
 @dataclass
 class ToolInvocation:
     """Record of a single tool invocation."""
@@ -56,11 +94,21 @@ class BaseTool(ABC, TraceableMixin, ConfigurableMixin):
     - Conversion methods to framework-specific tool types
     """
 
-    def __init__(self, name: str, description: str):
+    def __init__(self, name: str, description: str, tool_args: list[str] | None = None):
         super().__init__()
         self.name = name
         self.description = description
         self.history: list[ToolInvocation] = []
+
+        # Build tool arguments schema
+        self.tool_args = {}
+        if tool_args:
+            for arg in tool_args:
+                if arg in ARG_SCHEMAS:
+                    self.tool_args[arg] = ARG_SCHEMAS[arg]
+                else:
+                    # Default fallback for unknown args
+                    self.tool_args[arg] = {"type": "string", "description": arg, "nullable": True}
 
     @abstractmethod
     def execute(self, **kwargs) -> ToolResult:
@@ -180,33 +228,8 @@ class SmolagentsToolAdapter(TraceableMixin, ConfigurableMixin):
         class DynamicSmolagentsTool(SmolagentsTool):
             name = base_tool.name
             description = base_tool.description
-            # Comprehensive inputs schema to support all possible tool parameters
-            inputs = {
-                "action": {"type": "string", "description": "Action to perform", "nullable": False},
-                # Common parameters across tools
-                "to": {"type": "string", "description": "Recipient email address", "nullable": True},
-                "subject": {"type": "string", "description": "Email subject", "nullable": True},
-                "body": {"type": "string", "description": "Email body or message content", "nullable": True},
-                "email_id": {"type": "string", "description": "Email ID", "nullable": True},
-                "transaction_id": {"type": "string", "description": "Transaction ID", "nullable": True},
-                "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD)", "nullable": True},
-                "end_date": {"type": "string", "description": "End date (YYYY-MM-DD)", "nullable": True},
-                "expression": {"type": "string", "description": "Mathematical expression", "nullable": True},
-                "code": {"type": "string", "description": "Python code to execute", "nullable": True},
-                "person": {"type": "string", "description": "Person name", "nullable": True},
-                "relationship": {"type": "string", "description": "Relationship type", "nullable": True},
-                "asset_name": {"type": "string", "description": "Asset name (e.g., apple_shares)", "nullable": True},
-                "symbol": {"type": "string", "description": "Stock symbol (e.g., AAPL)", "nullable": True},
-                "ticker": {"type": "string", "description": "Stock ticker symbol", "nullable": True},
-                "date": {"type": "string", "description": "Date (YYYY-MM-DD)", "nullable": True},
-                "time": {"type": "string", "description": "Time (HH:MM)", "nullable": True},
-                "duration": {"type": "integer", "description": "Duration in minutes", "nullable": True},
-                "activity_type": {"type": "string", "description": "Type of activity", "nullable": True},
-                "location": {"type": "string", "description": "Location", "nullable": True},
-                "budget": {"type": "number", "description": "Budget amount", "nullable": True},
-                "checkin": {"type": "string", "description": "Check-in date", "nullable": True},
-                "checkout": {"type": "string", "description": "Check-out date", "nullable": True},
-            }
+            # Use specific tool arguments
+            inputs = base_tool.tool_args
             output_type = "string"
             skip_forward_signature_validation = True
 
@@ -223,6 +246,12 @@ class SmolagentsToolAdapter(TraceableMixin, ConfigurableMixin):
                     return str(result.data)
                 else:
                     raise RuntimeError(result.error or "Tool execution failed")
+
+        # Set the class name to the tool name for better tracing
+        # Sanitize name to be a valid class name (CamelCase)
+        sanitized_name = "".join(x.title() for x in base_tool.name.replace("-", "_").split("_")) + "Tool"
+        DynamicSmolagentsTool.__name__ = sanitized_name
+        DynamicSmolagentsTool.__qualname__ = sanitized_name
 
         self.tool = DynamicSmolagentsTool()
         self.name = base_tool.name  # Expose for Environment's _tools_dict

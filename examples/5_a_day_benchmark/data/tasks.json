@@ -1,6 +1,6 @@
 [
   {
-    "query": "I need to respond to the latest email from Sarah Johnson to confirm that I received her payment for the deposit and first month's rent. Can you check my recent transactions and draft a response?",
+    "query": "Sarah Johnson asked me to confirm that I received her payment for the deposit and first month's rent. Please check my transactions and respond accordingly.",
     "environment_data": {
       "tools": ["email", "banking"],
       "email_inbox": [
@@ -11,30 +11,33 @@
           "timestamp": "2025-11-18T09:30:00Z"
         }
       ],
-      "bank_transactions": [
-        {
-          "date": "2025-11-15",
-          "description": "Tenant Deposit - Sarah Johnson",
-          "amount": 2000,
-          "type": "deposit"
-        },
-        {
-          "date": "2025-11-17",
-          "description": "Rent Payment - Sarah Johnson",
-          "amount": 1500,
-          "type": "deposit"
-        },
-        {
-          "date": "2025-11-16",
-          "description": "Property Maintenance",
-          "amount": -450,
-          "type": "expense"
-        }
-      ],
-      "current_balance": 8750
+      "banking": {
+        "bank_transactions": [
+          {
+            "date": "2025-11-15",
+            "description": "Tenant Deposit - Sarah Johnson",
+            "amount": 2000,
+            "type": "deposit"
+          },
+          {
+            "date": "2025-11-17",
+            "description": "Rent Payment - Sarah Johnson",
+            "amount": 1500,
+            "type": "deposit"
+          },
+          {
+            "date": "2025-11-16",
+            "description": "Property Maintenance",
+            "amount": -450,
+            "type": "expense"
+          }
+        ],
+        "assets": {},
+        "current_balance": 8750
+      }
     },
     "user_data": {
-      "simulation_instructions": "You are Sean Crane, a landlord who needs help managing tenant communications. Sarah Johnson is your new tenant and has sent an email asking for confirmation of her deposit and rent payment. You want the agent to verify the payments were received and draft a professional, friendly confirmation email."
+      "simulation_instructions": "You are Sean Crane, a landlord who needs help managing tenant communications. Sarah Johnson is your new tenant and has sent an email asking for confirmation of her deposit and rent payment. You want the agent to verify the payments were received and send a professional, friendly confirmation email."
     },
     "evaluation_data": {
       "expected_deposit_amount": 2000,
@@ -50,7 +53,7 @@
       ]
     },
     "metadata": {
-      "description": "Tests multi-tool coordination between email and banking systems. Agent must retrieve banking information, verify specific payments from a tenant, and compose an appropriate confirmation email response.",
+      "description": "Tests multi-tool coordination between email and banking systems. Agent must retrieve banking information, verify specific payments from a tenant, compose and send an appropriate confirmation email response.",
       "tools_required": ["email", "banking"],
       "complexity": "medium",
       "skills_tested": [
@@ -63,17 +66,27 @@
   {
     "query": "I want to split my Apple stock equally among my three children. Can you look up the current stock price and tell me how much each child would get if I give them equal shares?",
     "environment_data": {
-      "tools": ["websearch", "family_info", "calculator"],
+      "tools": ["websearch", "family_info", "calculator", "banking"],
       "family_info": {
         "children": [
           { "name": "Emma", "age": 16 },
           { "name": "Liam", "age": 14 },
           { "name": "Sophia", "age": 12 }
-        ],
-        "apple_shares_owned": 150
+        ]
+      },
+      "banking": {
+        "assets": {
+          "AAPL": 180,
+          "GOOGL": 48,
+          "BMWG": 1301
+        },
+        "current_balance": 0,
+        "bank_transactions": []
       },
       "stock_price_lookup": {
-        "AAPL": 237.5
+        "AAPL": 237.5,
+        "GOOGLE": 145.3,
+        "BMWG": 85.0
       }
     },
     "user_data": {
@@ -82,7 +95,7 @@
     "evaluation_data": {
       "stock_symbol": "AAPL",
       "stock_price": 237.5,
-      "total_shares": 150,
+      "total_shares": 180,
       "number_of_children": 3,
       "total_value": 35625.0,
       "value_per_child": 11875.0,
@@ -94,7 +107,7 @@
     },
     "metadata": {
       "description": "Tests multi-step reasoning with web search, data retrieval, and mathematical computation. Agent must look up stock price, retrieve family information, and calculate per-child inheritance value.",
-      "tools_required": ["websearch", "family_info", "calculator"],
+      "tools_required": ["websearch", "family_info", "calculator", "banking"],
       "complexity": "medium",
       "skills_tested": [
         "web_search",

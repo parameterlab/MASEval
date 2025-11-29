@@ -41,7 +41,11 @@ class EmailTool(BaseTool):
             "Actions: 'get_inbox' (lists all emails), 'get_email' (read email by email_id), "
             "'send_email' (send email with to, subject, body), 'draft_email' (draft email with to, subject, body)"
         )
-        super().__init__("email", description)
+        super().__init__(
+            "email",
+            description,
+            tool_args=["action", "to", "subject", "body", "email_id"],
+        )
         self.inbox: list[EmailMessage] = []
         self.sent: list[EmailMessage] = []
         self._next_id = len(inbox_data) + 1

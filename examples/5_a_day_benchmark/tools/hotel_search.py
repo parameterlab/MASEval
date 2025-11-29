@@ -14,7 +14,11 @@ class HotelSearchTool(BaseTool):
             "Actions: 'search' (filter hotels by max_price, max_distance, min_wifi), "
             "'get_hotel' (get hotel by hotel_id), 'get_all' (get all hotels)"
         )
-        super().__init__("hotel_search", description)
+        super().__init__(
+            "hotel_search",
+            description,
+            tool_args=["action", "max_price", "max_distance", "min_wifi", "hotel_id"],
+        )
         self.hotels = hotels_data
 
     def execute(self, **kwargs) -> ToolResult:

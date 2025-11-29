@@ -36,11 +36,11 @@ class ToolFactory:
 
         # Banking tool
         if "banking" in required_tools:
-            transactions_data = environment_data.get("bank_transactions", [])
-            current_balance = environment_data.get("current_balance", 0.0)
+            banking_data = environment_data.get("banking", {})
             tools["banking"] = BankingTool(
-                transactions_data=transactions_data,
-                current_balance=current_balance,
+                transactions_data=banking_data.get("bank_transactions", []),
+                current_balance=banking_data.get("current_balance", 0.0),
+                assets_data=banking_data.get("assets", {}),
             )
 
         # Calculator tool
@@ -51,12 +51,12 @@ class ToolFactory:
         if "python_executor" in required_tools:
             test_cases = environment_data.get("test_cases", [])
             tools["python_executor"] = CodeExecutionTool(test_cases=test_cases)
+            print(f"DEBUG: Code execution tool created with test cases: {test_cases}")
 
         # Family info tool
         if "family_info" in required_tools:
             family_data = {
                 "children": environment_data.get("family_info", {}).get("children", []),
-                "apple_shares_owned": environment_data.get("family_info", {}).get("apple_shares_owned", 0),
             }
             tools["family_info"] = FamilyInfoTool(family_data=family_data)
 

@@ -28,17 +28,30 @@ class Transaction:
 
 
 class BankingTool(BaseTool):
-    """Banking tool with transaction history and balance."""
+    """Banking tool with transaction history, balance, and asset information."""
 
-    def __init__(self, transactions_data: list[dict[str, Any]], current_balance: float):
+    def __init__(
+        self,
+        transactions_data: list[dict[str, Any]],
+        current_balance: float,
+        assets_data: dict[str, Any] | None = None,
+    ):
         description = (
-            "Access bank account information. "
+            "Access bank account information and assets. "
             "Actions: 'get_balance' (get current balance), 'get_transactions' (get transactions with optional start_date/end_date), "
-            "'get_transaction' (get transaction by transaction_id)"
+            "'get_transaction' (get transaction by transaction_id), "
+            "'get_asset' (requires asset_name parameter, e.g. asset_name='AAPL')"
         )
-        super().__init__("banking", description)
+        super().__init__(
+            "banking",
+            description,
+            tool_args=["action", "transaction_id", "start_date", "end_date", "asset_name"],
+        )
         self.current_balance = current_balance
         self.transactions: list[Transaction] = []
+
+        # Store assets
+        self.assets = assets_data or {}
 
         # Load transactions
         for i, txn_data in enumerate(transactions_data):
@@ -65,6 +78,8 @@ class BankingTool(BaseTool):
             )
         elif action == "get_transaction":
             return self._get_transaction(kwargs.get("transaction_id"))
+        elif action == "get_asset":
+            return self._get_asset(kwargs.get("asset_name"))
         else:
             return ToolResult(success=False, data=None, error=f"Unknown action: {action}")
 
@@ -100,3 +115,16 @@ class BankingTool(BaseTool):
                 return ToolResult(success=True, data=txn.to_dict())
 
         return ToolResult(success=False, data=None, error=f"Transaction {transaction_id} not found")
+
+    def _get_asset(self, asset_name: str | None) -> ToolResult:
+        """Get asset information."""
+        if not asset_name:
+            return ToolResult(success=False, data=None, error="asset_name is required")
+
+        if asset_name in self.assets:
+            return ToolResult(
+                success=True,
+                data={"asset": asset_name, "value": self.assets[asset_name]},
+            )
+
+        return ToolResult(success=False, data=None, error=f"Asset {asset_name} not found")

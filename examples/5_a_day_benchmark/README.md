@@ -208,9 +208,3 @@ trace = adapter.get_messages()  # Full conversation history
 
 **Requirements:** maseval, RestrictedPython, smolagents, langgraph, langchain-google-genai, llama-index-core, llama-index-llms-litellm, litellm  
 **Environment:** Set `GOOGLE_API_KEY` for Gemini models
-
----
-
-- DynamicSmolagentsTool => should have dynamic name for tracing.
-- The task 0 query is "I need to respond to confirm... draft" change to "asked me to confirm... please check my transactions and respond accordingly...."
--

@@ -176,12 +176,20 @@ class FiveADayEnvironment(Environment):
 
         # Map tool names to tool classes and their initialization data
         tool_mapping = {
-            "email": (EmailTool, lambda: self.state["email_inbox"]),
-            "banking": (BankingTool, lambda: (self.state["bank_transactions"], self.state["current_balance"])),
+            "email": (EmailTool, lambda: (self.state["email_inbox"],)),
+            "banking": (
+                BankingTool,
+                lambda: (
+                    self.state["banking"]["bank_transactions"],
+                    self.state["banking"]["current_balance"],
+                    self.state["banking"]["assets"],
+                ),
+            ),
             "calculator": (CalculatorTool, lambda: ()),
             "python_executor": (CodeExecutionTool, lambda: (self.state["test_cases"],)),
             "family_info": (FamilyInfoTool, lambda: (self.state["family_info"],)),
             "stock_price": (StockPriceTool, lambda: (self.state["stock_price_lookup"],)),
+            "websearch": (StockPriceTool, lambda: (self.state["stock_price_lookup"],)),
             "calendar": (CalendarTool, lambda: ("my_calendar", self.state["my_calendar_availability"])),
             "running_app": (RunningAppTool, lambda: (self.state["running_activities"],)),
             "gym_tracker": (GymTrackerTool, lambda: (self.state["gym_activities"],)),
@@ -299,13 +307,19 @@ class FiveADayBenchmark(Benchmark):
         else:
             raise ValueError(f"Unsupported agent_type: {agent_data['agent_type']}")
 
-        return setup_fn(
+        agents = setup_fn(
             agent_data,
             environment,
             agent_data["framework"],
             agent_data["model_config"]["model_id"],
             agent_data["model_config"]["temperature"],
         )
+
+        # use .visualize() when smolagents
+        if agent_data["framework"] == "smolagents":
+            for agent in agents[0]:
+                agent.agent.visualize()
+        return agents
 
     def _setup_single_agent(
         self,
@@ -841,14 +855,13 @@ def load_agent_configs(
 
 
 if __name__ == "__main__":
-
     from langfuse import get_client
     from openinference.instrumentation.smolagents import SmolagentsInstrumentor
 
     SmolagentsInstrumentor().instrument()
 
     langfuse = get_client()
-    
+
     # Verify connection
     if langfuse.auth_check():
         print("Langfuse client is authenticated and ready!")

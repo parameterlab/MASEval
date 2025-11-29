@@ -11,7 +11,11 @@ class StockPriceTool(BaseTool):
 
     def __init__(self, price_data: dict[str, float]):
         description = "Look up stock prices by symbol (e.g. 'AAPL', 'GOOGL')"
-        super().__init__("stock_price", description)
+        super().__init__(
+            "stock_price",
+            description,
+            tool_args=["action", "symbol"],
+        )
         self.prices = price_data
 
     def execute(self, **kwargs) -> ToolResult:

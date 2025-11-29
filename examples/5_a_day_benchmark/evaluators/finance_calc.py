@@ -4,7 +4,6 @@ Task: User asks to split Apple stock value equally among children.
 Success criteria: Agent correctly calculates total value and per-child amount.
 """
 
-import re
 from typing import Any, Dict, Optional
 import json
 

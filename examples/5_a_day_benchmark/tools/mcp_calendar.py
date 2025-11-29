@@ -20,7 +20,20 @@ class MCPCalendarTool(BaseTool):
             calendar_data: Calendar events dict with "events" list
         """
         description = f"Access {name} via MCP. Supports: get_events, check_availability, add_event"
-        super().__init__(name, description)
+        super().__init__(
+            name,
+            description,
+            tool_args=[
+                "action",
+                "start_date",
+                "end_date",
+                "date",
+                "start_time",
+                "end_time",
+                "title",
+                "description",
+            ],
+        )
         self.calendar_data = calendar_data
 
     def execute(self, **kwargs) -> ToolResult:
