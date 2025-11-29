@@ -34,7 +34,7 @@ class HotelSearchSearchTool(BaseTool):
         max_price = kwargs.get("max_price")
         max_distance = kwargs.get("max_distance")
         min_wifi = kwargs.get("min_wifi")
-        
+
         filtered = self.state.hotels
 
         if max_price is not None:
@@ -64,7 +64,7 @@ class HotelSearchGetTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Get specific hotel by ID."""
         hotel_id = kwargs.get("hotel_id")
-        
+
         if not hotel_id:
             return ToolResult(success=False, data=None, error="hotel_id is required")
 

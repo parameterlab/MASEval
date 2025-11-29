@@ -39,7 +39,7 @@ class CalendarGetAvailabilityTool(BaseTool):
 
     def __init__(self, calendar_state: CalendarState):
         super().__init__(
-            f"calendar.get_availability",
+            "calendar.get_availability",
             f"Get {calendar_state.calendar_id} calendar availability with optional start_date and end_date filters (YYYY-MM-DD)",
             tool_args=["start_date", "end_date"],
         )
@@ -49,7 +49,7 @@ class CalendarGetAvailabilityTool(BaseTool):
         """Get availability for date range."""
         start_date = kwargs.get("start_date")
         end_date = kwargs.get("end_date")
-        
+
         if not start_date and not end_date:
             # Return all availability
             result = {date: [slot.to_dict() for slot in slots] for date, slots in self.state.availability.items()}
@@ -74,7 +74,7 @@ class CalendarGetDateAvailabilityTool(BaseTool):
 
     def __init__(self, calendar_state: CalendarState):
         super().__init__(
-            f"calendar.get_date_availability",
+            "calendar.get_date_availability",
             f"Get {calendar_state.calendar_id} calendar availability for a specific date (YYYY-MM-DD)",
             tool_args=["date"],
         )
@@ -83,7 +83,7 @@ class CalendarGetDateAvailabilityTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Get availability for a specific date."""
         date = kwargs.get("date")
-        
+
         if not date:
             return ToolResult(success=False, data=None, error="date is required")
 

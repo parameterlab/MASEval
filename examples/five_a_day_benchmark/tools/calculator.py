@@ -57,7 +57,7 @@ class CalculatorCalculateTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Evaluate a mathematical expression safely."""
         expression = kwargs.get("expression")
-        
+
         if not expression:
             return ToolResult(success=False, data=None, error="expression is required")
 
@@ -94,7 +94,7 @@ class CalculatorCalculateTool(BaseTool):
 
 class CalculatorToolCollection:
     """Calculator tool collection factory.
-    
+
     Currently only contains one tool, but structured as a collection
     for consistency with other tool patterns.
     """

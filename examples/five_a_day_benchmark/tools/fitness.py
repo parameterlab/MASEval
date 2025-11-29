@@ -3,7 +3,7 @@
 Tools:
 - running_app.get_activities: Get running/cardio activities with optional date filters
 - running_app.get_activity: Get specific activity by ID
-- gym_tracker.get_workouts: Get gym/strength workouts with optional date filters  
+- gym_tracker.get_workouts: Get gym/strength workouts with optional date filters
 - gym_tracker.get_workout: Get specific workout by ID
 """
 
@@ -73,7 +73,7 @@ class RunningAppGetActivitiesTool(BaseTool):
         """Get activities in date range."""
         start_date = kwargs.get("start_date")
         end_date = kwargs.get("end_date")
-        
+
         filtered = self.state.activities
 
         if start_date:
@@ -104,7 +104,7 @@ class RunningAppGetActivityTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Get specific activity by ID."""
         activity_id = kwargs.get("activity_id")
-        
+
         if not activity_id:
             return ToolResult(success=False, data=None, error="activity_id is required")
 
@@ -164,7 +164,7 @@ class GymTrackerGetWorkoutsTool(BaseTool):
         """Get workouts in date range."""
         start_date = kwargs.get("start_date")
         end_date = kwargs.get("end_date")
-        
+
         filtered = self.state.workouts
 
         if start_date:
@@ -195,7 +195,7 @@ class GymTrackerGetWorkoutTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Get specific workout by ID."""
         workout_id = kwargs.get("workout_id")
-        
+
         if not workout_id:
             return ToolResult(success=False, data=None, error="workout_id is required")
 

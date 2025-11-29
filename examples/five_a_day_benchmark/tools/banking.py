@@ -36,7 +36,7 @@ class Transaction:
 
 class BankingState:
     """Shared state for all banking tools.
-    
+
     Maintains balance, transactions, and assets across all sub-tool invocations.
     """
 
@@ -97,7 +97,7 @@ class BankingGetTransactionsTool(BaseTool):
         """Get transaction history with optional date filtering."""
         start_date = kwargs.get("start_date")
         end_date = kwargs.get("end_date")
-        
+
         filtered = self.state.transactions
 
         if start_date:
@@ -126,7 +126,7 @@ class BankingGetTransactionTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Get specific transaction by ID."""
         transaction_id = kwargs.get("transaction_id")
-        
+
         if not transaction_id:
             return ToolResult(success=False, data=None, error="transaction_id is required")
 
@@ -151,7 +151,7 @@ class BankingGetAssetTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Get asset information."""
         asset_name = kwargs.get("asset_name")
-        
+
         if not asset_name:
             return ToolResult(success=False, data=None, error="asset_name is required")
 
@@ -166,10 +166,10 @@ class BankingGetAssetTool(BaseTool):
 
 class BankingToolCollection:
     """Banking tool collection factory.
-    
+
     Creates a shared state and returns all banking sub-tools that share that state.
     This ensures transaction history and balance are consistent across all operations.
-    
+
     Usage:
         collection = BankingToolCollection(transactions_data, balance, assets_data)
         tools = collection.get_sub_tools()

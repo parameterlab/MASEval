@@ -217,7 +217,7 @@ class FiveADayEnvironment(Environment):
                     tool_instance = ToolClass(init_args)
 
                 # Check if it's a collection with get_sub_tools method
-                if hasattr(tool_instance, 'get_sub_tools'):
+                if hasattr(tool_instance, "get_sub_tools"):
                     # Get all sub-tools from the collection
                     base_tools = tool_instance.get_sub_tools()
                 else:

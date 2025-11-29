@@ -37,7 +37,7 @@ class MCPCalendarGetEventsTool(BaseTool):
         """Get events in date range."""
         start_date = kwargs.get("start_date", "")
         end_date = kwargs.get("end_date", "")
-        
+
         try:
             events = self.state.calendar_data.get("events", [])
             if start_date and end_date:
@@ -48,12 +48,8 @@ class MCPCalendarGetEventsTool(BaseTool):
                 filtered = [e for e in events if e["date"] <= end_date]
             else:
                 filtered = events
-                
-            return ToolResult(
-                success=True,
-                data={"events": filtered, "count": len(filtered)},
-                metadata={"mcp": True, "action": "get_events"}
-            )
+
+            return ToolResult(success=True, data={"events": filtered, "count": len(filtered)}, metadata={"mcp": True, "action": "get_events"})
         except Exception as e:
             return ToolResult(success=False, data=None, error=str(e))
 
@@ -74,18 +70,15 @@ class MCPCalendarCheckAvailabilityTool(BaseTool):
         date = kwargs.get("date", "")
         start_time = kwargs.get("start_time", "")
         end_time = kwargs.get("end_time", "")
-        
+
         try:
             events = self.state.calendar_data.get("events", [])
-            conflicts = [
-                e for e in events 
-                if e["date"] == date and not (end_time <= e["start_time"] or start_time >= e["end_time"])
-            ]
-            
+            conflicts = [e for e in events if e["date"] == date and not (end_time <= e["start_time"] or start_time >= e["end_time"])]
+
             return ToolResult(
                 success=True,
                 data={"available": len(conflicts) == 0, "conflicts": conflicts},
-                metadata={"mcp": True, "action": "check_availability"}
+                metadata={"mcp": True, "action": "check_availability"},
             )
         except Exception as e:
             return ToolResult(success=False, data=None, error=str(e))
@@ -109,14 +102,10 @@ class MCPCalendarAddEventTool(BaseTool):
         end_time = kwargs.get("end_time", "")
         title = kwargs.get("title", "")
         description = kwargs.get("description", "")
-        
+
         try:
             if not all([date, start_time, end_time, title]):
-                return ToolResult(
-                    success=False,
-                    data=None,
-                    error="Missing required fields: date, start_time, end_time, title"
-                )
+                return ToolResult(success=False, data=None, error="Missing required fields: date, start_time, end_time, title")
 
             event = {
                 "date": date,
@@ -126,12 +115,8 @@ class MCPCalendarAddEventTool(BaseTool):
                 "description": description,
             }
             self.state.calendar_data.setdefault("events", []).append(event)
-            
-            return ToolResult(
-                success=True,
-                data={"success": True, "event": event},
-                metadata={"mcp": True, "action": "add_event"}
-            )
+
+            return ToolResult(success=True, data={"success": True, "event": event}, metadata={"mcp": True, "action": "add_event"})
         except Exception as e:
             return ToolResult(success=False, data=None, error=str(e))
 

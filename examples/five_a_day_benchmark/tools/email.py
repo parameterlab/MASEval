@@ -41,7 +41,7 @@ class EmailMessage:
 
 class EmailState:
     """Shared state for all email tools.
-    
+
     Maintains inbox and sent emails across all sub-tool invocations.
     """
 
@@ -100,7 +100,7 @@ class EmailGetTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Get specific email by ID."""
         email_id = kwargs.get("email_id")
-        
+
         if not email_id:
             return ToolResult(success=False, data=None, error="email_id is required")
 
@@ -128,7 +128,7 @@ class EmailSendTool(BaseTool):
         to = kwargs.get("to")
         subject = kwargs.get("subject")
         body = kwargs.get("body")
-        
+
         if not to or not subject or not body:
             return ToolResult(
                 success=False,
@@ -170,7 +170,7 @@ class EmailDraftTool(BaseTool):
         to = kwargs.get("to")
         subject = kwargs.get("subject")
         body = kwargs.get("body")
-        
+
         if not to or not subject or not body:
             return ToolResult(
                 success=False,
@@ -190,10 +190,10 @@ class EmailDraftTool(BaseTool):
 
 class EmailToolCollection:
     """Email tool collection factory.
-    
+
     Creates a shared state and returns all email sub-tools that share that state.
     This ensures sent emails are visible across all email operations.
-    
+
     Usage:
         collection = EmailToolCollection(inbox_data)
         tools = collection.get_sub_tools()

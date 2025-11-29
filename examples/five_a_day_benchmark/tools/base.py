@@ -242,7 +242,7 @@ class SmolagentsToolAdapter(TraceableMixin, ConfigurableMixin):
 
             def forward(self, **kwargs) -> str:  # noqa: N807
                 """Execute the base tool and return string result.
-                
+
                 No action parameter - each tool does one specific thing.
                 Smolagents passes all tool arguments directly to forward().
                 """

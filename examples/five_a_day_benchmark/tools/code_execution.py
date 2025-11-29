@@ -16,7 +16,7 @@ from .base import BaseTool, ToolResult
 
 class CodeExecutionState:
     """Shared state for code execution tools.
-    
+
     Maintains test cases and safe execution environment.
     """
 
@@ -26,29 +26,29 @@ class CodeExecutionState:
         # Build safe builtins with common functions needed for algorithm problems
         safe_builtins = {
             **limited_builtins,
-            'len': len,
-            'max': max,
-            'min': min,
-            'sum': sum,
-            'abs': abs,
-            'all': all,
-            'any': any,
-            'enumerate': enumerate,
-            'zip': zip,
-            'sorted': sorted,
-            'reversed': reversed,
-            'map': map,
-            'filter': filter,
-            'int': int,
-            'float': float,
-            'str': str,
-            'bool': bool,
-            'dict': dict,
-            'set': set,
-            'list': list,
-            'tuple': tuple,
-            'range': range,
-            'print': print,
+            "len": len,
+            "max": max,
+            "min": min,
+            "sum": sum,
+            "abs": abs,
+            "all": all,
+            "any": any,
+            "enumerate": enumerate,
+            "zip": zip,
+            "sorted": sorted,
+            "reversed": reversed,
+            "map": map,
+            "filter": filter,
+            "int": int,
+            "float": float,
+            "str": str,
+            "bool": bool,
+            "dict": dict,
+            "set": set,
+            "list": list,
+            "tuple": tuple,
+            "range": range,
+            "print": print,
         }
 
         # Safe execution environment with all RestrictedPython guards
@@ -79,7 +79,7 @@ class PythonExecutorExecuteTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Execute Python code and return output."""
         code = kwargs.get("code")
-        
+
         if not code:
             return ToolResult(success=False, data=None, error="code is required")
 
@@ -140,7 +140,7 @@ class PythonExecutorTestTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Execute code and run test cases."""
         code = kwargs.get("code")
-        
+
         if not code:
             return ToolResult(success=False, data=None, error="code is required")
 
@@ -248,9 +248,9 @@ class PythonExecutorTestTool(BaseTool):
 
 class CodeExecutionToolCollection:
     """Code execution tool collection factory.
-    
+
     Creates a shared state with test cases and returns code execution sub-tools.
-    
+
     Usage:
         collection = CodeExecutionToolCollection(test_cases)
         tools = collection.get_sub_tools()

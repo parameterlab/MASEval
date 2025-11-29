@@ -26,7 +26,7 @@ class FamilyInfoGetChildrenTool(BaseTool):
 
 class FamilyInfoToolCollection:
     """Family information tool collection factory.
-    
+
     Currently only contains one tool, but structured as a collection
     for consistency and future extensibility.
     """

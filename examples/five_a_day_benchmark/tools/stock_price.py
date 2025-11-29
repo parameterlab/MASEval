@@ -17,7 +17,7 @@ class StockPriceGetTool(BaseTool):
     def execute(self, **kwargs) -> ToolResult:
         """Get stock price for symbol."""
         symbol = kwargs.get("symbol")
-        
+
         if not symbol:
             return ToolResult(success=False, data=None, error="symbol is required")
 
@@ -37,7 +37,7 @@ class StockPriceGetTool(BaseTool):
 
 class StockPriceToolCollection:
     """Stock price tool collection factory.
-    
+
     Currently only contains one tool, but structured as a collection
     for consistency with other tool patterns.
     """
