@@ -4,11 +4,7 @@
     "task_description": "Email + Banking coordination",
     "agent_type": "multi",
     "primary_agent_id": "orchestrator",
-    "model_config": {
-      "model_id": "gemini-2.0-flash-exp",
-      "temperature": 0.7,
-      "max_tokens": 4096
-    },
+
     "agents": [
       {
         "agent_id": "orchestrator",
@@ -36,7 +32,6 @@
     "agent_type": "multi",
     "primary_agent_id": "orchestrator",
     "model_config": {
-      "model_id": "gemini-2.0-flash-exp",
       "temperature": 0.7,
       "max_tokens": 4096
     },
@@ -67,7 +62,6 @@
     "agent_type": "multi",
     "primary_agent_id": "orchestrator",
     "model_config": {
-      "model_id": "gemini-2.0-flash-exp",
       "temperature": 0.7,
       "max_tokens": 4096
     },
@@ -92,7 +86,6 @@
     "agent_type": "multi",
     "primary_agent_id": "orchestrator",
     "model_config": {
-      "model_id": "gemini-2.0-flash-exp",
       "temperature": 0.7,
       "max_tokens": 4096
     },

@@ -60,7 +60,7 @@ parser.add_argument(
 )
 parser.add_argument("--limit", type=int, default=None, help="Number of tasks to run (default: all tasks)")
 parser.add_argument("--task", type=int, default=None, help="Run only a specific task by index (default: all tasks)")
-parser.add_argument("--model-id", type=str, default="gemini-2.5-flash-lite", help="Model identifier to use")
+parser.add_argument("--model-id", type=str, default="gemini-2.5-flash", help="Model identifier to use")
 parser.add_argument("--temperature", type=float, default=0.7, help="Model temperature")
 
 
@@ -811,6 +811,9 @@ def load_tasks(data_file: str = "data/tasks.json", limit: Optional[int] = None, 
             )
         )
 
+
+    print(f"Loaded {len(tasks_data)} tasks\n")
+
     return TaskCollection(tasks_data)
 
 
@@ -819,7 +822,9 @@ def load_agent_configs(
     framework: str = "smolagents",
     limit: Optional[int] = None,
     specific_task_only: Optional[int] = None,
-) -> List[Dict[str, Any]]:
+    model_id: Optional[str] = None,
+    temperature: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
     """Load agent configurations from JSON file.
 
     Args:
@@ -846,6 +851,9 @@ def load_agent_configs(
             continue
         # Add framework to config
         config["framework"] = framework
+        # Inject model_id and temperature here
+        config["model_id"] = model_id
+        config["temperature"] = temperature
         configs_data.append(config)
 
     return configs_data
@@ -859,56 +867,40 @@ def load_agent_configs(
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    framework = args.framework
-    config_type = args.config_type
-    limit = args.limit
-    specific_task_only = args.task
-    model_id = args.model_id
-    temperature = args.temperature
-
-    config_file = f"data/{args.config_type}agent.json"
-
     print("Running 5-A-Day Benchmark")
     print(f"Framework: {args.framework}")
     print(f"Config: {args.config_type}agent")
-    print(f"Model: {model_id}")
-    print(f"Temperature: {temperature}")
-    print(f"Task limit: {limit or 'all'}")
-    print(f"Specific task: {specific_task_only if specific_task_only is not None else 'all'}\n")
+    print(f"Model: {args.model_id}")
+    print(f"Temperature: {args.temperature}")
+    print(f"Task limit: {args.limit or 'all'}")
+    print(f"Specific task: {args.task if args.task is not None else 'all'}\n")
 
     # Load tasks and agent configs
-    tasks = load_tasks(limit=limit, specific_task_only=specific_task_only)
-    agent_configs = load_agent_configs(config_file=config_file, framework=args.framework, limit=limit, specific_task_only=specific_task_only)
-
-    # Update agent configs with model_id and temperature from CLI args
-    for config in agent_configs:
-        if "model_config" not in config:
-            config["model_config"] = {}
-        config["model_config"]["model_id"] = model_id
-        config["model_config"]["temperature"] = temperature
-
-    print(f"Loaded {len(tasks)} tasks\n")
-
-    # Setup output directory
-    output_dir = Path(__file__).parent / "results"
-
-    # Create logger callback
-    logger = FileResultLogger(
-        output_dir=str(output_dir),
-        filename_pattern=f"{framework}_{config_type}agent_{{timestamp}}.jsonl",
-        validate_on_completion=False,  # Disable validation warnings
+    tasks = load_tasks(limit=args.limit, specific_task_only=args.task)
+    agent_configs = load_agent_configs(
+        config_file=f"data/{args.config_type}agent.json",
+        framework=args.framework,
+        limit=args.limit,
+        specific_task_only=args.task,
+        model_id=args.model_id,
+        temperature=args.temperature,
     )
 
-    # Run benchmark with all tasks - the Benchmark class handles the task loop
+    output_dir = Path(__file__).parent / "results"
+    logger = FileResultLogger(
+        output_dir=str(output_dir),
+        filename_pattern=f"{args.framework}_{args.config_type}agent_{{timestamp}}.jsonl",
+        validate_on_completion=False,
+    )
+
     benchmark = FiveADayBenchmark(
         agent_data=agent_configs,
         callbacks=[logger],
-        fail_on_task_error=True,  # Enable strict mode for debugging
+        fail_on_task_error=True,
         fail_on_evaluation_error=True,
     )
     results = benchmark.run(tasks=tasks)
 
-    # Print summary
     print("\n--- Benchmark Complete ---")
     print(f"Total tasks: {len(tasks)}")
     print(f"Results saved to: {output_dir}")

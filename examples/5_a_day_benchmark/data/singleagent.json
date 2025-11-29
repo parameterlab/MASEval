@@ -3,11 +3,7 @@
     "task_id": 0,
     "task_description": "Email + Banking coordination",
     "agent_type": "single",
-    "model_config": {
-      "model_id": "gemini-2.5-flash",
-      "temperature": 0.7,
-      "max_tokens": 4096
-    },
+
     "agent": {
       "agent_id": "main_agent",
       "agent_name": "Email and Banking Assistant",
@@ -20,7 +16,6 @@
     "task_description": "Stock inheritance calculation",
     "agent_type": "single",
     "model_config": {
-      "model_id": "gemini-2.5-flash",
       "temperature": 0.7,
       "max_tokens": 4096
     },
@@ -36,7 +31,6 @@
     "task_description": "Code generation (DP algorithm)",
     "agent_type": "single",
     "model_config": {
-      "model_id": "gemini-2.5-flash",
       "temperature": 0.7,
       "max_tokens": 4096
     },
@@ -52,7 +46,6 @@
     "task_description": "Calendar scheduling",
     "agent_type": "single",
     "model_config": {
-      "model_id": "gemini-2.5-flash",
       "temperature": 0.7,
       "max_tokens": 4096
     },
@@ -68,7 +61,6 @@
     "task_description": "Hotel search optimization",
     "agent_type": "single",
     "model_config": {
-      "model_id": "gemini-2.5-flash",
       "temperature": 0.7,
       "max_tokens": 4096
     },
