@@ -279,10 +279,10 @@ class LlamaIndexAgentAdapter(AgentAdapter):
     def _run_agent_sync(self, query: str) -> Any:
         """Run agent in sync context.
 
-        LlamaIndex agents return a WorkflowHandler from .run() which must be awaited.
-        The pattern is: handler = agent.run(user_msg=query); result = await handler
-
-        For compatibility, also supports agents with run_sync() method.
+        Supports multiple LlamaIndex agent types:
+        - AgentWorkflow: .run() returns a WorkflowHandler that must be awaited
+        - ReActAgent/FunctionAgent: .chat() for synchronous execution
+        - Legacy agents: .run_sync() or .query() methods
 
         Args:
             query: The user query
@@ -294,7 +294,15 @@ class LlamaIndexAgentAdapter(AgentAdapter):
         if hasattr(self.agent, "run_sync") and callable(self.agent.run_sync):
             return self.agent.run_sync(input=query)
 
-        # LlamaIndex .run() returns a WorkflowHandler that must be awaited
+        # Check if agent has .chat() method (ReActAgent, FunctionAgent, etc.)
+        if hasattr(self.agent, "chat") and callable(self.agent.chat):
+            return self.agent.chat(query)
+
+        # Check if agent has .query() method (some LlamaIndex agents)
+        if hasattr(self.agent, "query") and callable(self.agent.query):
+            return self.agent.query(query)
+
+        # LlamaIndex .run() returns a WorkflowHandler that must be awaited (AgentWorkflow)
         # We need to run this in an async context
         async def run_async():
             handler = self.agent.run(user_msg=query)

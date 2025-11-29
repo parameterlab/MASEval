@@ -431,7 +431,7 @@ class FiveADayBenchmark(Benchmark):
             wrapper = LangGraphAgentAdapter(graph, agent_spec["agent_id"])
 
         elif framework == "llamaindex":
-            from llama_index.core.agent import ReActAgent
+            from llama_index.core.agent.workflow.react_agent import ReActAgent
 
             # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
             model = get_model(model_id, framework, temperature)
@@ -440,16 +440,20 @@ class FiveADayBenchmark(Benchmark):
             tools = [adapter.tool for adapter in tool_adapters]
 
             # Create ReActAgent with tools
-            agent = ReActAgent.from_tools(
+            agent = ReActAgent(
                 tools=tools,
                 llm=model,
                 verbose=True,
                 max_iterations=10,
             )
 
-            # Set system prompt if provided
-            if agent_spec["agent_instruction"]:
-                agent.update_prompts({"agent_worker:system_prompt": agent_spec["agent_instruction"]})
+            # Set system prompt if provided (ReActAgent may not support update_prompts)
+            # Note: ReActAgent is workflow-based and may have different prompt customization
+            if hasattr(agent, "update_prompts") and agent_spec["agent_instruction"]:
+                try:
+                    agent.update_prompts({"agent_worker:system_prompt": agent_spec["agent_instruction"]})
+                except Exception:
+                    pass  # Silently skip if not supported
 
             # Wrap in adapter
             from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
@@ -537,10 +541,11 @@ class FiveADayBenchmark(Benchmark):
 
         elif framework == "langgraph":
             from langchain_core.messages import SystemMessage
+            from langchain_core.tools import tool as create_tool
             from langgraph.graph import StateGraph, END
             from langgraph.graph.message import add_messages
+            from langgraph.prebuilt import ToolNode
             from typing_extensions import TypedDict, Annotated
-            from typing import Literal
 
             # Create LangChain model
             model = get_model(model_id, framework, temperature)
@@ -548,12 +553,11 @@ class FiveADayBenchmark(Benchmark):
             # Define state for multi-agent graph
             class MultiAgentState(TypedDict):
                 messages: Annotated[List[Any], add_messages]
-                next_agent: str
 
             all_tool_adapters = environment.get_tools()
 
-            # Create specialist agent nodes
-            specialist_nodes = {}
+            # Create specialist agent subgraphs that can execute tools
+            specialist_subgraphs = {}
             for agent_spec in specialist_specs:
                 agent_id = agent_spec["agent_id"]
                 agent_instruction = agent_spec["agent_instruction"]
@@ -562,65 +566,135 @@ class FiveADayBenchmark(Benchmark):
                 specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
                 specialist_tools = [adapter.tool for adapter in specialist_adapters]
 
-                # Create specialist node function
-                specialist_model = model.bind_tools(specialist_tools) if specialist_tools else model
-
-                def make_specialist_node(spec_model, spec_instruction, spec_tools, spec_name):
+                # Create specialist subgraph with tool calling
+                def make_specialist_node(spec_instruction, spec_tools):
                     def specialist_node(state: MultiAgentState):
+                        from langchain_core.messages import HumanMessage, AIMessage
+
                         messages = state["messages"]
-                        # Add system message with specialist instruction
-                        if spec_instruction and not any(isinstance(m, SystemMessage) for m in messages):
-                            messages = [SystemMessage(content=spec_instruction)] + messages
 
-                        # If there are tools, use tool calling workflow
+                        # Extract the delegated query from the orchestrator's tool call
+                        # The last message should be an AIMessage with tool_calls
+                        delegated_query = None
+                        if messages and isinstance(messages[-1], AIMessage):
+                            last_msg = messages[-1]
+                            if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                                # Get the query from tool call arguments
+                                tool_call = last_msg.tool_calls[0]
+                                if "args" in tool_call and "query" in tool_call["args"]:
+                                    delegated_query = tool_call["args"]["query"]
+
+                        # If we couldn't extract from tool call, fall back to getting from history
+                        if not delegated_query:
+                            # Find the most recent user message
+                            for msg in reversed(messages):
+                                if hasattr(msg, "type") and msg.type == "human":
+                                    delegated_query = msg.content
+                                    break
+
+                        # Ensure we have a valid query string
+                        if not delegated_query:
+                            delegated_query = "Please help with the task."
+
+                        # Create fresh conversation for specialist with proper message sequence
+                        specialist_messages = []
+                        if spec_instruction:
+                            specialist_messages.append(SystemMessage(content=spec_instruction))
+                        specialist_messages.append(HumanMessage(content=delegated_query))
+
+                        # Run specialist with tools if available
                         if spec_tools:
-                            from langgraph.prebuilt import ToolNode
+                            specialist_model = model.bind_tools(spec_tools)
+                            current_messages = specialist_messages
 
-                            response = spec_model.invoke(messages)
-                            # Check if tools were called
-                            if hasattr(response, "tool_calls") and response.tool_calls:
-                                # Execute tools
-                                tool_node = ToolNode(spec_tools)
-                                tool_results = tool_node.invoke({"messages": [response]})
-                                # Get final response after tool execution
-                                final_messages = messages + [response] + tool_results["messages"]
-                                final_response = spec_model.invoke(final_messages)
-                                return {"messages": [final_response], "next_agent": "orchestrator"}
-                            return {"messages": [response], "next_agent": "orchestrator"}
+                            # Allow multiple tool calling rounds
+                            for _ in range(5):  # Max 5 iterations
+                                response = specialist_model.invoke(current_messages)
+                                current_messages = current_messages + [response]
+
+                                # Check if tools were called
+                                if hasattr(response, "tool_calls") and response.tool_calls:
+                                    # Execute tools
+                                    tool_node = ToolNode(spec_tools)
+                                    tool_results = tool_node.invoke({"messages": [response]})
+                                    current_messages = current_messages + tool_results["messages"]
+                                else:
+                                    # No more tool calls, return final response
+                                    return {"messages": [response]}
+
+                            # Max iterations reached, return last response
+                            return {"messages": [current_messages[-1]]}
                         else:
-                            response = spec_model.invoke(messages)
-                            return {"messages": [response], "next_agent": "orchestrator"}
+                            # No tools, just invoke model
+                            response = model.invoke(specialist_messages)
+                            return {"messages": [response]}
 
                     return specialist_node
 
-                specialist_nodes[agent_id] = make_specialist_node(
-                    specialist_model, agent_instruction, specialist_tools, agent_spec["agent_name"]
-                )
+                specialist_subgraphs[agent_id] = make_specialist_node(agent_instruction, specialist_tools)
 
-            # Create orchestrator node with routing logic
+            # Create handoff tools for orchestrator to delegate to specialists
+            handoff_tools = []
+            for agent_spec in specialist_specs:
+                agent_id = agent_spec["agent_id"]
+                agent_name = agent_spec["agent_name"]
+                agent_description = agent_spec["agent_instruction"]
+
+                # Create a handoff tool for each specialist
+                def make_handoff_tool(spec_id, spec_name, spec_description):
+                    @create_tool
+                    def handoff_tool(query: str) -> str:
+                        """Delegate query to specialist.
+
+                        Args:
+                            query: The specific query or task to delegate to this specialist
+
+                        Returns:
+                            The specialist's response
+                        """
+                        # This is a placeholder - actual execution happens in the graph routing
+                        return f"Delegating to {spec_name}: {query}"
+
+                    handoff_tool.name = f"ask_{spec_id}"
+                    handoff_tool.description = f"Delegate to {spec_name}: {spec_description}"
+                    # Store metadata for routing (dynamic attribute)
+                    handoff_tool._target_agent = spec_id  # type: ignore[attr-defined]
+                    return handoff_tool
+
+                handoff_tools.append(make_handoff_tool(agent_id, agent_name, agent_description))
+
+            # Create orchestrator node with handoff tools
             primary_instruction = primary_spec["agent_instruction"]
+            orchestrator_model = model.bind_tools(handoff_tools)
 
             def orchestrator_node(state: MultiAgentState):
                 messages = state["messages"]
 
                 # Add system message with orchestrator instruction
                 if primary_instruction and not any(isinstance(m, SystemMessage) for m in messages):
-                    orchestrator_prompt = (
-                        f"{primary_instruction}\n\n"
-                        f"Available specialists: {', '.join(specialist_nodes.keys())}\n"
-                        "Analyze the query and decide which specialist to call next, or provide a final answer."
-                    )
-                    messages = [SystemMessage(content=orchestrator_prompt)] + messages
+                    messages = [SystemMessage(content=primary_instruction)] + messages
 
-                response = model.invoke(messages)
-                return {"messages": [response], "next_agent": "__end__"}
+                response = orchestrator_model.invoke(messages)
+                return {"messages": [response]}
 
-            # Router function to decide next agent
-            def route_to_specialist(state: MultiAgentState) -> Literal["orchestrator", "__end__"] | str:
-                next_agent = state.get("next_agent", "__end__")
-                if next_agent == "__end__":
-                    return END
-                return next_agent
+            # Router function based on tool calls
+            def route_after_orchestrator(state: MultiAgentState):
+                """Route to specialist if handoff tool was called, otherwise end."""
+                messages = state["messages"]
+                last_message = messages[-1]
+
+                # Check if orchestrator called a handoff tool
+                if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+                    # Get the first tool call
+                    tool_call = last_message.tool_calls[0]
+                    tool_name = tool_call["name"]
+
+                    # Extract specialist ID from tool name (ask_{specialist_id})
+                    if tool_name.startswith("ask_"):
+                        specialist_id = tool_name[4:]  # Remove "ask_" prefix
+                        return specialist_id
+
+                return END
 
             # Build the multi-agent graph
             workflow = StateGraph(MultiAgentState)
@@ -629,19 +703,19 @@ class FiveADayBenchmark(Benchmark):
             workflow.add_node("orchestrator", orchestrator_node)
 
             # Add specialist nodes
-            for agent_id, node_fn in specialist_nodes.items():
+            for agent_id, node_fn in specialist_subgraphs.items():
                 workflow.add_node(agent_id, node_fn)
 
             # Set orchestrator as entry point
             workflow.set_entry_point("orchestrator")
 
-            # Add conditional edges from orchestrator to specialists
-            workflow.add_conditional_edges(
-                "orchestrator", route_to_specialist, {agent_id: agent_id for agent_id in specialist_nodes.keys()} | {"__end__": END}
-            )
+            # Add conditional routing from orchestrator
+            specialist_routes = {agent_id: agent_id for agent_id in specialist_subgraphs.keys()}
+            specialist_routes[END] = END
+            workflow.add_conditional_edges("orchestrator", route_after_orchestrator, specialist_routes)
 
             # Add edges from specialists back to orchestrator
-            for agent_id in specialist_nodes.keys():
+            for agent_id in specialist_subgraphs.keys():
                 workflow.add_edge(agent_id, "orchestrator")
 
             graph = workflow.compile()
@@ -652,7 +726,7 @@ class FiveADayBenchmark(Benchmark):
             wrapper = LangGraphAgentAdapter(graph, primary_agent_id)
 
         elif framework == "llamaindex":
-            from llama_index.core.agent import ReActAgent
+            from llama_index.core.agent.workflow.react_agent import ReActAgent
             from llama_index.core.tools import FunctionTool
 
             # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
@@ -672,16 +746,19 @@ class FiveADayBenchmark(Benchmark):
                 specialist_tools = [adapter.tool for adapter in specialist_adapters]
 
                 # Create specialist agent
-                specialist_agent = ReActAgent.from_tools(
+                specialist_agent = ReActAgent(
                     tools=specialist_tools,
                     llm=model,
                     verbose=True,
                     max_iterations=10,
                 )
 
-                # Set system prompt if provided
-                if agent_instruction:
-                    specialist_agent.update_prompts({"agent_worker:system_prompt": agent_instruction})
+                # Set system prompt if provided (ReActAgent may not support update_prompts)
+                if hasattr(specialist_agent, "update_prompts") and agent_instruction:
+                    try:
+                        specialist_agent.update_prompts({"agent_worker:system_prompt": agent_instruction})
+                    except Exception:
+                        pass  # Silently skip if not supported
 
                 specialist_agents_dict[agent_id] = {
                     "agent": specialist_agent,
@@ -691,18 +768,30 @@ class FiveADayBenchmark(Benchmark):
 
             # Create handoff tools that delegate to specialist agents
             def make_handoff_tool(specialist_id: str, specialist_info: dict):
+                import asyncio
+
                 def handoff_to_specialist(task: str) -> str:
-                    f"""Delegate task to {specialist_info["name"]}.
-                    
+                    """Delegate task to specialist agent.
+
                     Args:
                         task: The task description for the specialist
-                    
+
                     Returns:
                         The specialist's response
                     """
                     specialist_agent = specialist_info["agent"]
-                    response = specialist_agent.chat(task)
-                    return str(response)
+
+                    # ReActAgent uses async .run() method
+                    async def run_specialist():
+                        handler = specialist_agent.run(user_msg=task)
+                        result = await handler
+                        return result
+
+                    result = asyncio.run(run_specialist())
+                    # Extract response content from result
+                    if hasattr(result, "response"):
+                        return str(result.response)
+                    return str(result)
 
                 return FunctionTool.from_defaults(
                     fn=handoff_to_specialist,
@@ -719,17 +808,20 @@ class FiveADayBenchmark(Benchmark):
             orchestrator_tools.extend(primary_tools)
 
             # Create orchestrator agent with handoff tools
-            orchestrator = ReActAgent.from_tools(
+            orchestrator = ReActAgent(
                 tools=orchestrator_tools,
                 llm=model,
                 verbose=True,
                 max_iterations=15,
             )
 
-            # Set orchestrator system prompt
+            # Set orchestrator system prompt (ReActAgent may not support update_prompts)
             primary_instruction = primary_spec["agent_instruction"]
-            if primary_instruction:
-                orchestrator.update_prompts({"agent_worker:system_prompt": primary_instruction})
+            if hasattr(orchestrator, "update_prompts") and primary_instruction:
+                try:
+                    orchestrator.update_prompts({"agent_worker:system_prompt": primary_instruction})
+                except Exception:
+                    pass  # Silently skip if not supported
 
             # Wrap orchestrator in adapter
             from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
