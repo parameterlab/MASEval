@@ -129,13 +129,25 @@ class EmailQualityEvaluator(Evaluator):
         invocation = sent_emails[0]
         inputs = invocation.get("inputs", {})
 
+        # Check if all required fields are present
+        email_to = inputs.get("to")
+        email_subject = inputs.get("subject")
+        email_body = inputs.get("body")
+
+        if not email_to or not email_subject or not email_body:
+            return {
+                "one_email_sent": one_email_sent,
+                "email_correctly_addressed": False,
+                "tenant_name_correct": False,
+                "both_amounts_present_and_correct": False,
+                "email_quality_score": 0.0,
+                "error": f"Email missing required fields. Found: {list(inputs.keys())}",
+            }
+
         # Check if email was addressed correctly
-        email_to = inputs["to"]
         email_correctly_addressed = email_to == tenant_email
 
         # Build email content for evaluation
-        email_subject = inputs["subject"]
-        email_body = inputs["body"]
         email_content = f"To: {email_to}\nSubject: {email_subject}\n\n{email_body}"
 
         prompt = f"""
