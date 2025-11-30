@@ -1,10 +1,10 @@
 """Email tool collection with shared state across sub-tools.
 
 Tools:
-- email.get_inbox: List all emails in inbox
-- email.get: Read specific email by ID
-- email.send: Send an email
-- email.draft: Draft an email without sending
+- email_get_inbox: List all emails in inbox
+- email_get: Read specific email by ID
+- email_send: Send an email
+- email_draft: Draft an email without sending
 """
 
 from dataclasses import dataclass
@@ -70,7 +70,7 @@ class EmailGetInboxTool(BaseTool):
 
     def __init__(self, email_state: EmailState):
         super().__init__(
-            "email.get_inbox",
+            "email_get_inbox",
             "List all emails in the inbox",
             tool_args=[],
         )
@@ -91,7 +91,7 @@ class EmailGetTool(BaseTool):
 
     def __init__(self, email_state: EmailState):
         super().__init__(
-            "email.get",
+            "email_get",
             "Read a specific email by ID",
             tool_args=["email_id"],
         )
@@ -117,7 +117,7 @@ class EmailSendTool(BaseTool):
 
     def __init__(self, email_state: EmailState):
         super().__init__(
-            "email.send",
+            "email_send",
             "Send an email to a recipient",
             tool_args=["to", "subject", "body"],
         )
@@ -159,7 +159,7 @@ class EmailDraftTool(BaseTool):
 
     def __init__(self, email_state: EmailState):
         super().__init__(
-            "email.draft",
+            "email_draft",
             "Draft an email without sending it",
             tool_args=["to", "subject", "body"],
         )

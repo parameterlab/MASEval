@@ -1,10 +1,10 @@
 """Banking tool collection with shared state across sub-tools.
 
 Tools:
-- banking.get_balance: Get current account balance
-- banking.get_transactions: Get transaction history with optional date filtering
-- banking.get_transaction: Get specific transaction by ID
-- banking.get_asset: Get asset information by name
+- banking_get_balance: Get current account balance
+- banking_get_transactions: Get transaction history with optional date filtering
+- banking_get_transaction: Get specific transaction by ID
+- banking_get_asset: Get asset information by name
 """
 
 from dataclasses import dataclass
@@ -68,7 +68,7 @@ class BankingGetBalanceTool(BaseTool):
 
     def __init__(self, banking_state: BankingState):
         super().__init__(
-            "banking.get_balance",
+            "banking_get_balance",
             "Get current bank account balance",
             tool_args=[],
         )
@@ -87,7 +87,7 @@ class BankingGetTransactionsTool(BaseTool):
 
     def __init__(self, banking_state: BankingState):
         super().__init__(
-            "banking.get_transactions",
+            "banking_get_transactions",
             "Get transaction history with optional start_date and end_date filters (YYYY-MM-DD format)",
             tool_args=["start_date", "end_date"],
         )
@@ -117,7 +117,7 @@ class BankingGetTransactionTool(BaseTool):
 
     def __init__(self, banking_state: BankingState):
         super().__init__(
-            "banking.get_transaction",
+            "banking_get_transaction",
             "Get specific transaction details by transaction ID",
             tool_args=["transaction_id"],
         )
@@ -142,7 +142,7 @@ class BankingGetAssetTool(BaseTool):
 
     def __init__(self, banking_state: BankingState):
         super().__init__(
-            "banking.get_asset",
+            "banking_get_asset",
             "Get the number of shares you own for a stock ticker symbol (e.g., 'AAPL' returns how many Apple shares you own)",
             tool_args=["asset_name"],
         )

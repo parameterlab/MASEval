@@ -1,7 +1,7 @@
 """Evaluators for Task 0: Email & Banking Confirmation.
 
-Task: User asks agent to verify tenant payment and draft confirmation email.
-Success criteria: Agent correctly identifies payment amounts and drafts appropriate email.
+Task: User asks agent to verify tenant payment and send confirmation email.
+Success criteria: Agent correctly identifies payment amounts and sends appropriate email.
 """
 
 from typing import Any, Dict, Optional
@@ -90,10 +90,10 @@ class FinancialAccuracyEvaluator(Evaluator):
 
 
 class EmailQualityEvaluator(Evaluator):
-    """Evaluates quality of the drafted email response.
+    """Evaluates quality of the sent email response.
 
     Evaluation type: LLM-as-judge
-    Measures: Did the agent draft a professional, appropriate email?
+    Measures: Did the agent send a professional, appropriate email?
     """
 
     def __init__(self, task: Task, environment: Environment, user: Optional[User] = None):
@@ -101,40 +101,46 @@ class EmailQualityEvaluator(Evaluator):
         self.ground_truth = task.evaluation_data
 
     def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
-        """Evaluate email quality."""
-        full_response = extract_assistant_response(trace)
+        """Evaluate email quality by checking email_send tool invocations."""
+        # Get email_send tool traces from environment
+        email_tool_traces = None
 
-        if not full_response:
+        if not email_tool_traces or not email_tool_traces.get("invocations"):
             return {
-                "email_drafted": False,
+                "email_sent": False,
                 "mentions_tenant_name": False,
                 "mentions_both_amounts": False,
                 "email_quality_score": 0.0,
-                "error": "No assistant response found",
+                "error": "No email_send tool invocations found",
             }
+
+        # Get the first successful invocation
+        invocation = email_tool_traces["invocations"][0]
+        inputs = invocation.get("inputs", {})
+
+        # Build email content from inputs
+        email_content = f"To: {inputs.get('to', '')}\\nSubject: {inputs.get('subject', '')}\\n\\n{inputs.get('body', '')}"
 
         tenant_name = self.ground_truth.get("tenant_name", "")
         deposit_amount = self.ground_truth["expected_deposit_amount"]
         rent_amount = self.ground_truth["expected_rent_amount"]
 
         prompt = f"""
-        You are evaluating an email drafted by an AI agent.
+        You are evaluating the content of an email sent by an AI agent.
         
-        Requirements:
-        1. Must be a drafted email (Subject, Body, etc.)
-        2. Must mention the tenant name: {tenant_name}
-        3. Must mention the deposit amount: {deposit_amount}
-        4. Must mention the rent amount: {rent_amount}
-        5. Tone should be professional and polite.
+        Requirements for the email:
+        1. Must mention the tenant name: {tenant_name}
+        2. Must mention the deposit amount: {deposit_amount}
+        3. Must mention the rent amount: {rent_amount}
+        4. Tone should be professional and polite
         
-        Agent Response:
-        "{full_response}"
+        Email Content:
+        "{email_content}"
         
-        Evaluate the response and return a JSON object with:
-        - email_drafted: boolean
-        - mentions_tenant_name: boolean
-        - mentions_both_amounts: boolean
-        - email_quality_score: float (0.0 to 1.0) based on overall quality and requirements
+        Evaluate the email and return a JSON object with:
+        - mentions_tenant_name: boolean (true if tenant name is mentioned)
+        - mentions_both_amounts: boolean (true if both deposit and rent amounts are mentioned)
+        - email_quality_score: float (0.0 to 1.0) based on overall quality, professionalism, and completeness
         """
 
         try:
@@ -143,14 +149,16 @@ class EmailQualityEvaluator(Evaluator):
             result = json.loads(response)
 
             return {
-                "email_drafted": result.get("email_drafted", False),
+                "email_sent": True,
                 "mentions_tenant_name": result.get("mentions_tenant_name", False),
                 "mentions_both_amounts": result.get("mentions_both_amounts", False),
                 "email_quality_score": result.get("email_quality_score", 0.0),
+                "email_to": inputs.get("to", ""),
+                "email_subject": inputs.get("subject", ""),
             }
         except Exception as e:
             return {
-                "email_drafted": False,
+                "email_sent": True,
                 "mentions_tenant_name": False,
                 "mentions_both_amounts": False,
                 "email_quality_score": 0.0,

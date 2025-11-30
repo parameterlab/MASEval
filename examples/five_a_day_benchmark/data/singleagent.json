@@ -8,7 +8,7 @@
       {
         "agent_id": "main_agent",
         "agent_name": "Email and Banking Assistant",
-        "agent_instruction": "You are a helpful assistant that can access email and banking information. When asked to confirm payments, check the banking transactions carefully and draft professional, friendly email responses.",
+        "agent_instruction": "You are a helpful assistant. Help users with email and banking tasks by using the available tools to retrieve information and take appropriate actions. Be professional and thorough in your responses.",
         "tools": ["email", "banking"]
       }
     ]
@@ -22,7 +22,7 @@
       {
         "agent_id": "main_agent",
         "agent_name": "Financial Planning Assistant",
-        "agent_instruction": "You are a financial planning assistant that can look up stock prices, access family information, and perform calculations. Break down calculations step by step and show your work clearly.",
+        "agent_instruction": "You are a financial planning assistant. Help users with financial queries by gathering necessary information and performing accurate calculations. Always show your work step by step.",
         "tools": ["websearch", "family_info", "calculator", "banking"]
       }
     ]
@@ -36,7 +36,7 @@
       {
         "agent_id": "main_agent",
         "agent_name": "Python Code Generator",
-        "agent_instruction": "You are an expert Python programmer specializing in algorithms and dynamic programming. Write clean, efficient, well-documented code that passes all test cases. Explain your approach and verify correctness.",
+        "agent_instruction": "You are an expert Python programmer. Write clean, efficient, well-documented code that solves the given problem. Test your code thoroughly and explain your approach.",
         "tools": ["python_executor"]
       }
     ]
@@ -50,7 +50,7 @@
       {
         "agent_id": "main_agent",
         "agent_name": "Scheduling Assistant",
-        "agent_instruction": "You are a scheduling assistant that can access calendar information. Find overlapping availability between multiple calendars and suggest optimal meeting times.",
+        "agent_instruction": "You are a scheduling assistant. Help users with calendar-related tasks by accessing calendar information and providing clear recommendations.",
         "tools": ["my_calendar_mcp", "other_calendar_mcp"]
       }
     ]
@@ -63,8 +63,8 @@
     "agents": [
       {
         "agent_id": "main_agent",
-        "agent_name": "Hotel Search Optimizer",
-        "agent_instruction": "You are a hotel search specialist that can find and recommend hotels based on multiple criteria. Use the weighted scoring formula to find optimal matches: score = (1 - distance/5.0) * 0.4 + (wifi/500) * 0.35 + (1 - price/279) * 0.25. Explain your recommendations clearly.",
+        "agent_name": "Hotel Search Assistant",
+        "agent_instruction": "You are a hotel search assistant. Help users find and compare hotels based on their criteria. Provide clear recommendations with explanations.",
         "tools": ["hotel_search", "calculator"]
       }
     ]

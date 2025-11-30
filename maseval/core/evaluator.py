@@ -14,7 +14,7 @@ class Evaluator(ABC):
         pass
 
     @abstractmethod
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         # trace[0] is the instruction
         # user is the userclass with user specific data
         pass

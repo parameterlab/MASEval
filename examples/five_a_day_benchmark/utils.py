@@ -47,20 +47,14 @@ def derive_seed(base_seed: int, *components: str | int) -> int:
 def sanitize_name(name: str) -> str:
     """Sanitize name to be a valid Python identifier.
 
-    Required for smolagents framework which uses names as Python identifiers.
+    Converts human-readable agent names to valid identifiers that work across
+    all agent frameworks.
 
     Args:
-        name: Name to sanitize (may contain spaces, hyphens, etc.)
+        name: Agent name to sanitize (may contain spaces, hyphens, etc.)
 
     Returns:
-        Valid Python identifier (underscores instead of spaces/hyphens,
-        starts with letter or underscore)
-
-    Example:
-        >>> sanitize_name("Email Assistant")
-        "Email_Assistant"
-        >>> sanitize_name("123-agent")
-        "_123_agent"
+        Valid Python identifier
     """
     sanitized = name.replace(" ", "_").replace("-", "_")
     if not sanitized[0].isalpha() and sanitized[0] != "_":

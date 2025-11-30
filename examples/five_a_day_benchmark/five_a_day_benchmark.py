@@ -559,7 +559,7 @@ def build_langgraph_multi_agent(
     handoff_tools = []
     for agent_spec in specialist_specs:
         agent_id = agent_spec["agent_id"]
-        agent_name = agent_spec["agent_name"]
+        agent_name = sanitize_name(agent_spec["agent_name"])
         agent_description = agent_spec["agent_instruction"]
 
         def make_handoff_tool(spec_id, spec_name, spec_description):
@@ -650,7 +650,7 @@ def build_llamaindex_multi_agent(
     specialist_agents_dict = {}
     for agent_spec in specialist_specs:
         agent_id = agent_spec["agent_id"]
-        agent_name = agent_spec["agent_name"]
+        agent_name = sanitize_name(agent_spec["agent_name"])
         agent_instruction = agent_spec["agent_instruction"]
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "llamaindex", temperature, specialist_seed)
@@ -794,7 +794,14 @@ class FiveADayBenchmark(Benchmark):
             "metadata": task.metadata,
         }
 
-        return FiveADayEnvironment(task_data, framework=agent_data["framework"])
+        environment = FiveADayEnvironment(task_data, framework=agent_data["framework"])
+
+        # Register all tools with the benchmark for tracing
+        for tool_adapter in environment.get_tools():
+            tool_name = getattr(tool_adapter, "name", None) or str(type(tool_adapter).__name__)
+            self.register("tools", tool_name, tool_adapter)
+
+        return environment
 
     def setup_agents(
         self, agent_data: Dict[str, Any], environment: Environment, task: Task, user=None
@@ -809,10 +816,7 @@ class FiveADayBenchmark(Benchmark):
         all_tool_adapters = environment.get_tools()
 
         # Extract primary and specialist specs
-        primary_spec = next((a for a in agents_specs if a["agent_id"] == primary_agent_id), None)
-        if not primary_spec:
-            raise ValueError(f"Primary agent {primary_agent_id} not found in agents list")
-
+        primary_spec = next(a for a in agents_specs if a["agent_id"] == primary_agent_id)
         specialist_specs = [a for a in agents_specs if a["agent_id"] != primary_agent_id]
 
         # Build agent using unified interface
@@ -834,9 +838,7 @@ class FiveADayBenchmark(Benchmark):
         evaluator_instances = []
         for name in task.evaluation_data["evaluators"]:
             # Get evaluator class from evaluators module
-            evaluator_class = getattr(evaluators, name, None)
-            if evaluator_class is None:
-                raise ValueError(f"Evaluator '{name}' not found in evaluators module")
+            evaluator_class = getattr(evaluators, name)
 
             # Instantiate with standard arguments
             evaluator_instances.append(evaluator_class(task, environment, user))
@@ -858,22 +860,10 @@ class FiveADayBenchmark(Benchmark):
         """Evaluate agent performance."""
         results = []
 
-        # Get main agent trace (both single and multi-agent use "main_agent")
-        agent_traces = traces["agents"]
-        main_trace_dict = agent_traces["main_agent"]
-
-        # Extract messages and wrap in MessageHistory
-        messages = main_trace_dict["messages"]
-        message_history = MessageHistory(messages)
-
-        # Run each evaluator
         for evaluator in evaluators:
-            try:
-                eval_result = evaluator(message_history)
-                eval_result["evaluator"] = evaluator.__class__.__name__
-                results.append(eval_result)
-            except Exception as e:
-                results.append({"evaluator": evaluator.__class__.__name__, "error": str(e), "success": False})
+            # ensure the evaluator is only called with relevant traces
+            filtered_traces = evaluator.filter_traces(traces)
+            results.append(evaluator(filtered_traces))
 
         return results
 

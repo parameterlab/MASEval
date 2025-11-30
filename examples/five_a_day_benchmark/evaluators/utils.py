@@ -2,7 +2,7 @@
 
 import re
 import os
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from litellm import completion
 from maseval import MessageHistory
@@ -79,6 +79,32 @@ def extract_tool_calls(trace: MessageHistory) -> List[str]:
                 tools_used.add(tool_call["function"]["name"])
 
     return list(tools_used)
+
+
+def extract_tool_call_args(trace: MessageHistory, tool_name: str) -> Optional[Dict[str, Any]]:
+    """Extract arguments from a specific tool call.
+
+    Args:
+        trace: The message history trace
+        tool_name: Name of the tool to find (e.g., 'email_send')
+
+    Returns:
+        Dictionary with tool call arguments if found, None otherwise
+    """
+    import json
+
+    for msg in trace:
+        tool_calls = msg.get("tool_calls", [])
+        for tool_call in tool_calls:
+            if isinstance(tool_call, dict):
+                function = tool_call.get("function", {})
+                if function.get("name") == tool_name:
+                    args_str = function.get("arguments", "{}")
+                    try:
+                        return json.loads(args_str) if isinstance(args_str, str) else args_str
+                    except (json.JSONDecodeError, AttributeError):
+                        continue
+    return None
 
 
 def extract_python_code(trace: MessageHistory) -> Optional[str]:

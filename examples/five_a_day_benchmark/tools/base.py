@@ -224,13 +224,12 @@ class SmolagentsToolAdapter(TraceableMixin, ConfigurableMixin):
 
         self.base_tool = base_tool
 
-        # Sanitize tool name to be a valid Python identifier for smolagents
-        # Replace dots with underscores (email.get_inbox -> email_get_inbox)
-        sanitized_tool_name = base_tool.name.replace(".", "_").replace("-", "_")
+        # Tool names already use underscores (email_send, banking_get_balance)
+        # No sanitization needed - names are framework-compatible by design
 
         # Create a dynamic smolagents Tool class
         class DynamicSmolagentsTool(SmolagentsTool):
-            name = sanitized_tool_name
+            name = base_tool.name
             description = base_tool.description
             # Use specific tool arguments (excluding 'action' which is smolagents internal)
             inputs = base_tool.tool_args
@@ -254,11 +253,10 @@ class SmolagentsToolAdapter(TraceableMixin, ConfigurableMixin):
                 else:
                     raise RuntimeError(result.error or "Tool execution failed")
 
-        # Set the class name to the tool name for better tracing
-        # Sanitize name to be a valid class name (CamelCase)
-        sanitized_name = "".join(x.title() for x in base_tool.name.replace("-", "_").split("_")) + "Tool"
-        DynamicSmolagentsTool.__name__ = sanitized_name
-        DynamicSmolagentsTool.__qualname__ = sanitized_name
+        # Set the class name to the tool name for better tracing (CamelCase)
+        class_name = "".join(x.title() for x in base_tool.name.split("_")) + "Tool"
+        DynamicSmolagentsTool.__name__ = class_name
+        DynamicSmolagentsTool.__qualname__ = class_name
 
         self.tool = DynamicSmolagentsTool()
         self.name = base_tool.name  # Expose for Environment's _tools_dict
