@@ -132,7 +132,7 @@
     }
   },
   {
-    "query": "Write a Python function called `house_robber` that solves the house robber dynamic programming problem. The function should take a list of integers representing money in each house and return the maximum amount that can be robbed without robbing adjacent houses.",
+    "query": "Write a Python function called `house_robber` that solves the house robber dynamic programming problem. The function should take a list of integers representing money in each house and return the maximum amount that can be robbed without robbing adjacent houses. Run and test the code. Return the code to me even if there are errors, and I will help you debug it.",
     "environment_data": {
       "tools": ["python_executor"],
       "test_cases": [

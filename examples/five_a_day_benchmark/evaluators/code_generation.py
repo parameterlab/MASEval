@@ -8,11 +8,11 @@ import ast
 import json
 from typing import Any, Dict, Optional
 
-from RestrictedPython import compile_restricted, safe_globals, limited_builtins
-from RestrictedPython.Guards import guarded_iter_unpack_sequence
+from RestrictedPython import compile_restricted
 
 from maseval import Evaluator, Environment, Task, User
 from .utils import normalize_final_answer, call_llm_judge
+from examples.five_a_day_benchmark.tools import get_safe_python_exec_environment
 
 
 class UnitTestEvaluator(Evaluator):
@@ -90,14 +90,8 @@ class UnitTestEvaluator(Evaluator):
 
         code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
 
-        # Safe execution environment
-        safe_env = {
-            **safe_globals,
-            "__builtins__": limited_builtins,
-            "_getattr_": getattr,
-            "_getitem_": lambda obj, index: obj[index],
-            "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
-        }
+        # Get shared safe execution environment
+        safe_env = get_safe_python_exec_environment(include_print_collector=False)
 
         exec(code_obj, safe_env)
 

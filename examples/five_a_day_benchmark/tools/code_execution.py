@@ -7,11 +7,94 @@ Tools:
 
 from typing import Any
 
-from RestrictedPython import compile_restricted, safe_globals, limited_builtins
-from RestrictedPython.PrintCollector import PrintCollector
-from RestrictedPython.Guards import guarded_iter_unpack_sequence
+from RestrictedPython import compile_restricted
 
 from .base import BaseTool, ToolResult
+
+
+from RestrictedPython import safe_globals, limited_builtins
+from RestrictedPython.Guards import guarded_iter_unpack_sequence
+
+
+def get_safe_builtins() -> dict:
+    """Get the set of allowed built-in functions for code execution.
+
+    Returns a permissive set of builtins that covers common Python operations
+    needed for algorithm problems while maintaining safety.
+    """
+    return {
+        **limited_builtins,
+        # Type constructors
+        "int": int,
+        "float": float,
+        "str": str,
+        "bool": bool,
+        "list": list,
+        "dict": dict,
+        "tuple": tuple,
+        "set": set,
+        # Common operations
+        "len": len,
+        "range": range,
+        "enumerate": enumerate,
+        "zip": zip,
+        # Aggregation functions
+        "max": max,
+        "min": min,
+        "sum": sum,
+        "abs": abs,
+        "all": all,
+        "any": any,
+        # Sorting and ordering
+        "sorted": sorted,
+        "reversed": reversed,
+        # Functional programming
+        "map": map,
+        "filter": filter,
+        # I/O (for debugging)
+        "print": print,
+    }
+
+
+def get_safe_guards() -> dict:
+    """Get the set of RestrictedPython guards for safe code execution.
+
+    Returns a permissive set of guards that allows most common Python operations
+    including iteration, indexing, attribute access, and assignments.
+    """
+    return {
+        "_getitem_": lambda obj, index: obj[index],
+        "_setitem_": lambda obj, index, value: obj.__setitem__(index, value),
+        "_getattr_": getattr,
+        "_setattr_": setattr,
+        "_write_": lambda obj: obj,
+        "_getiter_": iter,
+        "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
+    }
+
+
+def get_safe_python_exec_environment(include_print_collector: bool = False) -> dict:
+    """Get a complete safe execution environment for RestrictedPython.
+
+    Args:
+        include_print_collector: If True, includes PrintCollector for capturing print output.
+                                If False, print goes to stdout (useful for evaluators).
+
+    Returns:
+        A dictionary suitable for use as globals in exec() with RestrictedPython.
+    """
+    env = {
+        **safe_globals,
+        "__builtins__": get_safe_builtins(),
+        **get_safe_guards(),
+    }
+
+    if include_print_collector:
+        from RestrictedPython.PrintCollector import PrintCollector
+
+        env["_print_"] = PrintCollector
+
+    return env
 
 
 class CodeExecutionState:
@@ -22,47 +105,8 @@ class CodeExecutionState:
 
     def __init__(self, test_cases: list[dict[str, Any]] | None = None):
         self.test_cases = test_cases or []
-
-        # Build safe builtins with common functions needed for algorithm problems
-        safe_builtins = {
-            **limited_builtins,
-            "len": len,
-            "max": max,
-            "min": min,
-            "sum": sum,
-            "abs": abs,
-            "all": all,
-            "any": any,
-            "enumerate": enumerate,
-            "zip": zip,
-            "sorted": sorted,
-            "reversed": reversed,
-            "map": map,
-            "filter": filter,
-            "int": int,
-            "float": float,
-            "str": str,
-            "bool": bool,
-            "dict": dict,
-            "set": set,
-            "list": list,
-            "tuple": tuple,
-            "range": range,
-            "print": print,
-        }
-
-        # Safe execution environment with all RestrictedPython guards
-        self.safe_env = {
-            **safe_globals,
-            "__builtins__": safe_builtins,
-            "_print_": PrintCollector,
-            "_getattr_": getattr,
-            "_getitem_": lambda obj, index: obj[index],
-            "_getiter_": iter,
-            "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
-            "__name__": "restricted_module",
-            "__metaclass__": type,
-        }
+        # Get shared safe execution environment with print collector for capturing output
+        self.safe_env = get_safe_python_exec_environment(include_print_collector=True)
 
 
 class PythonExecutorExecuteTool(BaseTool):
