@@ -36,7 +36,31 @@ uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --config-type m
 
 # Specify model (default: gemini-2.5-flash)
 uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --model-id gemini-2.5-flash
+
+# Run with deterministic seeding for reproducibility
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --seed 42
 ```
+
+### Reproducibility with Seeds
+
+The benchmark supports deterministic seeding for reproducible results:
+
+```bash
+# Same seed produces same results
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --seed 42 --task 0
+
+# Different frameworks with same seed get same LLM behavior
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework smolagents --seed 42
+uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework langgraph --seed 42
+```
+
+**How it works:**
+
+- Each agent gets a unique but deterministic seed derived from the base `--seed`
+- Derivation uses task index + agent ID, ensuring reproducibility
+- Different agents (orchestrator, specialists) get different seeds
+- Same configuration always produces the same seeds
+- Without `--seed`, models run non-deterministically (default)
 
 Results saved to `results/` as JSONL with traces and evaluation scores.
 
@@ -206,5 +230,20 @@ trace = adapter.get_messages()  # Full conversation history
 - How message tracing enables diverse evaluation metrics
 - Pattern for single vs multi-agent comparison
 
-**Requirements:** maseval, RestrictedPython, smolagents, langgraph, langchain-google-genai, llama-index-core, llama-index-llms-litellm, litellm  
+**Requirements:** maseval, RestrictedPython, smolagents, langgraph, langchain-google-genai, llama-index-core, llama-index-llms-litellm, litellm
 **Environment:** Set `GOOGLE_API_KEY` for Gemini models
+
+TODO
+
+- simplify inside benchmark class.
+- use `ty` to find typing errors
+- check eval works.
+- extend GHA to examples and make it pass.
+- change `only_Run_task_specific` to task id
+- proper assertions
+
+General instruction and context for your work is given in the AGENTS.md files. Please study these carefully.
+
+The `five_a_day_benchmark.py` is a bit overcomplicated. The main purpose of the file is to showcase the `maseval` library and be educational. Are there simplicifcation possible in the `Benchmark` and `Environment` subclasses that do not change functionality but improve readability? For instance the distinction between tool and adapter might not be necessary there. This is an artifical example, so you can change the data too. e.g. if you move a field in the json and can safe a line in the benchmark file that might be worth it.
+
+Do not change the code yet, instead generate a PROPOSEDSIMPLIFICATIONS.md with a numbered list of proposed changes.

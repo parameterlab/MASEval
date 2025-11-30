@@ -7,8 +7,8 @@ Success criteria: Agent correctly calculates total value and per-child amount.
 from typing import Any, Dict, Optional
 import json
 
-from maseval import Evaluator, Environment, Task, User, MessageHistory
-from .utils import extract_assistant_response, call_llm_judge
+from maseval import Evaluator, Environment, Task, User
+from .utils import call_llm_judge
 
 
 class ArithmeticAccuracyEvaluator(Evaluator):
@@ -20,22 +20,30 @@ class ArithmeticAccuracyEvaluator(Evaluator):
 
     def __init__(self, task: Task, environment: Environment, user: Optional[User] = None):
         super().__init__(task, environment, user)
-        self.ground_truth = task.evaluation_data
+        self.eval_data = task.evaluation_data
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to agent messages only."""
-        return {"agents": traces.get("agents", {})}
+        """Filter to final_answer tool only. Agent's final response is what matters."""
+        tools = traces.get("tools", {})
+        return tools.get("final_answer", {})
 
     def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate arithmetic accuracy."""
-        # Extract messages from agent traces
-        agents = traces.get("agents", {})
-        message_history = MessageHistory()
-        if agents:
-            agent_trace = next(iter(agents.values()))
-            message_history._messages = agent_trace.get("messages", [])
 
-        full_response = extract_assistant_response(message_history)
+        # Get final answer from tool invocations
+        invocations = traces.get("invocations", [])
+
+        if not invocations:
+            return {
+                "total_value_correct": False,
+                "per_child_value_correct": False,
+                "arithmetic_score": 0.0,
+                "error": "No final answer found",
+            }
+
+        # Get the final answer content
+        final_answer_invocation = invocations[-1]
+        full_response = str(final_answer_invocation.get("inputs", {}).get("answer", ""))
 
         if not full_response:
             return {
@@ -45,8 +53,8 @@ class ArithmeticAccuracyEvaluator(Evaluator):
                 "error": "No assistant response found",
             }
 
-        expected_total = self.ground_truth["total_value"]
-        expected_per_child = self.ground_truth["value_per_child"]
+        expected_total = self.eval_data["total_value"]
+        expected_per_child = self.eval_data["value_per_child"]
 
         prompt = f"""
         You are evaluating an AI agent's financial calculation.
@@ -97,27 +105,36 @@ class InformationRetrievalEvaluator(Evaluator):
 
     def __init__(self, task: Task, environment: Environment, user: Optional[User] = None):
         super().__init__(task, environment, user)
-        self.ground_truth = task.evaluation_data
+        self.eval_data = task.evaluation_data
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to tool traces only."""
-        return {"tools": traces.get("tools", {})}
+        """Filter to relevant tool traces only."""
+        tools = traces.get("tools", {})
+        return {
+            "stock_price": tools.get("stock_price_get", {}),
+            "family_info": tools.get("family_info_get_children", {}),
+            "banking_asset": tools.get("banking_get_asset", {}),
+        }
 
     def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate information retrieval from tools."""
-        # Get tool invocations directly from traces
-        tools = traces.get("tools", {})
 
         # Check for required tools by checking if they have invocations
-        stock_price_retrieved = bool(tools.get("stock_price.get", {}).get("invocations", []))
-        family_info_retrieved = bool(tools.get("family_info.get_children", {}).get("invocations", []))
+        stock_price_retrieved = bool(traces.get("stock_price", {}).get("invocations", []))
+        family_info_retrieved = bool(traces.get("family_info", {}).get("invocations", []))
 
-        # Check if correct stock symbol was used (AAPL) by checking banking.get_asset invocations
-        asset_invocations = tools.get("banking.get_asset", {}).get("invocations", [])
+        # Check if correct stock symbol was used (AAPL)
+        asset_invocations = traces.get("banking_asset", {}).get("invocations", [])
         used_aapl = any(inv.get("inputs", {}).get("asset_name", "").upper() == "AAPL" for inv in asset_invocations)
 
-        # Create tools_used list for backwards compatibility
-        tools_used = [name for name, data in tools.items() if data.get("invocations", [])]
+        # Create tools_used list
+        tools_used = []
+        if stock_price_retrieved:
+            tools_used.append("stock_price_get")
+        if family_info_retrieved:
+            tools_used.append("family_info_get_children")
+        if asset_invocations:
+            tools_used.append("banking_get_asset")
 
         # Calculate completeness
         required_retrievals = [stock_price_retrieved, family_info_retrieved, used_aapl]

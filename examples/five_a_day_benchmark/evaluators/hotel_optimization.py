@@ -7,8 +7,7 @@ Success criteria: Agent selects hotel close to the mathematical optimum.
 import re
 from typing import Any, Dict, List, Optional
 
-from maseval import Evaluator, Environment, Task, User, MessageHistory
-from .utils import extract_assistant_response
+from maseval import Evaluator, Environment, Task, User
 
 
 class OptimizationQualityEvaluator(Evaluator):
@@ -20,25 +19,27 @@ class OptimizationQualityEvaluator(Evaluator):
 
     def __init__(self, task: Task, environment: Environment, user: Optional[User] = None):
         super().__init__(task, environment, user)
-        self.ground_truth = task.evaluation_data
+        self.eval_data = task.evaluation_data
         self.hotels = task.environment_data.get("hotels", [])
         self.weights = task.environment_data.get("user_priorities", {"distance_weight": 0.4, "wifi_weight": 0.35, "price_weight": 0.25})
         self.hotel_scores = self._calculate_all_hotel_scores()
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to agent messages only."""
-        return {"agents": traces.get("agents", {})}
+        """Filter to final_answer tool only. Agent's final response is what matters."""
+        tools = traces.get("tools", {})
+        return tools.get("final_answer", {})
 
     def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate optimization quality."""
-        # Extract messages from agent traces
-        agents = traces.get("agents", {})
-        message_history = MessageHistory()
-        if agents:
-            agent_trace = next(iter(agents.values()))
-            message_history._messages = agent_trace.get("messages", [])
 
-        full_response = extract_assistant_response(message_history)
+        # Get final answer from tool invocations
+        invocations = traces.get("invocations", [])
+
+        if not invocations:
+            return {"found_optimal_hotel": False, "optimization_score": 0.0, "error": "No final answer found"}
+
+        # Get the final answer content
+        full_response = str(invocations[-1].get("inputs", {}).get("answer", ""))
 
         if not full_response:
             return {"found_optimal_hotel": False, "optimization_score": 0.0, "error": "No assistant response found"}
@@ -130,19 +131,21 @@ class SearchStrategyEvaluator(Evaluator):
         self.total_hotels = len(task.environment_data.get("hotels", []))
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to tool traces only."""
-        return {"tools": traces.get("tools", {})}
+        """Filter to relevant tool traces only."""
+        tools = traces.get("tools", {})
+        return {
+            "hotel_search": tools.get("hotel_search_search", {}),
+            "calculator": tools.get("calculator_calculate", {}),
+        }
 
     def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate search strategy."""
-        # Get tool invocations directly from traces
-        tools = traces.get("tools", {})
 
         # Check if hotel_search was used
-        used_hotel_search = bool(tools.get("hotel_search.search", {}).get("invocations", []))
+        used_hotel_search = bool(traces.get("hotel_search", {}).get("invocations", []))
 
         # Check if calculator was used (for scoring)
-        used_calculator = bool(tools.get("calculator.calculate", {}).get("invocations", []))
+        used_calculator = bool(traces.get("calculator", {}).get("invocations", []))
 
         # Calculate strategy score
         score_components = [int(used_hotel_search), int(used_calculator)]

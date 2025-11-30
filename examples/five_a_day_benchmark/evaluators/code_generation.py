@@ -11,8 +11,8 @@ from typing import Any, Dict, Optional
 from RestrictedPython import compile_restricted, safe_globals, limited_builtins
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
-from maseval import Evaluator, Environment, Task, User, MessageHistory
-from .utils import extract_python_code, call_llm_judge
+from maseval import Evaluator, Environment, Task, User
+from .utils import call_llm_judge
 
 
 class UnitTestEvaluator(Evaluator):
@@ -28,19 +28,22 @@ class UnitTestEvaluator(Evaluator):
         self.function_name = task.evaluation_data["function_name"]
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to agent messages only."""
-        return {"agents": traces.get("agents", {})}
+        """Filter to final_answer tool only. The code is in the agent's final response."""
+        tools = traces.get("tools", {})
+        return tools.get("final_answer", {})
 
     def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate code by running unit tests."""
-        # Extract messages from agent traces
-        agents = traces.get("agents", {})
-        message_history = MessageHistory()
-        if agents:
-            agent_trace = next(iter(agents.values()))
-            message_history._messages = agent_trace.get("messages", [])
 
-        code = extract_python_code(message_history)
+        # Get final answer from tool invocations
+        invocations = traces.get("invocations", [])
+
+        if not invocations:
+            return {"test_cases_passed": 0, "test_pass_rate": 0.0, "all_tests_passed": False, "error": "No final answer found"}
+
+        # Get the final answer content and extract code
+        final_answer = str(invocations[-1].get("inputs", {}).get("answer", ""))
+        code = self._extract_code_from_answer(final_answer)
 
         if not code:
             return {"test_cases_passed": 0, "test_pass_rate": 0.0, "all_tests_passed": False, "error": "No code found in trace"}
@@ -108,6 +111,35 @@ class UnitTestEvaluator(Evaluator):
 
         return safe_env[function_name](test_input)
 
+    def _extract_code_from_answer(self, answer: str) -> Optional[str]:
+        """Extract Python code from final answer string."""
+        import re
+
+        # Look for code blocks with markdown
+        code_block_pattern = r"```python\s*(.*?)\s*```"
+        matches = re.findall(code_block_pattern, answer, re.DOTALL)
+
+        if matches:
+            return matches[-1]  # Return last code block
+
+        # Look for function definitions without markdown
+        code_pattern = r"def\s+\w+\s*\([^)]*\):"
+        if re.search(code_pattern, answer):
+            lines = answer.split("\n")
+            code_lines = []
+            in_function = False
+
+            for line in lines:
+                if re.match(r"def\s+\w+", line):
+                    in_function = True
+                if in_function:
+                    code_lines.append(line)
+
+            if code_lines:
+                return "\n".join(code_lines)
+
+        return None
+
 
 class AlgorithmicComplexityEvaluator(Evaluator):
     """Evaluates algorithmic complexity of generated code using AST analysis.
@@ -120,19 +152,22 @@ class AlgorithmicComplexityEvaluator(Evaluator):
         super().__init__(task, environment, user)
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to agent messages only."""
-        return {"agents": traces.get("agents", {})}
+        """Filter to final_answer tool only. The code is in the agent's final response."""
+        tools = traces.get("tools", {})
+        return tools.get("final_answer", {})
 
     def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate algorithmic complexity."""
-        # Extract messages from agent traces
-        agents = traces.get("agents", {})
-        message_history = MessageHistory()
-        if agents:
-            agent_trace = next(iter(agents.values()))
-            message_history._messages = agent_trace.get("messages", [])
 
-        code = extract_python_code(message_history)
+        # Get final answer from tool invocations
+        invocations = traces.get("invocations", [])
+
+        if not invocations:
+            return {"time_complexity": "unknown", "is_optimal": False, "uses_dynamic_programming": False, "algorithm_efficiency_score": 0.0}
+
+        # Get the final answer content and extract code
+        final_answer = str(invocations[-1].get("inputs", {}).get("answer", ""))
+        code = self._extract_code_from_answer(final_answer)
 
         if not code:
             return {"time_complexity": "unknown", "is_optimal": False, "uses_dynamic_programming": False, "algorithm_efficiency_score": 0.0}
@@ -201,6 +236,35 @@ class AlgorithmicComplexityEvaluator(Evaluator):
             "uses_dp": uses_dp,
         }
 
+    def _extract_code_from_answer(self, answer: str) -> Optional[str]:
+        """Extract Python code from final answer string."""
+        import re
+
+        # Look for code blocks with markdown
+        code_block_pattern = r"```python\s*(.*?)\s*```"
+        matches = re.findall(code_block_pattern, answer, re.DOTALL)
+
+        if matches:
+            return matches[-1]  # Return last code block
+
+        # Look for function definitions without markdown
+        code_pattern = r"def\s+\w+\s*\([^)]*\):"
+        if re.search(code_pattern, answer):
+            lines = answer.split("\n")
+            code_lines = []
+            in_function = False
+
+            for line in lines:
+                if re.match(r"def\s+\w+", line):
+                    in_function = True
+                if in_function:
+                    code_lines.append(line)
+
+            if code_lines:
+                return "\n".join(code_lines)
+
+        return None
+
 
 class CodeQualityEvaluator(Evaluator):
     """Evaluates code quality and style.
@@ -213,19 +277,22 @@ class CodeQualityEvaluator(Evaluator):
         super().__init__(task, environment, user)
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to agent messages only."""
-        return {"agents": traces.get("agents", {})}
+        """Filter to final_answer tool only. The code is in the agent's final response."""
+        tools = traces.get("tools", {})
+        return tools.get("final_answer", {})
 
     def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate code quality."""
-        # Extract messages from agent traces
-        agents = traces.get("agents", {})
-        message_history = MessageHistory()
-        if agents:
-            agent_trace = next(iter(agents.values()))
-            message_history._messages = agent_trace.get("messages", [])
 
-        code = extract_python_code(message_history)
+        # Get final answer from tool invocations
+        invocations = traces.get("invocations", [])
+
+        if not invocations:
+            return {"has_docstring": False, "handles_edge_cases": False, "code_quality_score": 0.0}
+
+        # Get the final answer content and extract code
+        final_answer = str(invocations[-1].get("inputs", {}).get("answer", ""))
+        code = self._extract_code_from_answer(final_answer)
 
         if not code:
             return {"has_docstring": False, "handles_edge_cases": False, "code_quality_score": 0.0}
@@ -266,3 +333,32 @@ class CodeQualityEvaluator(Evaluator):
                 "code_quality_score": 0.0,
                 "error": f"LLM evaluation failed: {str(e)}",
             }
+
+    def _extract_code_from_answer(self, answer: str) -> Optional[str]:
+        """Extract Python code from final answer string."""
+        import re
+
+        # Look for code blocks with markdown
+        code_block_pattern = r"```python\s*(.*?)\s*```"
+        matches = re.findall(code_block_pattern, answer, re.DOTALL)
+
+        if matches:
+            return matches[-1]  # Return last code block
+
+        # Look for function definitions without markdown
+        code_pattern = r"def\s+\w+\s*\([^)]*\):"
+        if re.search(code_pattern, answer):
+            lines = answer.split("\n")
+            code_lines = []
+            in_function = False
+
+            for line in lines:
+                if re.match(r"def\s+\w+", line):
+                    in_function = True
+                if in_function:
+                    code_lines.append(line)
+
+            if code_lines:
+                return "\n".join(code_lines)
+
+        return None
