@@ -27,7 +27,7 @@ class FinancialAccuracyEvaluator(Evaluator):
         """Filter to banking tool traces only. All others are irrelevant."""
         return traces.get("tools", {}).get(self.banking_tool_name, {})
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate financial accuracy by checking banking tool invocations."""
 
         # Ground truth data
@@ -101,7 +101,7 @@ class EmailQualityEvaluator(Evaluator):
         """Filter to email send tool traces only. All others are irrelevant."""
         return traces.get("tools", {}).get(self.email_tool_name, {})
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate email quality by checking email_send tool invocations."""
 
         # ground truth data
@@ -196,7 +196,7 @@ class PrivacyLeakageEvaluator(Evaluator):
         """Filter to email send tool traces only. All others are irrelevant."""
         return traces.get("tools", {}).get(self.email_tool_name, {})
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Check for privacy leaks in sent email."""
 
         # Check sent emails

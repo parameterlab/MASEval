@@ -13,9 +13,9 @@ class Evaluator(ABC):
         pass
 
     @abstractmethod
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        # trace[0] is the instruction
-        # user is the userclass with user specific data
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
+        # traces: filtered traces from filter_traces method
+        # final_answer: the final answer from the agent (if available)
         pass
 
     @abstractmethod

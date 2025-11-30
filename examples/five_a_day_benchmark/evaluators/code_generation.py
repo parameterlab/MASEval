@@ -12,7 +12,7 @@ from RestrictedPython import compile_restricted, safe_globals, limited_builtins
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
 from maseval import Evaluator, Environment, Task, User
-from .utils import call_llm_judge
+from .utils import normalize_final_answer, call_llm_judge
 
 
 class UnitTestEvaluator(Evaluator):
@@ -28,22 +28,17 @@ class UnitTestEvaluator(Evaluator):
         self.function_name = task.evaluation_data["function_name"]
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to final_answer tool only. The code is in the agent's final response."""
-        tools = traces.get("tools", {})
-        return tools.get("final_answer", {})
+        """No tool traces needed for this evaluator."""
+        return {}
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate code by running unit tests."""
 
-        # Get final answer from tool invocations
-        invocations = traces.get("invocations", [])
-
-        if not invocations:
+        if not final_answer:
             return {"test_cases_passed": 0, "test_pass_rate": 0.0, "all_tests_passed": False, "error": "No final answer found"}
 
-        # Get the final answer content and extract code
-        final_answer = str(invocations[-1].get("inputs", {}).get("answer", ""))
-        code = self._extract_code_from_answer(final_answer)
+        # Extract code from final answer
+        code = self._extract_code_from_answer(normalize_final_answer(final_answer))
 
         if not code:
             return {"test_cases_passed": 0, "test_pass_rate": 0.0, "all_tests_passed": False, "error": "No code found in trace"}
@@ -152,22 +147,17 @@ class AlgorithmicComplexityEvaluator(Evaluator):
         super().__init__(task, environment, user)
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to final_answer tool only. The code is in the agent's final response."""
-        tools = traces.get("tools", {})
-        return tools.get("final_answer", {})
+        """No tool traces needed for this evaluator."""
+        return {}
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate algorithmic complexity."""
 
-        # Get final answer from tool invocations
-        invocations = traces.get("invocations", [])
-
-        if not invocations:
+        if not final_answer:
             return {"time_complexity": "unknown", "is_optimal": False, "uses_dynamic_programming": False, "algorithm_efficiency_score": 0.0}
 
-        # Get the final answer content and extract code
-        final_answer = str(invocations[-1].get("inputs", {}).get("answer", ""))
-        code = self._extract_code_from_answer(final_answer)
+        # Extract code from final answer
+        code = self._extract_code_from_answer(normalize_final_answer(final_answer))
 
         if not code:
             return {"time_complexity": "unknown", "is_optimal": False, "uses_dynamic_programming": False, "algorithm_efficiency_score": 0.0}
@@ -277,22 +267,17 @@ class CodeQualityEvaluator(Evaluator):
         super().__init__(task, environment, user)
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to final_answer tool only. The code is in the agent's final response."""
-        tools = traces.get("tools", {})
-        return tools.get("final_answer", {})
+        """No tool traces needed for this evaluator."""
+        return {}
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate code quality."""
 
-        # Get final answer from tool invocations
-        invocations = traces.get("invocations", [])
-
-        if not invocations:
+        if not final_answer:
             return {"has_docstring": False, "handles_edge_cases": False, "code_quality_score": 0.0}
 
-        # Get the final answer content and extract code
-        final_answer = str(invocations[-1].get("inputs", {}).get("answer", ""))
-        code = self._extract_code_from_answer(final_answer)
+        # Extract code from final answer
+        code = self._extract_code_from_answer(normalize_final_answer(final_answer))
 
         if not code:
             return {"has_docstring": False, "handles_edge_cases": False, "code_quality_score": 0.0}

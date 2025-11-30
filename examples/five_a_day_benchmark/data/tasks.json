@@ -68,7 +68,7 @@
     }
   },
   {
-    "query": "I want to split my Apple stock equally among my three children. Can you look up the current stock price and tell me how much each child would get if I give them equal shares?",
+    "query": "I want to split my Apple stock equally among my children. Can you look up the current stock price and tell me how much each child would get if I give them equal shares?",
     "environment_data": {
       "tools": ["websearch", "family_info", "calculator", "banking"],
       "family_info": {

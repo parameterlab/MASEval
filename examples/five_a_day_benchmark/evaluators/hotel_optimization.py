@@ -8,6 +8,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from maseval import Evaluator, Environment, Task, User
+from .utils import normalize_final_answer
 
 
 class OptimizationQualityEvaluator(Evaluator):
@@ -25,21 +26,16 @@ class OptimizationQualityEvaluator(Evaluator):
         self.hotel_scores = self._calculate_all_hotel_scores()
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to final_answer tool only. Agent's final response is what matters."""
-        tools = traces.get("tools", {})
-        return tools.get("final_answer", {})
+        """No tool traces needed for this evaluator."""
+        return {}
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate optimization quality."""
 
-        # Get final answer from tool invocations
-        invocations = traces.get("invocations", [])
-
-        if not invocations:
+        if not final_answer:
             return {"found_optimal_hotel": False, "optimization_score": 0.0, "error": "No final answer found"}
 
-        # Get the final answer content
-        full_response = str(invocations[-1].get("inputs", {}).get("answer", ""))
+        full_response = normalize_final_answer(final_answer)
 
         if not full_response:
             return {"found_optimal_hotel": False, "optimization_score": 0.0, "error": "No assistant response found"}
@@ -138,7 +134,7 @@ class SearchStrategyEvaluator(Evaluator):
             "calculator": tools.get("calculator_calculate", {}),
         }
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate search strategy."""
 
         # Check if hotel_search was used

@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 import json
 
 from maseval import Evaluator, Environment, Task, User
-from .utils import call_llm_judge
+from .utils import call_llm_judge, normalize_final_answer
 
 
 class ArithmeticAccuracyEvaluator(Evaluator):
@@ -23,17 +23,13 @@ class ArithmeticAccuracyEvaluator(Evaluator):
         self.eval_data = task.evaluation_data
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to final_answer tool only. Agent's final response is what matters."""
-        tools = traces.get("tools", {})
-        return tools.get("final_answer", {})
+        """No tool traces needed for this evaluator."""
+        return {}
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate arithmetic accuracy."""
 
-        # Get final answer from tool invocations
-        invocations = traces.get("invocations", [])
-
-        if not invocations:
+        if not final_answer:
             return {
                 "total_value_correct": False,
                 "per_child_value_correct": False,
@@ -41,9 +37,7 @@ class ArithmeticAccuracyEvaluator(Evaluator):
                 "error": "No final answer found",
             }
 
-        # Get the final answer content
-        final_answer_invocation = invocations[-1]
-        full_response = str(final_answer_invocation.get("inputs", {}).get("answer", ""))
+        full_response = normalize_final_answer(final_answer)
 
         if not full_response:
             return {
@@ -116,7 +110,7 @@ class InformationRetrievalEvaluator(Evaluator):
             "banking_asset": tools.get("banking_get_asset", {}),
         }
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate information retrieval from tools."""
 
         # Check for required tools by checking if they have invocations

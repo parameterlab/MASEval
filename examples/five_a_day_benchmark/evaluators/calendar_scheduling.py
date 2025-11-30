@@ -7,6 +7,7 @@ Success criteria: Agent correctly identifies overlapping available time slots.
 from typing import Any, Dict, Optional
 
 from maseval import Evaluator, Environment, Task, User
+from .utils import normalize_final_answer
 
 
 class SchedulingAccuracyEvaluator(Evaluator):
@@ -21,17 +22,13 @@ class SchedulingAccuracyEvaluator(Evaluator):
         self.expected_slots = task.evaluation_data["overlapping_slots"]
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to final_answer tool only. Agent's final response is what matters."""
-        tools = traces.get("tools", {})
-        return tools.get("final_answer", {})
+        """No tool traces needed for this evaluator."""
+        return {}
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate scheduling accuracy."""
 
-        # Get final answer from tool invocations
-        invocations = traces.get("invocations", [])
-
-        if not invocations:
+        if not final_answer:
             return {
                 "overlapping_slots_found": 0,
                 "all_overlaps_identified": False,
@@ -39,8 +36,7 @@ class SchedulingAccuracyEvaluator(Evaluator):
                 "error": "No final answer found",
             }
 
-        # Get the final answer content
-        full_response = str(invocations[-1].get("inputs", {}).get("answer", ""))
+        full_response = normalize_final_answer(final_answer)
 
         if not full_response:
             return {
@@ -124,11 +120,11 @@ class MCPIntegrationEvaluator(Evaluator):
         """Filter to calendar tool traces only."""
         tools = traces.get("tools", {})
         return {
-            "my_calendar": tools.get("my_calendar_get_events", {}),
-            "other_calendar": tools.get("other_calendar_get_events", {}),
+            "my_calendar": tools.get("my_calendar_mcp_get_events", {}),
+            "other_calendar": tools.get("other_calendar_mcp_get_events", {}),
         }
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate MCP tool usage for task completion."""
 
         # Check if both calendars were accessed
@@ -141,9 +137,9 @@ class MCPIntegrationEvaluator(Evaluator):
         # Create tools_used list
         tools_used = []
         if my_calendar_used:
-            tools_used.append("my_calendar_get_events")
+            tools_used.append("my_calendar_mcp_get_events")
         if other_calendar_used:
-            tools_used.append("other_calendar_get_events")
+            tools_used.append("other_calendar_mcp_get_events")
 
         return {"used_both_calendars": used_both_calendars, "mcp_integration_score": score, "tools_used": tools_used}
 
@@ -160,21 +156,16 @@ class ConstraintSatisfactionEvaluator(Evaluator):
         self.expected_slots = task.evaluation_data["overlapping_slots"]
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter to final_answer tool only. Agent's final response is what matters."""
-        tools = traces.get("tools", {})
-        return tools.get("final_answer", {})
+        """No tool traces needed for this evaluator."""
+        return {}
 
-    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate constraint satisfaction logic."""
 
-        # Get final answer from tool invocations
-        invocations = traces.get("invocations", [])
-
-        if not invocations:
+        if not final_answer:
             return {"understands_overlap_logic": False, "constraint_satisfaction_score": 0.0}
 
-        # Get the final answer content
-        full_response = str(invocations[-1].get("inputs", {}).get("answer", "")).lower()
+        full_response = normalize_final_answer(final_answer).lower()
 
         if not full_response:
             return {"understands_overlap_logic": False, "constraint_satisfaction_score": 0.0}

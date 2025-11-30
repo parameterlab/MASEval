@@ -26,7 +26,7 @@ from pathlib import Path
 
 from utils import derive_seed, sanitize_name
 
-from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter, MessageHistory
+from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter
 from maseval.core.callbacks.result_logger import FileResultLogger
 
 # Import tool implementations
@@ -297,7 +297,7 @@ def build_langgraph_single_agent(
 
     seed = primary_spec.get("seed")
     model = get_model(model_id, "langgraph", temperature, seed)
-    tool_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    tool_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
     tools = [adapter.tool for adapter in tool_adapters]
 
     class AgentState(TypedDict):
@@ -350,7 +350,7 @@ def build_llamaindex_single_agent(
 
     seed = primary_spec.get("seed")
     model = get_model(model_id, "llamaindex", temperature, seed)
-    tool_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    tool_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
     tools = [adapter.tool for adapter in tool_adapters]
 
     agent = ReActAgent(
@@ -395,7 +395,7 @@ def build_smolagents_multi_agent(
     for agent_spec in specialist_specs:
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "smolagents", temperature, specialist_seed)
-        specialist_adapters = filter_tools_fn(all_tool_adapters, agent_spec["tools"])
+        specialist_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, agent_spec["tools"])
         specialist_tools = [adapter.tool for adapter in specialist_adapters]
         specialist_tools.append(FinalAnswerTool())
         sanitized_name = sanitize_name(agent_spec["agent_name"])
@@ -410,7 +410,7 @@ def build_smolagents_multi_agent(
         )
         specialist_agents.append(specialist)
 
-    primary_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    primary_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
     primary_tools = [adapter.tool for adapter in primary_adapters]
     primary_tools.append(FinalAnswerTool())
     sanitized_primary_name = sanitize_name(primary_spec["agent_name"])
@@ -466,7 +466,7 @@ def build_langgraph_multi_agent(
         agent_instruction = agent_spec["agent_instruction"]
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "langgraph", temperature, specialist_seed)
-        specialist_adapters = filter_tools_fn(all_tool_adapters, agent_spec["tools"])
+        specialist_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, agent_spec["tools"])
         specialist_tools = [adapter.tool for adapter in specialist_adapters]
 
         def make_specialist_node(spec_instruction, spec_tools, spec_model):
@@ -617,7 +617,7 @@ def build_llamaindex_multi_agent(
         agent_instruction = agent_spec["agent_instruction"]
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "llamaindex", temperature, specialist_seed)
-        specialist_adapters = filter_tools_fn(all_tool_adapters, agent_spec["tools"])
+        specialist_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, agent_spec["tools"])
         specialist_tools = [adapter.tool for adapter in specialist_adapters]
 
         specialist_agent = ReActAgent(
@@ -661,7 +661,7 @@ def build_llamaindex_multi_agent(
         )
 
     orchestrator_tools = [make_handoff_tool(spec_id, spec_info) for spec_id, spec_info in specialist_agents_dict.items()]
-    primary_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    primary_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
     primary_tools = [adapter.tool for adapter in primary_adapters]
     orchestrator_tools.extend(primary_tools)
 
@@ -797,7 +797,7 @@ class FiveADayBenchmark(Benchmark):
         for evaluator in evaluators:
             # ensure the evaluator is only called with relevant traces
             filtered_traces = evaluator.filter_traces(traces)
-            results.append(evaluator(filtered_traces))
+            results.append(evaluator(filtered_traces, final_answer))
 
         return results
 

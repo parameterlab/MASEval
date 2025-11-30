@@ -2,10 +2,32 @@
 
 import re
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from litellm import completion
 from maseval import MessageHistory
+
+
+def normalize_final_answer(final_answer: Union[str, List, Any]) -> str:
+    """Convert final_answer to a string, handling various types.
+
+    Args:
+        final_answer: The final answer which can be a string, list, or other type
+
+    Returns:
+        String representation of the final answer
+    """
+    if final_answer is None:
+        return ""
+
+    if isinstance(final_answer, str):
+        return final_answer
+
+    if isinstance(final_answer, list):
+        # If it's a list, join the string elements
+        return " ".join(str(item) for item in final_answer)
+
+    return str(final_answer)
 
 
 def extract_assistant_response(trace: MessageHistory) -> str:
