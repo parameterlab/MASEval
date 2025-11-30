@@ -60,7 +60,8 @@
         "tool_coordination",
         "data_retrieval",
         "basic_reasoning"
-      ]
+      ],
+      "task_id": "email_banking"
     }
   },
   {
@@ -69,9 +70,18 @@
       "tools": ["websearch", "family_info", "calculator", "banking"],
       "family_info": {
         "children": [
-          { "name": "Emma", "age": 16 },
-          { "name": "Liam", "age": 14 },
-          { "name": "Sophia", "age": 12 }
+          {
+            "name": "Emma",
+            "age": 16
+          },
+          {
+            "name": "Liam",
+            "age": 14
+          },
+          {
+            "name": "Sophia",
+            "age": 12
+          }
         ]
       },
       "banking": {
@@ -114,7 +124,8 @@
         "data_retrieval",
         "arithmetic",
         "multi_step_reasoning"
-      ]
+      ],
+      "task_id": "finance_calculation"
     }
   },
   {
@@ -122,9 +133,18 @@
     "environment_data": {
       "tools": ["python_executor"],
       "test_cases": [
-        { "input": [1, 2, 3, 1], "expected_output": 4 },
-        { "input": [2, 7, 9, 3, 1], "expected_output": 12 },
-        { "input": [5, 3, 4, 11, 2], "expected_output": 16 }
+        {
+          "input": [1, 2, 3, 1],
+          "expected_output": 4
+        },
+        {
+          "input": [2, 7, 9, 3, 1],
+          "expected_output": 12
+        },
+        {
+          "input": [5, 3, 4, 11, 2],
+          "expected_output": 16
+        }
       ]
     },
     "user_data": {
@@ -133,9 +153,18 @@
     "evaluation_data": {
       "function_name": "house_robber",
       "test_cases": [
-        { "input": [1, 2, 3, 1], "expected_output": 4 },
-        { "input": [2, 7, 9, 3, 1], "expected_output": 12 },
-        { "input": [5, 3, 4, 11, 2], "expected_output": 16 }
+        {
+          "input": [1, 2, 3, 1],
+          "expected_output": 4
+        },
+        {
+          "input": [2, 7, 9, 3, 1],
+          "expected_output": 12
+        },
+        {
+          "input": [5, 3, 4, 11, 2],
+          "expected_output": 16
+        }
       ],
       "task_type": "code_generation_dp_algorithm",
       "evaluators": [
@@ -153,7 +182,8 @@
         "algorithm_design",
         "debugging",
         "iterative_refinement"
-      ]
+      ],
+      "task_id": "code_generation"
     }
   },
   {
@@ -162,20 +192,57 @@
       "tools": ["my_calendar_mcp", "other_calendar_mcp"],
       "my_calendar_availability": {
         "2025-12-02": [
-          { "start": "09:00", "end": "11:00" },
-          { "start": "14:00", "end": "16:00" }
+          {
+            "start": "09:00",
+            "end": "11:00"
+          },
+          {
+            "start": "14:00",
+            "end": "16:00"
+          }
         ],
-        "2025-12-03": [{ "start": "10:00", "end": "12:00" }],
-        "2025-12-04": [{ "start": "13:00", "end": "17:00" }],
+        "2025-12-03": [
+          {
+            "start": "10:00",
+            "end": "12:00"
+          }
+        ],
+        "2025-12-04": [
+          {
+            "start": "13:00",
+            "end": "17:00"
+          }
+        ],
         "2025-12-05": [
-          { "start": "09:00", "end": "10:00" },
-          { "start": "15:00", "end": "16:00" }
+          {
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "start": "15:00",
+            "end": "16:00"
+          }
         ]
       },
       "roger_bannister_availability": {
-        "2025-12-02": [{ "start": "14:00", "end": "16:00" }],
-        "2025-12-03": [{ "start": "10:00", "end": "12:00" }],
-        "2025-12-04": [{ "start": "14:00", "end": "16:00" }]
+        "2025-12-02": [
+          {
+            "start": "14:00",
+            "end": "16:00"
+          }
+        ],
+        "2025-12-03": [
+          {
+            "start": "10:00",
+            "end": "12:00"
+          }
+        ],
+        "2025-12-04": [
+          {
+            "start": "14:00",
+            "end": "16:00"
+          }
+        ]
       },
       "other_person_name": "roger_bannister"
     },
@@ -185,9 +252,21 @@
     "evaluation_data": {
       "other_person": "Roger Bannister",
       "overlapping_slots": [
-        { "date": "2025-12-02", "start": "14:00", "end": "16:00" },
-        { "date": "2025-12-03", "start": "10:00", "end": "12:00" },
-        { "date": "2025-12-04", "start": "14:00", "end": "16:00" }
+        {
+          "date": "2025-12-02",
+          "start": "14:00",
+          "end": "16:00"
+        },
+        {
+          "date": "2025-12-03",
+          "start": "10:00",
+          "end": "12:00"
+        },
+        {
+          "date": "2025-12-04",
+          "start": "14:00",
+          "end": "16:00"
+        }
       ],
       "task_type": "calendar_scheduling_mcp",
       "evaluators": [
@@ -205,7 +284,8 @@
         "constraint_satisfaction",
         "scheduling",
         "mcp_integration"
-      ]
+      ],
+      "task_id": "calendar_scheduling"
     }
   },
   {
@@ -437,7 +517,8 @@
         "weighted_scoring",
         "data_analysis",
         "reasoning_under_constraints"
-      ]
+      ],
+      "task_id": "hotel_optimization"
     }
   }
 ]

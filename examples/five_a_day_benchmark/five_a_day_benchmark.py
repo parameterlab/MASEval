@@ -24,6 +24,8 @@ import os
 from typing import Any, Dict, List, Optional, Sequence
 from pathlib import Path
 
+from utils import derive_seed
+
 from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter, MessageHistory
 from maseval.core.callbacks.result_logger import FileResultLogger
 
@@ -62,6 +64,7 @@ parser.add_argument("--limit", type=int, default=None, help="Number of tasks to 
 parser.add_argument("--task", type=int, default=None, help="Run only a specific task by index (default: all tasks)")
 parser.add_argument("--model-id", type=str, default="gemini-2.5-flash", help="Model identifier to use")
 parser.add_argument("--temperature", type=float, default=0.7, help="Model temperature")
+parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility (default: None for non-deterministic)")
 
 
 # ============================================================================
@@ -69,13 +72,14 @@ parser.add_argument("--temperature", type=float, default=0.7, help="Model temper
 # ============================================================================
 
 
-def get_model(model_id: str, framework: str, temperature: float = 0.7):
+def get_model(model_id: str, framework: str, temperature: float = 0.7, seed: Optional[int] = None):
     """Get a model instance for the specified framework.
 
     Args:
         model_id: Model identifier (e.g., 'gemini-2.5-flash')
         framework: Target framework ('smolagents', 'langgraph', 'llamaindex')
         temperature: Model temperature (default: 0.7)
+        seed: Random seed for reproducibility (default: None)
 
     Returns:
         Framework-specific model instance
@@ -87,6 +91,7 @@ def get_model(model_id: str, framework: str, temperature: float = 0.7):
             model_id=f"gemini/{model_id}",
             api_key=os.getenv("GOOGLE_API_KEY"),
             temperature=temperature,
+            seed=seed,
         )
 
     elif framework == "langgraph":
@@ -96,6 +101,7 @@ def get_model(model_id: str, framework: str, temperature: float = 0.7):
             model=f"gemini/{model_id}",
             api_key=os.getenv("GOOGLE_API_KEY"),
             temperature=temperature,
+            seed=seed,
         )
 
     elif framework == "llamaindex":
@@ -105,6 +111,7 @@ def get_model(model_id: str, framework: str, temperature: float = 0.7):
             model=f"gemini/{model_id}",
             api_key=os.getenv("GOOGLE_API_KEY"),
             temperature=temperature,
+            seed=seed,
         )
 
     else:
@@ -360,6 +367,9 @@ class FiveADayBenchmark(Benchmark):
         tool_adapters = environment.get_tools()
         agent_spec = agent_data["agent"]
 
+        # Extract seed from agent_spec if available
+        seed = agent_spec.get("seed", None)
+
         # Sanitize agent name to be a valid Python identifier for smolagents
         sanitized_name = self._sanitize_name(agent_spec["agent_name"])
 
@@ -367,7 +377,7 @@ class FiveADayBenchmark(Benchmark):
             from smolagents import ToolCallingAgent
 
             # Create smolagents model
-            model = get_model(model_id, framework, temperature)
+            model = get_model(model_id, framework, temperature, seed)
 
             # Extract raw smolagents Tool objects from adapters
             tools = [adapter.tool for adapter in tool_adapters]
@@ -394,7 +404,7 @@ class FiveADayBenchmark(Benchmark):
             from typing_extensions import TypedDict, Annotated
 
             # Create LangChain model
-            model = get_model(model_id, framework, temperature)
+            model = get_model(model_id, framework, temperature, seed)
 
             # Extract raw LangChain StructuredTool objects from adapters
             tools = [adapter.tool for adapter in tool_adapters]
@@ -434,7 +444,7 @@ class FiveADayBenchmark(Benchmark):
             from llama_index.core.agent.workflow.react_agent import ReActAgent
 
             # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
-            model = get_model(model_id, framework, temperature)
+            model = get_model(model_id, framework, temperature, seed)
 
             # Extract raw LlamaIndex FunctionTool objects from adapters
             tools = [adapter.tool for adapter in tool_adapters]
@@ -489,14 +499,16 @@ class FiveADayBenchmark(Benchmark):
         if framework == "smolagents":
             from smolagents import ToolCallingAgent, FinalAnswerTool
 
-            # Create smolagents model
-            model = get_model(model_id, framework, temperature)
-
             # Create specialist agents
             specialist_agents = []
             all_tool_adapters = environment.get_tools()
 
             for agent_spec in specialist_specs:
+                # Get seed for this specialist agent
+                specialist_seed = agent_spec.get("seed", None)
+                # Create model for this specialist
+                specialist_model = get_model(model_id, framework, temperature, specialist_seed)
+
                 # Filter adapters, then extract tools for this specialist
                 specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
                 specialist_tools = [adapter.tool for adapter in specialist_adapters]
@@ -507,7 +519,7 @@ class FiveADayBenchmark(Benchmark):
 
                 # Create specialist agent
                 specialist = ToolCallingAgent(
-                    model=model,
+                    model=specialist_model,
                     tools=specialist_tools,
                     name=sanitized_name,
                     description=agent_spec["agent_instruction"],
@@ -524,9 +536,13 @@ class FiveADayBenchmark(Benchmark):
             # Sanitize agent name to be a valid Python identifier
             sanitized_primary_name = self._sanitize_name(primary_spec["agent_name"])
 
+            # Get seed for primary agent and create its model
+            primary_seed = primary_spec.get("seed", None)
+            primary_model = get_model(model_id, framework, temperature, primary_seed)
+
             # Create primary orchestrator agent with managed_agents
             agent = ToolCallingAgent(
-                model=model,
+                model=primary_model,
                 tools=primary_tools,
                 managed_agents=specialist_agents if specialist_agents else None,
                 name=sanitized_primary_name,
@@ -547,9 +563,6 @@ class FiveADayBenchmark(Benchmark):
             from langgraph.prebuilt import ToolNode
             from typing_extensions import TypedDict, Annotated
 
-            # Create LangChain model
-            model = get_model(model_id, framework, temperature)
-
             # Define state for multi-agent graph
             class MultiAgentState(TypedDict):
                 messages: Annotated[List[Any], add_messages]
@@ -562,12 +575,16 @@ class FiveADayBenchmark(Benchmark):
                 agent_id = agent_spec["agent_id"]
                 agent_instruction = agent_spec["agent_instruction"]
 
+                # Get seed for this specialist and create its model
+                specialist_seed = agent_spec.get("seed", None)
+                specialist_model = get_model(model_id, framework, temperature, specialist_seed)
+
                 # Filter adapters, then extract tools for this specialist
                 specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
                 specialist_tools = [adapter.tool for adapter in specialist_adapters]
 
                 # Create specialist subgraph with tool calling
-                def make_specialist_node(spec_instruction, spec_tools):
+                def make_specialist_node(spec_instruction, spec_tools, spec_model):
                     def specialist_node(state: MultiAgentState):
                         from langchain_core.messages import HumanMessage, AIMessage
 
@@ -604,12 +621,12 @@ class FiveADayBenchmark(Benchmark):
 
                         # Run specialist with tools if available
                         if spec_tools:
-                            specialist_model = model.bind_tools(spec_tools)
+                            specialist_model_with_tools = spec_model.bind_tools(spec_tools)
                             current_messages = specialist_messages
 
                             # Allow multiple tool calling rounds
                             for _ in range(5):  # Max 5 iterations
-                                response = specialist_model.invoke(current_messages)
+                                response = specialist_model_with_tools.invoke(current_messages)
                                 current_messages = current_messages + [response]
 
                                 # Check if tools were called
@@ -626,12 +643,12 @@ class FiveADayBenchmark(Benchmark):
                             return {"messages": [current_messages[-1]]}
                         else:
                             # No tools, just invoke model
-                            response = model.invoke(specialist_messages)
+                            response = spec_model.invoke(specialist_messages)
                             return {"messages": [response]}
 
                     return specialist_node
 
-                specialist_subgraphs[agent_id] = make_specialist_node(agent_instruction, specialist_tools)
+                specialist_subgraphs[agent_id] = make_specialist_node(agent_instruction, specialist_tools, specialist_model)
 
             # Create handoff tools for orchestrator to delegate to specialists
             handoff_tools = []
@@ -663,9 +680,11 @@ class FiveADayBenchmark(Benchmark):
 
                 handoff_tools.append(make_handoff_tool(agent_id, agent_name, agent_description))
 
-            # Create orchestrator node with handoff tools
+            # Create orchestrator model with primary seed and bind handoff tools
             primary_instruction = primary_spec["agent_instruction"]
-            orchestrator_model = model.bind_tools(handoff_tools)
+            primary_seed = primary_spec.get("seed", None)
+            primary_model = get_model(model_id, framework, temperature, primary_seed)
+            orchestrator_model = primary_model.bind_tools(handoff_tools)
 
             def orchestrator_node(state: MultiAgentState):
                 messages = state["messages"]
@@ -729,9 +748,6 @@ class FiveADayBenchmark(Benchmark):
             from llama_index.core.agent.workflow.react_agent import ReActAgent
             from llama_index.core.tools import FunctionTool
 
-            # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
-            model = get_model(model_id, framework, temperature)
-
             all_tool_adapters = environment.get_tools()
 
             # Create specialist agents
@@ -741,6 +757,10 @@ class FiveADayBenchmark(Benchmark):
                 agent_name = agent_spec["agent_name"]
                 agent_instruction = agent_spec["agent_instruction"]
 
+                # Get seed for this specialist and create its model
+                specialist_seed = agent_spec.get("seed", None)
+                specialist_model = get_model(model_id, framework, temperature, specialist_seed)
+
                 # Filter adapters, then extract tools for this specialist
                 specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
                 specialist_tools = [adapter.tool for adapter in specialist_adapters]
@@ -748,7 +768,7 @@ class FiveADayBenchmark(Benchmark):
                 # Create specialist agent
                 specialist_agent = ReActAgent(
                     tools=specialist_tools,
-                    llm=model,
+                    llm=specialist_model,
                     verbose=True,
                     max_iterations=10,
                 )
@@ -807,10 +827,14 @@ class FiveADayBenchmark(Benchmark):
             primary_tools = [adapter.tool for adapter in primary_adapters]
             orchestrator_tools.extend(primary_tools)
 
+            # Get seed for primary agent and create its model
+            primary_seed = primary_spec.get("seed", None)
+            primary_model = get_model(model_id, framework, temperature, primary_seed)
+
             # Create orchestrator agent with handoff tools
             orchestrator = ReActAgent(
                 tools=orchestrator_tools,
-                llm=model,
+                llm=primary_model,
                 verbose=True,
                 max_iterations=15,
             )
@@ -939,10 +963,12 @@ def load_tasks(data_file: str = "data/tasks.json", limit: Optional[int] = None, 
 def load_agent_configs(
     config_file: str = "data/singleagent.json",
     framework: str = "smolagents",
+    tasks: TaskCollection,
     limit: Optional[int] = None,
-    specific_task_only: Optional[int] = None,
+    specific_task_only: Optional[int | str] = None,
     model_id: Optional[str] = None,
     temperature: Optional[float] = None,
+    seed: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Load agent configurations from JSON file.
 
@@ -953,6 +979,8 @@ def load_agent_configs(
         specific_task_only: Optional index to load only a specific config (must match specific task)
         model_id: Model identifier to inject into config
         temperature: Model temperature to inject into config
+        seed: Base random seed for reproducibility (None for non-deterministic)
+        task_ids: List of task IDs corresponding to configs (for reproducible seeding)
 
     Returns:
         List of agent configuration dictionaries with framework and model_config added
@@ -965,6 +993,18 @@ def load_agent_configs(
     if limit is not None and specific_task_only is not None:
         raise ValueError("Cannot specify both limit and specific_task_only")
 
+    # assert length of agent config matches number of tasks if limit not specified
+    if limit is None and specific_task_only is None:
+        if len(configs) != len(tasks):
+            raise ValueError(f"Number of agent configs ({len(configs)}) does not match number of tasks ({len(tasks)})")
+    # if only specific task is specified, assert that only one config is loaded
+    if specific_task_only is not None and len(configs) > 1:
+        raise ValueError("When specific_task_only is specified, config file should contain only one config")
+
+
+    # Extract task_ids from tasks for reproducible seeding
+    task_ids = [task.metadata["task_id"] for i, task in enumerate(tasks.to_list())]
+
     # Filter by specific task if specified
     configs_data = []
     for config_idx, config in enumerate(configs[:limit] if limit else configs):
@@ -972,6 +1012,24 @@ def load_agent_configs(
             continue
         # Add framework to config
         config["framework"] = framework
+
+        # Derive seeds for agents if base seed is provided
+        if seed is not None:
+            task_id = task_ids[config_idx]
+
+            # For single-agent configs
+            if "agent" in config:
+                agent_id = config["agent"]["agent_id"]
+                agent_seed = derive_seed(seed, task_id, agent_id)
+                config["agent"]["seed"] = agent_seed
+
+            # For multi-agent configs
+            elif "agents" in config:
+                for agent_spec in config["agents"]:
+                    agent_id = agent_spec["agent_id"]
+                    agent_seed = derive_seed(seed, task_id, agent_id)
+                    agent_spec["seed"] = agent_seed
+
         # Create model_config from argparse arguments
         config["model_config"] = {
             "model_id": model_id,
@@ -1009,18 +1067,22 @@ if __name__ == "__main__":
     print(f"Config: {args.config_type}agent")
     print(f"Model: {args.model_id}")
     print(f"Temperature: {args.temperature}")
+    print(f"Seed: {args.seed if args.seed is not None else 'None (non-deterministic)'}")
     print(f"Task limit: {args.limit or 'all'}")
     print(f"Specific task: {args.task if args.task is not None else 'all'}\n")
 
     # Load tasks and agent configs
     tasks = load_tasks(limit=args.limit, specific_task_only=args.task)
+
     agent_configs = load_agent_configs(
         config_file=f"data/{args.config_type}agent.json",
         framework=args.framework,
+        tasks=tasks,
         limit=args.limit,
         specific_task_only=args.task,
         model_id=args.model_id,
         temperature=args.temperature,
+        seed=args.seed,
     )
 
     output_dir = Path(__file__).parent / "results"
