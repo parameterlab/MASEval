@@ -1,9 +1,9 @@
 """Hotel search tool collection.
 
 Tools:
-- hotel_search.search: Search hotels by criteria (price, distance, wifi)
-- hotel_search.get: Get specific hotel by ID
-- hotel_search.get_all: Get all available hotels
+- hotel_search_search: Search hotels by criteria (price, distance, wifi)
+- hotel_search_get: Get specific hotel by ID
+- hotel_search_get_all: Get all available hotels
 """
 
 from typing import Any
@@ -23,7 +23,7 @@ class HotelSearchSearchTool(BaseTool):
 
     def __init__(self, hotel_state: HotelSearchState):
         super().__init__(
-            "hotel_search.search",
+            "hotel_search_search",
             "Search hotels with optional filters: max_price (per night), max_distance (km to venue), min_wifi (Mbps speed)",
             tool_args=["max_price", "max_distance", "min_wifi"],
         )
@@ -55,7 +55,7 @@ class HotelSearchGetTool(BaseTool):
 
     def __init__(self, hotel_state: HotelSearchState):
         super().__init__(
-            "hotel_search.get",
+            "hotel_search_get",
             "Get specific hotel details by hotel ID",
             tool_args=["hotel_id"],
         )
@@ -80,7 +80,7 @@ class HotelSearchGetAllTool(BaseTool):
 
     def __init__(self, hotel_state: HotelSearchState):
         super().__init__(
-            "hotel_search.get_all",
+            "hotel_search_get_all",
             "Get all available hotels without any filters",
             tool_args=[],
         )

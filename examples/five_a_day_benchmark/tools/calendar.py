@@ -1,8 +1,8 @@
 """Calendar tool collection with shared state.
 
 Tools:
-- calendar.get_availability: Get calendar availability for date range
-- calendar.get_date_availability: Get availability for specific date
+- calendar_get_availability: Get calendar availability for date range
+- calendar_get_date_availability: Get availability for specific date
 """
 
 from dataclasses import dataclass
@@ -39,7 +39,7 @@ class CalendarGetAvailabilityTool(BaseTool):
 
     def __init__(self, calendar_state: CalendarState):
         super().__init__(
-            "calendar.get_availability",
+            "calendar_get_availability",
             f"Get {calendar_state.calendar_id} calendar availability with optional start_date and end_date filters (YYYY-MM-DD)",
             tool_args=["start_date", "end_date"],
         )
@@ -74,7 +74,7 @@ class CalendarGetDateAvailabilityTool(BaseTool):
 
     def __init__(self, calendar_state: CalendarState):
         super().__init__(
-            "calendar.get_date_availability",
+            "calendar_get_date_availability",
             f"Get {calendar_state.calendar_id} calendar availability for a specific date (YYYY-MM-DD)",
             tool_args=["date"],
         )

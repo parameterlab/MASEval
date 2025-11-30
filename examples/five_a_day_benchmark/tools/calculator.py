@@ -12,7 +12,7 @@ class CalculatorCalculateTool(BaseTool):
 
     def __init__(self):
         super().__init__(
-            "calculator.calculate",
+            "calculator_calculate",
             "Evaluate mathematical expressions with functions like sqrt, sin, cos, log, etc.",
             tool_args=["expression"],
         )

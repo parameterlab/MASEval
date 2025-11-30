@@ -1,8 +1,8 @@
 """Code execution tool collection using RestrictedPython.
 
 Tools:
-- python_executor.execute: Run Python code and see output
-- python_executor.test: Run code against test cases
+- python_executor_execute: Run Python code and see output
+- python_executor_test: Run code against test cases
 """
 
 from typing import Any
@@ -70,7 +70,7 @@ class PythonExecutorExecuteTool(BaseTool):
 
     def __init__(self, code_state: CodeExecutionState):
         super().__init__(
-            "python_executor.execute",
+            "python_executor_execute",
             "Execute Python code safely and see the output (use print() to display results)",
             tool_args=["code"],
         )
@@ -131,7 +131,7 @@ class PythonExecutorTestTool(BaseTool):
 
     def __init__(self, code_state: CodeExecutionState):
         super().__init__(
-            "python_executor.test",
+            "python_executor_test",
             "Execute Python code and run it against test cases to verify correctness",
             tool_args=["code"],
         )

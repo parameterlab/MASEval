@@ -177,7 +177,6 @@ class FiveADayEnvironment(Environment):
             "python_executor": (CodeExecutionToolCollection, lambda: (self.state["python_executor_state"],)),
             "family_info": (FamilyInfoToolCollection, lambda: (self.state["family_info"],)),
             "stock_price": (StockPriceToolCollection, lambda: (self.state["stock_price_lookup"],)),
-            "websearch": (StockPriceToolCollection, lambda: (self.state["stock_price_lookup"],)),
             "calendar": (CalendarToolCollection, lambda: (self.state["calendar_state"],)),
             "running_app": (RunningAppToolCollection, lambda: (self.state["running_app_state"],)),
             "gym_tracker": (GymTrackerToolCollection, lambda: (self.state["gym_tracker_state"],)),
@@ -941,6 +940,7 @@ if __name__ == "__main__":
     benchmark = FiveADayBenchmark(
         agent_data=agent_configs,
         callbacks=[logger],
+        fail_on_setup_error=True,
         fail_on_task_error=True,
         fail_on_evaluation_error=True,
     )

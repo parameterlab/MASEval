@@ -1,6 +1,6 @@
 [
   {
-    "query": "Sarah Johnson asked me to confirm that I received her payment for the deposit and first month's rent. Please check my transactions and send an email reply accordingly.",
+    "query": "Sarah Johnson emailed me to confirm that I received her payment for the deposit and first month's rent. Please check my transactions and send an email reply accordingly.",
     "environment_data": {
       "tools": ["email", "banking"],
       "user_email": "sean.crane85@mymail-online.biz",

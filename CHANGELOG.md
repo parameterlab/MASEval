@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `FileResultLogger` now accepts `pathlib.Path` for argument `output_dir` and has an `overwrite` argument to prevent overwriting of existing logs files.
+- `Benchmark` class now has a `fail_on_setup_error` flag that raises errors observed during setup of task (PR: #10)
 
 ### Fixed
 

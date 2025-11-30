@@ -23,7 +23,7 @@
         "agent_id": "main_agent",
         "agent_name": "Financial Planning Assistant",
         "agent_instruction": "You are a financial planning assistant. Help users with financial queries by gathering necessary information and performing accurate calculations. Always show your work step by step.",
-        "tools": ["websearch", "family_info", "calculator", "banking"]
+        "tools": ["stock_price", "family_info", "calculator", "banking"]
       }
     ]
   },

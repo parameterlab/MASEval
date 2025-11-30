@@ -8,7 +8,7 @@ class StockPriceGetTool(BaseTool):
 
     def __init__(self, price_data: dict[str, float]):
         super().__init__(
-            "stock_price.get",
+            "stock_price_get",
             "Look up current stock price by symbol (e.g. 'AAPL', 'GOOGL')",
             tool_args=["symbol"],
         )

@@ -4,9 +4,9 @@ Demonstrates MCP integration by wrapping calendar operations as framework-agnost
 Shows how maseval enables agents to work with external systems via standardized protocols.
 
 Tools:
-- mcp_calendar.get_events: Get events in date range
-- mcp_calendar.check_availability: Check if time slot is available
-- mcp_calendar.add_event: Add new event to calendar
+- {name}_get_events: Get events in date range
+- {name}_check_availability: Check if time slot is available
+- {name}_add_event: Add new event to calendar
 """
 
 from typing import Any, Dict
@@ -27,7 +27,7 @@ class MCPCalendarGetEventsTool(BaseTool):
 
     def __init__(self, mcp_state: MCPCalendarState):
         super().__init__(
-            f"{mcp_state.name}.get_events",
+            f"{mcp_state.name}_get_events",
             f"Get events from {mcp_state.name} calendar with optional start_date and end_date filters (YYYY-MM-DD)",
             tool_args=["start_date", "end_date"],
         )
@@ -59,7 +59,7 @@ class MCPCalendarCheckAvailabilityTool(BaseTool):
 
     def __init__(self, mcp_state: MCPCalendarState):
         super().__init__(
-            f"{mcp_state.name}.check_availability",
+            f"{mcp_state.name}_check_availability",
             f"Check if time slot is available in {mcp_state.name} calendar (requires date, start_time, end_time in HH:MM format)",
             tool_args=["date", "start_time", "end_time"],
         )
@@ -89,7 +89,7 @@ class MCPCalendarAddEventTool(BaseTool):
 
     def __init__(self, mcp_state: MCPCalendarState):
         super().__init__(
-            f"{mcp_state.name}.add_event",
+            f"{mcp_state.name}_add_event",
             f"Add new event to {mcp_state.name} calendar (requires date, start_time, end_time, title; optional description)",
             tool_args=["date", "start_time", "end_time", "title", "description"],
         )

@@ -10,7 +10,7 @@ class FamilyInfoGetChildrenTool(BaseTool):
 
     def __init__(self, family_data: dict[str, Any]):
         super().__init__(
-            "family_info.get_children",
+            "family_info_get_children",
             "Get list of children with their names and ages",
             tool_args=[],
         )

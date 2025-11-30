@@ -1,10 +1,10 @@
 """Fitness tracking tool collections with shared state.
 
 Tools:
-- running_app.get_activities: Get running/cardio activities with optional date filters
-- running_app.get_activity: Get specific activity by ID
-- gym_tracker.get_workouts: Get gym/strength workouts with optional date filters
-- gym_tracker.get_workout: Get specific workout by ID
+- running_app_get_activities: Get running/cardio activities with optional date filters
+- running_app_get_activity: Get specific activity by ID
+- gym_tracker_get_workouts: Get gym/strength workouts with optional date filters
+- gym_tracker_get_workout: Get specific workout by ID
 """
 
 from dataclasses import dataclass
@@ -63,7 +63,7 @@ class RunningAppGetActivitiesTool(BaseTool):
 
     def __init__(self, running_state: RunningAppState):
         super().__init__(
-            "running_app.get_activities",
+            "running_app_get_activities",
             "Get running and cardio activities with optional start_date and end_date filters (YYYY-MM-DD)",
             tool_args=["start_date", "end_date"],
         )
@@ -95,7 +95,7 @@ class RunningAppGetActivityTool(BaseTool):
 
     def __init__(self, running_state: RunningAppState):
         super().__init__(
-            "running_app.get_activity",
+            "running_app_get_activity",
             "Get specific running/cardio activity by ID",
             tool_args=["activity_id"],
         )
@@ -160,7 +160,7 @@ class GymTrackerGetWorkoutsTool(BaseTool):
 
     def __init__(self, gym_state: GymTrackerState):
         super().__init__(
-            "gym_tracker.get_workouts",
+            "gym_tracker_get_workouts",
             "Get gym and strength workouts with optional start_date and end_date filters (YYYY-MM-DD)",
             tool_args=["start_date", "end_date"],
         )
@@ -192,7 +192,7 @@ class GymTrackerGetWorkoutTool(BaseTool):
 
     def __init__(self, gym_state: GymTrackerState):
         super().__init__(
-            "gym_tracker.get_workout",
+            "gym_tracker_get_workout",
             "Get specific gym/strength workout by ID",
             tool_args=["workout_id"],
         )
