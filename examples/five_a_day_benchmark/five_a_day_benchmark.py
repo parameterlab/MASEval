@@ -24,7 +24,7 @@ import os
 from typing import Any, Dict, List, Optional, Sequence
 from pathlib import Path
 
-from utils import derive_seed
+from utils import derive_seed, sanitize_name
 
 from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter, MessageHistory
 from maseval.core.callbacks.result_logger import FileResultLogger
@@ -72,7 +72,7 @@ parser.add_argument("--seed", type=int, default=None, help="Random seed for repr
 # ============================================================================
 
 
-def get_model(model_id: str, framework: str, temperature: float = 0.7, seed: Optional[int] = None):
+def get_model(model_id: str, framework: str, temperature: float = 0.7, seed: Optional[int] = None) -> Any:
     """Get a model instance for the specified framework.
 
     Args:
@@ -151,14 +151,8 @@ class FiveADayEnvironment(Environment):
         Task data: {"2025-12-02": [{"start": "09:00", "end": "11:00"}]}
         MCP format: {"events": [{"date": "2025-12-02", "start_time": "09:00", ...}]}
         """
-        # For other_calendar, check person-specific availability
-        if calendar_key == "other_calendar":
-            person = self.state["other_person_name"]
-            availability = self.state[f"{person}_availability"]
-        else:
-            availability = self.state[calendar_key]
+        availability = self.state[calendar_key]
 
-        # Convert to events format
         events = [
             {
                 "date": date,
@@ -201,14 +195,13 @@ class FiveADayEnvironment(Environment):
             "running_app": (RunningAppToolCollection, lambda: (self.state["running_activities"],)),
             "gym_tracker": (GymTrackerToolCollection, lambda: (self.state["gym_activities"],)),
             "hotel_search": (HotelSearchToolCollection, lambda: (self.state["hotels"],)),
-            # MCP calendar tools
             "my_calendar_mcp": (
                 MCPCalendarToolCollection,
-                lambda: ("my_calendar_mcp", self._get_mcp_calendar_data("my_calendar_availability")),
+                lambda: ("my_calendar_mcp", self._get_mcp_calendar_data("my_calendar_mcp_availability")),
             ),
             "other_calendar_mcp": (
                 MCPCalendarToolCollection,
-                lambda: ("other_calendar_mcp", self._get_mcp_calendar_data("other_calendar")),
+                lambda: ("other_calendar_mcp", self._get_mcp_calendar_data("other_calendar_mcp_availability")),
             ),
         }
 
@@ -217,11 +210,8 @@ class FiveADayEnvironment(Environment):
                 ToolClass, get_init_args = tool_mapping[tool_name]
                 init_args = get_init_args()
 
-                # Create tool collection instance
-                if isinstance(init_args, tuple):
-                    tool_instance = ToolClass(*init_args)
-                else:
-                    tool_instance = ToolClass(init_args)
+                assert isinstance(init_args, tuple), f"Tool {tool_name} init_args must be a tuple"
+                tool_instance = ToolClass(*init_args)
 
                 # Check if it's a collection with get_sub_tools method
                 if hasattr(tool_instance, "get_sub_tools"):
@@ -261,6 +251,495 @@ class FiveADayEnvironment(Environment):
 
 
 # ============================================================================
+# Framework-Specific Agent Builders
+# ============================================================================
+
+
+def build_smolagents_single_agent(
+    model_id: str,
+    temperature: float,
+    all_tool_adapters: List[Any],
+    primary_spec: Dict[str, Any],
+    specialist_specs: List[Dict[str, Any]],
+    filter_tools_fn,
+) -> Any:
+    """Build a single smolagents agent.
+
+    Args:
+        model_id: Model identifier
+        temperature: Model temperature
+        all_tool_adapters: All available tool adapters
+        primary_spec: Primary agent specification
+        specialist_specs: Empty list for single-agent (ignored)
+        filter_tools_fn: Function to filter tools (ignored for single-agent, uses all)
+
+    Returns:
+        SmolAgentAdapter wrapping the created agent
+    """
+    from smolagents import ToolCallingAgent
+    from maseval.interface.agents.smolagents import SmolAgentAdapter
+
+    seed = primary_spec.get("seed")
+    model = get_model(model_id, "smolagents", temperature, seed)
+    tools = [adapter.tool for adapter in all_tool_adapters]
+    sanitized_name = sanitize_name(primary_spec["agent_name"])
+
+    agent = ToolCallingAgent(
+        model=model,
+        tools=tools,
+        name=sanitized_name,
+        instructions=primary_spec["agent_instruction"],
+        verbosity_level=2,
+    )
+
+    return SmolAgentAdapter(agent, primary_spec["agent_id"])
+
+
+def build_langgraph_single_agent(
+    model_id: str,
+    temperature: float,
+    all_tool_adapters: List[Any],
+    primary_spec: Dict[str, Any],
+    specialist_specs: List[Dict[str, Any]],
+    filter_tools_fn,
+) -> Any:
+    """Build a single langgraph agent.
+
+    Args:
+        model_id: Model identifier
+        temperature: Model temperature
+        all_tool_adapters: All available tool adapters
+        primary_spec: Primary agent specification
+        specialist_specs: Empty list for single-agent (ignored)
+        filter_tools_fn: Function to filter tools (ignored for single-agent, uses all)
+
+    Returns:
+        LangGraphAgentAdapter wrapping the created graph
+    """
+    from langchain_core.messages import SystemMessage
+    from langgraph.graph import StateGraph, END
+    from langgraph.graph.message import add_messages
+    from langgraph.prebuilt import ToolNode, tools_condition
+    from typing_extensions import TypedDict, Annotated
+    from maseval.interface.agents.langgraph import LangGraphAgentAdapter
+
+    seed = primary_spec.get("seed")
+    model = get_model(model_id, "langgraph", temperature, seed)
+    tools = [adapter.tool for adapter in all_tool_adapters]
+
+    class AgentState(TypedDict):
+        messages: Annotated[List[Any], add_messages]
+
+    llm_with_tools = model.bind_tools(tools)
+
+    def call_model(state: AgentState):
+        messages = state["messages"]
+        has_system = any(isinstance(m, SystemMessage) for m in messages)
+        if not has_system and primary_spec["agent_instruction"]:
+            system_message = SystemMessage(content=primary_spec["agent_instruction"])
+            messages = [system_message] + messages
+
+        response = llm_with_tools.invoke(messages)
+        return {"messages": [response]}
+
+    workflow = StateGraph(AgentState)
+    workflow.add_node("agent", call_model)
+    workflow.add_node("tools", ToolNode(tools))
+    workflow.set_entry_point("agent")
+    workflow.add_conditional_edges("agent", tools_condition, {"tools": "tools", END: END})
+    workflow.add_edge("tools", "agent")
+
+    graph = workflow.compile()
+    return LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+
+
+def build_llamaindex_single_agent(
+    model_id: str,
+    temperature: float,
+    all_tool_adapters: List[Any],
+    primary_spec: Dict[str, Any],
+    specialist_specs: List[Dict[str, Any]],
+    filter_tools_fn,
+) -> Any:
+    """Build a single llamaindex agent.
+
+    Args:
+        model_id: Model identifier
+        temperature: Model temperature
+        all_tool_adapters: All available tool adapters
+        primary_spec: Primary agent specification
+        specialist_specs: Empty list for single-agent (ignored)
+        filter_tools_fn: Function to filter tools (ignored for single-agent, uses all)
+
+    Returns:
+        LlamaIndexAgentAdapter wrapping the created agent
+    """
+    from llama_index.core.agent.workflow.react_agent import ReActAgent
+    from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
+
+    seed = primary_spec.get("seed")
+    model = get_model(model_id, "llamaindex", temperature, seed)
+    tools = [adapter.tool for adapter in all_tool_adapters]
+
+    agent = ReActAgent(
+        tools=tools,
+        llm=model,
+        verbose=True,
+        max_iterations=10,
+    )
+
+    if hasattr(agent, "update_prompts") and primary_spec["agent_instruction"]:
+        try:
+            agent.update_prompts({"agent_worker:system_prompt": primary_spec["agent_instruction"]})
+        except Exception:
+            pass
+
+    return LlamaIndexAgentAdapter(agent, primary_spec["agent_id"])
+
+
+def build_smolagents_multi_agent(
+    model_id: str,
+    temperature: float,
+    all_tool_adapters: List[Any],
+    primary_spec: Dict[str, Any],
+    specialist_specs: List[Dict[str, Any]],
+    filter_tools_fn,
+) -> Any:
+    """Build smolagents multi-agent setup with orchestrator and specialists.
+
+    Args:
+        model_id: Model identifier
+        temperature: Model temperature
+        all_tool_adapters: All available tool adapters
+        primary_spec: Primary agent specification
+        specialist_specs: List of specialist agent specifications
+        filter_tools_fn: Function to filter tools by name
+
+    Returns:
+        SmolAgentAdapter wrapping the orchestrator agent
+    """
+    from smolagents import ToolCallingAgent, FinalAnswerTool
+    from maseval.interface.agents.smolagents import SmolAgentAdapter
+
+    specialist_agents = []
+    for agent_spec in specialist_specs:
+        specialist_seed = agent_spec.get("seed")
+        specialist_model = get_model(model_id, "smolagents", temperature, specialist_seed)
+        specialist_adapters = filter_tools_fn(all_tool_adapters, agent_spec["tools"])
+        specialist_tools = [adapter.tool for adapter in specialist_adapters]
+        specialist_tools.append(FinalAnswerTool())
+        sanitized_name = sanitize_name(agent_spec["agent_name"])
+
+        specialist = ToolCallingAgent(
+            model=specialist_model,
+            tools=specialist_tools,
+            name=sanitized_name,
+            description=agent_spec["agent_instruction"],
+            instructions=agent_spec["agent_instruction"],
+            verbosity_level=2,
+        )
+        specialist_agents.append(specialist)
+
+    primary_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    primary_tools = [adapter.tool for adapter in primary_adapters]
+    primary_tools.append(FinalAnswerTool())
+    sanitized_primary_name = sanitize_name(primary_spec["agent_name"])
+    primary_seed = primary_spec.get("seed")
+    primary_model = get_model(model_id, "smolagents", temperature, primary_seed)
+
+    agent = ToolCallingAgent(
+        model=primary_model,
+        tools=primary_tools,
+        managed_agents=specialist_agents if specialist_agents else None,
+        name=sanitized_primary_name,
+        instructions=primary_spec["agent_instruction"],
+        verbosity_level=2,
+    )
+
+    return SmolAgentAdapter(agent, primary_spec["agent_id"])
+
+
+def build_langgraph_multi_agent(
+    model_id: str,
+    temperature: float,
+    all_tool_adapters: List[Any],
+    primary_spec: Dict[str, Any],
+    specialist_specs: List[Dict[str, Any]],
+    filter_tools_fn,
+) -> Any:
+    """Build langgraph multi-agent setup with orchestrator and specialists.
+
+    Args:
+        model_id: Model identifier
+        temperature: Model temperature
+        all_tool_adapters: All available tool adapters
+        primary_spec: Primary agent specification
+        specialist_specs: List of specialist agent specifications
+        filter_tools_fn: Function to filter tools by name
+
+    Returns:
+        LangGraphAgentAdapter wrapping the multi-agent graph
+    """
+    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+    from langchain_core.tools import tool as create_tool
+    from langgraph.graph import StateGraph, END
+    from langgraph.graph.message import add_messages
+    from langgraph.prebuilt import ToolNode
+    from typing_extensions import TypedDict, Annotated
+    from maseval.interface.agents.langgraph import LangGraphAgentAdapter
+
+    class MultiAgentState(TypedDict):
+        messages: Annotated[List[Any], add_messages]
+
+    # Create specialist subgraphs
+    specialist_subgraphs = {}
+    for agent_spec in specialist_specs:
+        agent_id = agent_spec["agent_id"]
+        agent_instruction = agent_spec["agent_instruction"]
+        specialist_seed = agent_spec.get("seed")
+        specialist_model = get_model(model_id, "langgraph", temperature, specialist_seed)
+        specialist_adapters = filter_tools_fn(all_tool_adapters, agent_spec["tools"])
+        specialist_tools = [adapter.tool for adapter in specialist_adapters]
+
+        def make_specialist_node(spec_instruction, spec_tools, spec_model):
+            def specialist_node(state: MultiAgentState):
+                messages = state["messages"]
+
+                # Extract delegated query from orchestrator's tool call
+                delegated_query = None
+                if messages and isinstance(messages[-1], AIMessage):
+                    last_msg = messages[-1]
+                    if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                        tool_call = last_msg.tool_calls[0]
+                        if "args" in tool_call and "query" in tool_call["args"]:
+                            delegated_query = tool_call["args"]["query"]
+
+                if not delegated_query:
+                    for msg in reversed(messages):
+                        if hasattr(msg, "type") and msg.type == "human":
+                            delegated_query = msg.content
+                            break
+
+                if not delegated_query:
+                    delegated_query = "Please help with the task."
+
+                specialist_messages = []
+                if spec_instruction:
+                    specialist_messages.append(SystemMessage(content=spec_instruction))
+                specialist_messages.append(HumanMessage(content=delegated_query))
+
+                if spec_tools:
+                    specialist_model_with_tools = spec_model.bind_tools(spec_tools)
+                    current_messages = specialist_messages
+
+                    for _ in range(5):
+                        response = specialist_model_with_tools.invoke(current_messages)
+                        current_messages = current_messages + [response]
+
+                        if hasattr(response, "tool_calls") and response.tool_calls:
+                            tool_node = ToolNode(spec_tools)
+                            tool_results = tool_node.invoke({"messages": [response]})
+                            current_messages = current_messages + tool_results["messages"]
+                        else:
+                            return {"messages": [response]}
+
+                    return {"messages": [current_messages[-1]]}
+                else:
+                    response = spec_model.invoke(specialist_messages)
+                    return {"messages": [response]}
+
+            return specialist_node
+
+        specialist_subgraphs[agent_id] = make_specialist_node(agent_instruction, specialist_tools, specialist_model)
+
+    # Create handoff tools
+    handoff_tools = []
+    for agent_spec in specialist_specs:
+        agent_id = agent_spec["agent_id"]
+        agent_name = agent_spec["agent_name"]
+        agent_description = agent_spec["agent_instruction"]
+
+        def make_handoff_tool(spec_id, spec_name, spec_description):
+            @create_tool
+            def handoff_tool(query: str) -> str:
+                """Delegate query to specialist."""
+                return f"Delegating to {spec_name}: {query}"
+
+            handoff_tool.name = f"ask_{spec_id}"
+            handoff_tool.description = f"Delegate to {spec_name}: {spec_description}"
+            handoff_tool._target_agent = spec_id  # type: ignore[attr-defined]
+            return handoff_tool
+
+        handoff_tools.append(make_handoff_tool(agent_id, agent_name, agent_description))
+
+    # Create orchestrator
+    primary_instruction = primary_spec["agent_instruction"]
+    primary_seed = primary_spec.get("seed")
+    primary_model = get_model(model_id, "langgraph", temperature, primary_seed)
+    orchestrator_model = primary_model.bind_tools(handoff_tools)
+
+    def orchestrator_node(state: MultiAgentState):
+        messages = state["messages"]
+        if primary_instruction and not any(isinstance(m, SystemMessage) for m in messages):
+            messages = [SystemMessage(content=primary_instruction)] + messages
+        response = orchestrator_model.invoke(messages)
+        return {"messages": [response]}
+
+    def route_after_orchestrator(state: MultiAgentState):
+        messages = state["messages"]
+        last_message = messages[-1]
+
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            tool_call = last_message.tool_calls[0]
+            tool_name = tool_call["name"]
+            if tool_name.startswith("ask_"):
+                specialist_id = tool_name[4:]
+                return specialist_id
+
+        return END
+
+    # Build graph
+    workflow = StateGraph(MultiAgentState)
+    workflow.add_node("orchestrator", orchestrator_node)
+
+    for agent_id, node_fn in specialist_subgraphs.items():
+        workflow.add_node(agent_id, node_fn)
+
+    workflow.set_entry_point("orchestrator")
+
+    specialist_routes = {agent_id: agent_id for agent_id in specialist_subgraphs.keys()}
+    specialist_routes[END] = END
+    workflow.add_conditional_edges("orchestrator", route_after_orchestrator, specialist_routes)
+
+    for agent_id in specialist_subgraphs.keys():
+        workflow.add_edge(agent_id, "orchestrator")
+
+    graph = workflow.compile()
+    return LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+
+
+def build_llamaindex_multi_agent(
+    model_id: str,
+    temperature: float,
+    all_tool_adapters: List[Any],
+    primary_spec: Dict[str, Any],
+    specialist_specs: List[Dict[str, Any]],
+    filter_tools_fn,
+) -> Any:
+    """Build llamaindex multi-agent setup with orchestrator and specialists.
+
+    Args:
+        model_id: Model identifier
+        temperature: Model temperature
+        all_tool_adapters: All available tool adapters
+        primary_spec: Primary agent specification
+        specialist_specs: List of specialist agent specifications
+        filter_tools_fn: Function to filter tools by name
+
+    Returns:
+        LlamaIndexAgentAdapter wrapping the orchestrator agent
+    """
+    from llama_index.core.agent.workflow.react_agent import ReActAgent
+    from llama_index.core.tools import FunctionTool
+    from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
+    import asyncio
+
+    specialist_agents_dict = {}
+    for agent_spec in specialist_specs:
+        agent_id = agent_spec["agent_id"]
+        agent_name = agent_spec["agent_name"]
+        agent_instruction = agent_spec["agent_instruction"]
+        specialist_seed = agent_spec.get("seed")
+        specialist_model = get_model(model_id, "llamaindex", temperature, specialist_seed)
+        specialist_adapters = filter_tools_fn(all_tool_adapters, agent_spec["tools"])
+        specialist_tools = [adapter.tool for adapter in specialist_adapters]
+
+        specialist_agent = ReActAgent(
+            tools=specialist_tools,
+            llm=specialist_model,
+            verbose=True,
+            max_iterations=10,
+        )
+
+        if hasattr(specialist_agent, "update_prompts") and agent_instruction:
+            try:
+                specialist_agent.update_prompts({"agent_worker:system_prompt": agent_instruction})
+            except Exception:
+                pass
+
+        specialist_agents_dict[agent_id] = {
+            "agent": specialist_agent,
+            "name": agent_name,
+            "description": agent_instruction,
+        }
+
+    def make_handoff_tool(specialist_id: str, specialist_info: dict):
+        def handoff_to_specialist(task: str) -> str:
+            """Delegate task to specialist agent."""
+            specialist_agent = specialist_info["agent"]
+
+            async def run_specialist():
+                handler = specialist_agent.run(user_msg=task)
+                result = await handler
+                return result
+
+            result = asyncio.run(run_specialist())
+            if hasattr(result, "response"):
+                return str(result.response)
+            return str(result)
+
+        return FunctionTool.from_defaults(
+            fn=handoff_to_specialist,
+            name=f"ask_{specialist_id}",
+            description=f"Delegate to {specialist_info['name']}: {specialist_info['description']}",
+        )
+
+    orchestrator_tools = [make_handoff_tool(spec_id, spec_info) for spec_id, spec_info in specialist_agents_dict.items()]
+    primary_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    primary_tools = [adapter.tool for adapter in primary_adapters]
+    orchestrator_tools.extend(primary_tools)
+
+    primary_seed = primary_spec.get("seed")
+    primary_model = get_model(model_id, "llamaindex", temperature, primary_seed)
+
+    orchestrator = ReActAgent(
+        tools=orchestrator_tools,
+        llm=primary_model,
+        verbose=True,
+        max_iterations=15,
+    )
+
+    primary_instruction = primary_spec["agent_instruction"]
+    if hasattr(orchestrator, "update_prompts") and primary_instruction:
+        try:
+            orchestrator.update_prompts({"agent_worker:system_prompt": primary_instruction})
+        except Exception:
+            pass
+
+    return LlamaIndexAgentAdapter(orchestrator, primary_spec["agent_id"])
+
+
+def get_agent_builder(framework: str, agent_type: str):
+    """Get the appropriate agent builder function based on framework and agent type."""
+    if agent_type == "single":
+        if framework == "smolagents":
+            return build_smolagents_single_agent
+        elif framework == "langgraph":
+            return build_langgraph_single_agent
+        elif framework == "llamaindex":
+            return build_llamaindex_single_agent
+    elif agent_type == "multi":
+        if framework == "smolagents":
+            return build_smolagents_multi_agent
+        elif framework == "langgraph":
+            return build_langgraph_multi_agent
+        elif framework == "llamaindex":
+            return build_llamaindex_multi_agent
+
+    raise ValueError(f"Unsupported combination of framework '{framework}' and agent_type '{agent_type}'")
+
+
+# ============================================================================
 # Benchmark
 # ============================================================================
 
@@ -273,23 +752,19 @@ class FiveADayBenchmark(Benchmark):
     """
 
     @staticmethod
-    def _sanitize_name(name: str) -> str:
-        """Sanitize name to be a valid Python identifier (for smolagents)."""
-        sanitized = name.replace(" ", "_").replace("-", "_")
-        if not sanitized[0].isalpha() and sanitized[0] != "_":
-            sanitized = "_" + sanitized
-        return sanitized
-
-    @staticmethod
     def _filter_tool_adapters(adapters: List[Any], tool_names: List[str]) -> List[Any]:
-        """Filter tool adapters by name or collection prefix.
+        """Filter tool adapters by exact name or collection prefix.
 
-        Adapters preserve original tool names (e.g., "banking.get_balance") before
-        framework-specific sanitization, making filtering consistent across frameworks.
+        Supports two matching modes (both used):
+        1. Exact match: "calculator" → adapter.name="calculator"
+        2. Collection prefix: "banking" → adapter.name="banking.get_balance"
 
-        Supports:
-        - Exact match: tool_name="calculator" matches adapter.name="calculator"
-        - Collection match: tool_name="banking" matches adapter.name="banking.get_balance"
+        Args:
+            adapters: List of tool adapters to filter
+            tool_names: Tool/collection names to match (e.g., ["banking", "calculator"])
+
+        Returns:
+            Filtered list of adapters matching the specified names
         """
         if not tool_names:
             return []
@@ -300,7 +775,6 @@ class FiveADayBenchmark(Benchmark):
                 continue
 
             for tool_name in tool_names:
-                # Exact match or collection prefix match (only need to check . since adapters use original names)
                 if adapter.name == tool_name or adapter.name.startswith(f"{tool_name}."):
                     filtered.append(adapter)
                     break
@@ -308,18 +782,7 @@ class FiveADayBenchmark(Benchmark):
         return filtered
 
     def setup_environment(self, agent_data: Dict[str, Any], task: Task) -> Environment:
-        """Create environment from task data.
-
-        Loads tools based on task.environment_data and converts them to the
-        framework specified in agent_data.
-
-        Args:
-            agent_data: Agent configuration including framework specification
-            task: Task containing environment_data, query, and evaluation_data
-
-        Returns:
-            FiveADayEnvironment with framework-specific tools
-        """
+        """Create environment from task data."""
         # Pass full task data to environment
         task_data = {
             "environment_data": task.environment_data,
@@ -334,532 +797,30 @@ class FiveADayBenchmark(Benchmark):
         self, agent_data: Dict[str, Any], environment: Environment, task: Task, user=None
     ) -> tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
         """Create framework-specific agent with tools from environment."""
-        if agent_data["agent_type"] == "single":
-            setup_fn = self._setup_single_agent
-        elif agent_data["agent_type"] == "multi":
-            setup_fn = self._setup_multi_agent
-        else:
-            raise ValueError(f"Unsupported agent_type: {agent_data['agent_type']}")
-
-        agents = setup_fn(
-            agent_data,
-            environment,
-            agent_data["framework"],
-            agent_data["model_config"]["model_id"],
-            agent_data["model_config"]["temperature"],
-        )
-
-        # use .visualize() when smolagents
-        if agent_data["framework"] == "smolagents":
-            for agent in agents[0]:
-                agent.agent.visualize()
-        return agents
-
-    def _setup_single_agent(
-        self,
-        agent_data: Dict[str, Any],
-        environment: Environment,
-        framework: str,
-        model_id: str,
-        temperature: float,
-    ) -> tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
-        """Setup a single agent with all tools."""
-        tool_adapters = environment.get_tools()
-        agent_spec = agent_data["agent"]
-
-        # Extract seed from agent_spec if available
-        seed = agent_spec.get("seed", None)
-
-        # Sanitize agent name to be a valid Python identifier for smolagents
-        sanitized_name = self._sanitize_name(agent_spec["agent_name"])
-
-        if framework == "smolagents":
-            from smolagents import ToolCallingAgent
-
-            # Create smolagents model
-            model = get_model(model_id, framework, temperature, seed)
-
-            # Extract raw smolagents Tool objects from adapters
-            tools = [adapter.tool for adapter in tool_adapters]
-
-            # Create agent
-            agent = ToolCallingAgent(
-                model=model,
-                tools=tools,
-                name=sanitized_name,
-                instructions=agent_spec["agent_instruction"],
-                verbosity_level=2,
-            )
-
-            # Wrap in adapter
-            from maseval.interface.agents.smolagents import SmolAgentAdapter
-
-            wrapper = SmolAgentAdapter(agent, agent_spec["agent_id"])
-
-        elif framework == "langgraph":
-            from langchain_core.messages import SystemMessage
-            from langgraph.graph import StateGraph, END
-            from langgraph.graph.message import add_messages
-            from langgraph.prebuilt import ToolNode, tools_condition
-            from typing_extensions import TypedDict, Annotated
-
-            # Create LangChain model
-            model = get_model(model_id, framework, temperature, seed)
-
-            # Extract raw LangChain StructuredTool objects from adapters
-            tools = [adapter.tool for adapter in tool_adapters]
-
-            # Create agent graph
-            class AgentState(TypedDict):
-                messages: Annotated[List[Any], add_messages]
-
-            llm_with_tools = model.bind_tools(tools)
-
-            def call_model(state: AgentState):
-                messages = state["messages"]
-                # Add system message with agent instruction if not present
-                has_system = any(isinstance(m, SystemMessage) for m in messages)
-                if not has_system and agent_spec["agent_instruction"]:
-                    system_message = SystemMessage(content=agent_spec["agent_instruction"])
-                    messages = [system_message] + messages
-
-                response = llm_with_tools.invoke(messages)
-                return {"messages": [response]}
-
-            workflow = StateGraph(AgentState)
-            workflow.add_node("agent", call_model)
-            workflow.add_node("tools", ToolNode(tools))
-            workflow.set_entry_point("agent")
-            workflow.add_conditional_edges("agent", tools_condition, {"tools": "tools", END: END})
-            workflow.add_edge("tools", "agent")
-
-            graph = workflow.compile()
-
-            # Wrap in adapter
-            from maseval.interface.agents.langgraph import LangGraphAgentAdapter
-
-            wrapper = LangGraphAgentAdapter(graph, agent_spec["agent_id"])
-
-        elif framework == "llamaindex":
-            from llama_index.core.agent.workflow.react_agent import ReActAgent
-
-            # Create LlamaIndex LiteLLM model (supports Gemini via 'gemini/' prefix)
-            model = get_model(model_id, framework, temperature, seed)
-
-            # Extract raw LlamaIndex FunctionTool objects from adapters
-            tools = [adapter.tool for adapter in tool_adapters]
-
-            # Create ReActAgent with tools
-            agent = ReActAgent(
-                tools=tools,
-                llm=model,
-                verbose=True,
-                max_iterations=10,
-            )
-
-            # Set system prompt if provided (ReActAgent may not support update_prompts)
-            # Note: ReActAgent is workflow-based and may have different prompt customization
-            if hasattr(agent, "update_prompts") and agent_spec["agent_instruction"]:
-                try:
-                    agent.update_prompts({"agent_worker:system_prompt": agent_spec["agent_instruction"]})
-                except Exception:
-                    pass  # Silently skip if not supported
-
-            # Wrap in adapter
-            from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
-
-            wrapper = LlamaIndexAgentAdapter(agent, agent_spec["agent_id"])
-
-        else:
-            raise ValueError(f"Unsupported framework: {framework}")
-
-        return [wrapper], {agent_spec["agent_id"]: wrapper}
-
-    def _setup_multi_agent(
-        self,
-        agent_data: Dict[str, Any],
-        environment: Environment,
-        framework: str,
-        model_id: str,
-        temperature: float,
-    ) -> tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
-        """Setup multiple agents with orchestrator pattern."""
+        framework = agent_data["framework"]
+        agent_type = agent_data["agent_type"]
+        model_id = agent_data["model_config"]["model_id"]
+        temperature = agent_data["model_config"]["temperature"]
         primary_agent_id = agent_data["primary_agent_id"]
         agents_specs = agent_data["agents"]
+        all_tool_adapters = environment.get_tools()
 
-        if not primary_agent_id:
-            raise ValueError("Multi-agent setup requires primary_agent_id")
-
+        # Extract primary and specialist specs
         primary_spec = next((a for a in agents_specs if a["agent_id"] == primary_agent_id), None)
         if not primary_spec:
             raise ValueError(f"Primary agent {primary_agent_id} not found in agents list")
 
         specialist_specs = [a for a in agents_specs if a["agent_id"] != primary_agent_id]
 
+        # Build agent using unified interface
+        builder = get_agent_builder(framework, agent_type)
+        agent_adapter = builder(model_id, temperature, all_tool_adapters, primary_spec, specialist_specs, self._filter_tool_adapters)
+
+        # Use .visualize() when smolagents # TODO remove
         if framework == "smolagents":
-            from smolagents import ToolCallingAgent, FinalAnswerTool
+            agent_adapter.agent.visualize()
 
-            # Create specialist agents
-            specialist_agents = []
-            all_tool_adapters = environment.get_tools()
-
-            for agent_spec in specialist_specs:
-                # Get seed for this specialist agent
-                specialist_seed = agent_spec.get("seed", None)
-                # Create model for this specialist
-                specialist_model = get_model(model_id, framework, temperature, specialist_seed)
-
-                # Filter adapters, then extract tools for this specialist
-                specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
-                specialist_tools = [adapter.tool for adapter in specialist_adapters]
-                specialist_tools.append(FinalAnswerTool())
-
-                # Sanitize agent name to be a valid Python identifier
-                sanitized_name = self._sanitize_name(agent_spec["agent_name"])
-
-                # Create specialist agent
-                specialist = ToolCallingAgent(
-                    model=specialist_model,
-                    tools=specialist_tools,
-                    name=sanitized_name,
-                    description=agent_spec["agent_instruction"],
-                    instructions=agent_spec["agent_instruction"],
-                    verbosity_level=2,
-                )
-                specialist_agents.append(specialist)
-
-            # Get primary agent tools (usually empty for orchestrators)
-            primary_adapters = self._filter_tool_adapters(all_tool_adapters, primary_spec["tools"])
-            primary_tools = [adapter.tool for adapter in primary_adapters]
-            primary_tools.append(FinalAnswerTool())
-
-            # Sanitize agent name to be a valid Python identifier
-            sanitized_primary_name = self._sanitize_name(primary_spec["agent_name"])
-
-            # Get seed for primary agent and create its model
-            primary_seed = primary_spec.get("seed", None)
-            primary_model = get_model(model_id, framework, temperature, primary_seed)
-
-            # Create primary orchestrator agent with managed_agents
-            agent = ToolCallingAgent(
-                model=primary_model,
-                tools=primary_tools,
-                managed_agents=specialist_agents if specialist_agents else None,
-                name=sanitized_primary_name,
-                instructions=primary_spec["agent_instruction"],
-                verbosity_level=2,
-            )
-
-            # Wrap in adapter
-            from maseval.interface.agents.smolagents import SmolAgentAdapter
-
-            wrapper = SmolAgentAdapter(agent, primary_agent_id)
-
-        elif framework == "langgraph":
-            from langchain_core.messages import SystemMessage
-            from langchain_core.tools import tool as create_tool
-            from langgraph.graph import StateGraph, END
-            from langgraph.graph.message import add_messages
-            from langgraph.prebuilt import ToolNode
-            from typing_extensions import TypedDict, Annotated
-
-            # Define state for multi-agent graph
-            class MultiAgentState(TypedDict):
-                messages: Annotated[List[Any], add_messages]
-
-            all_tool_adapters = environment.get_tools()
-
-            # Create specialist agent subgraphs that can execute tools
-            specialist_subgraphs = {}
-            for agent_spec in specialist_specs:
-                agent_id = agent_spec["agent_id"]
-                agent_instruction = agent_spec["agent_instruction"]
-
-                # Get seed for this specialist and create its model
-                specialist_seed = agent_spec.get("seed", None)
-                specialist_model = get_model(model_id, framework, temperature, specialist_seed)
-
-                # Filter adapters, then extract tools for this specialist
-                specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
-                specialist_tools = [adapter.tool for adapter in specialist_adapters]
-
-                # Create specialist subgraph with tool calling
-                def make_specialist_node(spec_instruction, spec_tools, spec_model):
-                    def specialist_node(state: MultiAgentState):
-                        from langchain_core.messages import HumanMessage, AIMessage
-
-                        messages = state["messages"]
-
-                        # Extract the delegated query from the orchestrator's tool call
-                        # The last message should be an AIMessage with tool_calls
-                        delegated_query = None
-                        if messages and isinstance(messages[-1], AIMessage):
-                            last_msg = messages[-1]
-                            if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
-                                # Get the query from tool call arguments
-                                tool_call = last_msg.tool_calls[0]
-                                if "args" in tool_call and "query" in tool_call["args"]:
-                                    delegated_query = tool_call["args"]["query"]
-
-                        # If we couldn't extract from tool call, fall back to getting from history
-                        if not delegated_query:
-                            # Find the most recent user message
-                            for msg in reversed(messages):
-                                if hasattr(msg, "type") and msg.type == "human":
-                                    delegated_query = msg.content
-                                    break
-
-                        # Ensure we have a valid query string
-                        if not delegated_query:
-                            delegated_query = "Please help with the task."
-
-                        # Create fresh conversation for specialist with proper message sequence
-                        specialist_messages = []
-                        if spec_instruction:
-                            specialist_messages.append(SystemMessage(content=spec_instruction))
-                        specialist_messages.append(HumanMessage(content=delegated_query))
-
-                        # Run specialist with tools if available
-                        if spec_tools:
-                            specialist_model_with_tools = spec_model.bind_tools(spec_tools)
-                            current_messages = specialist_messages
-
-                            # Allow multiple tool calling rounds
-                            for _ in range(5):  # Max 5 iterations
-                                response = specialist_model_with_tools.invoke(current_messages)
-                                current_messages = current_messages + [response]
-
-                                # Check if tools were called
-                                if hasattr(response, "tool_calls") and response.tool_calls:
-                                    # Execute tools
-                                    tool_node = ToolNode(spec_tools)
-                                    tool_results = tool_node.invoke({"messages": [response]})
-                                    current_messages = current_messages + tool_results["messages"]
-                                else:
-                                    # No more tool calls, return final response
-                                    return {"messages": [response]}
-
-                            # Max iterations reached, return last response
-                            return {"messages": [current_messages[-1]]}
-                        else:
-                            # No tools, just invoke model
-                            response = spec_model.invoke(specialist_messages)
-                            return {"messages": [response]}
-
-                    return specialist_node
-
-                specialist_subgraphs[agent_id] = make_specialist_node(agent_instruction, specialist_tools, specialist_model)
-
-            # Create handoff tools for orchestrator to delegate to specialists
-            handoff_tools = []
-            for agent_spec in specialist_specs:
-                agent_id = agent_spec["agent_id"]
-                agent_name = agent_spec["agent_name"]
-                agent_description = agent_spec["agent_instruction"]
-
-                # Create a handoff tool for each specialist
-                def make_handoff_tool(spec_id, spec_name, spec_description):
-                    @create_tool
-                    def handoff_tool(query: str) -> str:
-                        """Delegate query to specialist.
-
-                        Args:
-                            query: The specific query or task to delegate to this specialist
-
-                        Returns:
-                            The specialist's response
-                        """
-                        # This is a placeholder - actual execution happens in the graph routing
-                        return f"Delegating to {spec_name}: {query}"
-
-                    handoff_tool.name = f"ask_{spec_id}"
-                    handoff_tool.description = f"Delegate to {spec_name}: {spec_description}"
-                    # Store metadata for routing (dynamic attribute)
-                    handoff_tool._target_agent = spec_id  # type: ignore[attr-defined]
-                    return handoff_tool
-
-                handoff_tools.append(make_handoff_tool(agent_id, agent_name, agent_description))
-
-            # Create orchestrator model with primary seed and bind handoff tools
-            primary_instruction = primary_spec["agent_instruction"]
-            primary_seed = primary_spec.get("seed", None)
-            primary_model = get_model(model_id, framework, temperature, primary_seed)
-            orchestrator_model = primary_model.bind_tools(handoff_tools)
-
-            def orchestrator_node(state: MultiAgentState):
-                messages = state["messages"]
-
-                # Add system message with orchestrator instruction
-                if primary_instruction and not any(isinstance(m, SystemMessage) for m in messages):
-                    messages = [SystemMessage(content=primary_instruction)] + messages
-
-                response = orchestrator_model.invoke(messages)
-                return {"messages": [response]}
-
-            # Router function based on tool calls
-            def route_after_orchestrator(state: MultiAgentState):
-                """Route to specialist if handoff tool was called, otherwise end."""
-                messages = state["messages"]
-                last_message = messages[-1]
-
-                # Check if orchestrator called a handoff tool
-                if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-                    # Get the first tool call
-                    tool_call = last_message.tool_calls[0]
-                    tool_name = tool_call["name"]
-
-                    # Extract specialist ID from tool name (ask_{specialist_id})
-                    if tool_name.startswith("ask_"):
-                        specialist_id = tool_name[4:]  # Remove "ask_" prefix
-                        return specialist_id
-
-                return END
-
-            # Build the multi-agent graph
-            workflow = StateGraph(MultiAgentState)
-
-            # Add orchestrator node
-            workflow.add_node("orchestrator", orchestrator_node)
-
-            # Add specialist nodes
-            for agent_id, node_fn in specialist_subgraphs.items():
-                workflow.add_node(agent_id, node_fn)
-
-            # Set orchestrator as entry point
-            workflow.set_entry_point("orchestrator")
-
-            # Add conditional routing from orchestrator
-            specialist_routes = {agent_id: agent_id for agent_id in specialist_subgraphs.keys()}
-            specialist_routes[END] = END
-            workflow.add_conditional_edges("orchestrator", route_after_orchestrator, specialist_routes)
-
-            # Add edges from specialists back to orchestrator
-            for agent_id in specialist_subgraphs.keys():
-                workflow.add_edge(agent_id, "orchestrator")
-
-            graph = workflow.compile()
-
-            # Wrap in adapter
-            from maseval.interface.agents.langgraph import LangGraphAgentAdapter
-
-            wrapper = LangGraphAgentAdapter(graph, primary_agent_id)
-
-        elif framework == "llamaindex":
-            from llama_index.core.agent.workflow.react_agent import ReActAgent
-            from llama_index.core.tools import FunctionTool
-
-            all_tool_adapters = environment.get_tools()
-
-            # Create specialist agents
-            specialist_agents_dict = {}
-            for agent_spec in specialist_specs:
-                agent_id = agent_spec["agent_id"]
-                agent_name = agent_spec["agent_name"]
-                agent_instruction = agent_spec["agent_instruction"]
-
-                # Get seed for this specialist and create its model
-                specialist_seed = agent_spec.get("seed", None)
-                specialist_model = get_model(model_id, framework, temperature, specialist_seed)
-
-                # Filter adapters, then extract tools for this specialist
-                specialist_adapters = self._filter_tool_adapters(all_tool_adapters, agent_spec["tools"])
-                specialist_tools = [adapter.tool for adapter in specialist_adapters]
-
-                # Create specialist agent
-                specialist_agent = ReActAgent(
-                    tools=specialist_tools,
-                    llm=specialist_model,
-                    verbose=True,
-                    max_iterations=10,
-                )
-
-                # Set system prompt if provided (ReActAgent may not support update_prompts)
-                if hasattr(specialist_agent, "update_prompts") and agent_instruction:
-                    try:
-                        specialist_agent.update_prompts({"agent_worker:system_prompt": agent_instruction})
-                    except Exception:
-                        pass  # Silently skip if not supported
-
-                specialist_agents_dict[agent_id] = {
-                    "agent": specialist_agent,
-                    "name": agent_name,
-                    "description": agent_instruction,
-                }
-
-            # Create handoff tools that delegate to specialist agents
-            def make_handoff_tool(specialist_id: str, specialist_info: dict):
-                import asyncio
-
-                def handoff_to_specialist(task: str) -> str:
-                    """Delegate task to specialist agent.
-
-                    Args:
-                        task: The task description for the specialist
-
-                    Returns:
-                        The specialist's response
-                    """
-                    specialist_agent = specialist_info["agent"]
-
-                    # ReActAgent uses async .run() method
-                    async def run_specialist():
-                        handler = specialist_agent.run(user_msg=task)
-                        result = await handler
-                        return result
-
-                    result = asyncio.run(run_specialist())
-                    # Extract response content from result
-                    if hasattr(result, "response"):
-                        return str(result.response)
-                    return str(result)
-
-                return FunctionTool.from_defaults(
-                    fn=handoff_to_specialist,
-                    name=f"ask_{specialist_id}",
-                    description=f"Delegate to {specialist_info['name']}: {specialist_info['description']}",
-                )
-
-            # Create handoff tools for orchestrator
-            orchestrator_tools = [make_handoff_tool(spec_id, spec_info) for spec_id, spec_info in specialist_agents_dict.items()]
-
-            # Get primary agent tools (if any)
-            primary_adapters = self._filter_tool_adapters(all_tool_adapters, primary_spec["tools"])
-            primary_tools = [adapter.tool for adapter in primary_adapters]
-            orchestrator_tools.extend(primary_tools)
-
-            # Get seed for primary agent and create its model
-            primary_seed = primary_spec.get("seed", None)
-            primary_model = get_model(model_id, framework, temperature, primary_seed)
-
-            # Create orchestrator agent with handoff tools
-            orchestrator = ReActAgent(
-                tools=orchestrator_tools,
-                llm=primary_model,
-                verbose=True,
-                max_iterations=15,
-            )
-
-            # Set orchestrator system prompt (ReActAgent may not support update_prompts)
-            primary_instruction = primary_spec["agent_instruction"]
-            if hasattr(orchestrator, "update_prompts") and primary_instruction:
-                try:
-                    orchestrator.update_prompts({"agent_worker:system_prompt": primary_instruction})
-                except Exception:
-                    pass  # Silently skip if not supported
-
-            # Wrap orchestrator in adapter
-            from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
-
-            wrapper = LlamaIndexAgentAdapter(orchestrator, primary_agent_id)
-
-        else:
-            raise ValueError(f"Unsupported framework: {framework}")
-
-        return [wrapper], {primary_agent_id: wrapper}
-
-    def setup_user(self, agent_data: Dict[str, Any], environment: Environment, task: Task):
-        """No user simulation for this benchmark."""
-        return None
+        return [agent_adapter], {primary_agent_id: agent_adapter}
 
     def setup_evaluators(self, environment, task, agents, user) -> Sequence[Evaluator]:
         """Create evaluators based on task's evaluation_data.evaluators list."""
@@ -879,10 +840,10 @@ class FiveADayBenchmark(Benchmark):
 
         return evaluator_instances
 
-    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment) -> Any:
+    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment) -> Sequence[Any]:
         """Execute agents and return their final answers."""
         answers = [agent.run(task.query) for agent in agents]
-        return answers[0] if len(answers) == 1 else answers
+        return answers
 
     def evaluate(
         self,
@@ -894,14 +855,9 @@ class FiveADayBenchmark(Benchmark):
         """Evaluate agent performance."""
         results = []
 
-        # Get the main agent's trace from the agents dict in traces
-        agent_traces = traces.get("agents", {})
-        if not agent_traces:
-            # No agent traces found
-            return [{"evaluator": "system", "error": "No agent traces found", "success": False}]
-
-        # Get the first agent's trace (for single agent) or orchestrator trace (for multi-agent)
-        main_trace_dict = agent_traces.get("orchestrator") or next(iter(agent_traces.values()))
+        # Get main agent trace (both single and multi-agent use "main_agent")
+        agent_traces = traces["agents"]
+        main_trace_dict = agent_traces["main_agent"]
 
         # Extract messages and wrap in MessageHistory
         messages = main_trace_dict["messages"]
@@ -924,28 +880,62 @@ class FiveADayBenchmark(Benchmark):
 # ============================================================================
 
 
-def load_tasks(data_file: str = "data/tasks.json", limit: Optional[int] = None, specific_task_only: Optional[int] = None) -> TaskCollection:
-    """Load tasks from JSON file.
+def load_benchmark_data(
+    config_type: str,
+    framework: str,
+    model_id: str,
+    temperature: float,
+    limit: Optional[int] = None,
+    specific_task: Optional[int] = None,
+    seed: Optional[int] = None,
+) -> tuple[TaskCollection, List[Dict[str, Any]]]:
+    """Load tasks and agent configurations with validation.
 
     Args:
-        data_file: Path to tasks.json file
-        limit: Optional limit on number of tasks to load
+        config_type: Agent configuration type ('single' or 'multi')
+        framework: Target framework ('smolagents', 'langgraph', 'llamaindex')
+        limit: Optional limit on number of tasks/configs to load
+        specific_task: Optional index to load only a specific task
+        model_id: Model identifier
+        temperature: Model temperature
+        seed: Base random seed for reproducibility (None for non-deterministic)
 
     Returns:
-        TaskCollection containing loaded tasks
+        Tuple of (TaskCollection, agent_configs_list)
     """
-    data_path = Path(__file__).parent / data_file
+    if limit is not None and specific_task is not None:
+        raise ValueError("Cannot specify both limit and specific_task")
 
-    with open(data_path, "r") as f:
-        tasks_list = json.load(f)
+    data_dir = Path(__file__).parent / "data"
 
-    if limit is not None and specific_task_only is not None:
-        raise ValueError("Cannot specify both limit and specific_task_only")
+    # Load raw data from JSON files
+    with open(data_dir / "tasks.json", "r") as f:
+        tasks_raw = json.load(f)
+    with open(data_dir / f"{config_type}agent.json", "r") as f:
+        configs_raw = json.load(f)
 
+    # Validate alignment
+    if len(tasks_raw) != len(configs_raw):
+        raise ValueError(f"Mismatch: {len(tasks_raw)} tasks vs {len(configs_raw)} configs")
+
+    # Determine indices to load
+    if specific_task is not None:
+        indices = [specific_task]
+    elif limit is not None:
+        indices = list(range(limit))
+    else:
+        indices = list(range(len(tasks_raw)))
+
+    # Build tasks and configs in parallel
     tasks_data = []
-    for task_idx, task_dict in enumerate(tasks_list[:limit] if limit else tasks_list):
-        if (specific_task_only is not None) and not (task_idx == specific_task_only):
-            continue
+    configs_data = []
+
+    for idx in indices:
+        task_dict = tasks_raw[idx]
+        config = configs_raw[idx]
+        task_id = task_dict["metadata"]["task_id"]
+
+        # Create task
         tasks_data.append(
             Task(
                 query=task_dict["query"],
@@ -955,88 +945,20 @@ def load_tasks(data_file: str = "data/tasks.json", limit: Optional[int] = None, 
             )
         )
 
-    print(f"Loaded {len(tasks_data)} tasks\n")
-
-    return TaskCollection(tasks_data)
-
-
-def load_agent_configs(
-    tasks: TaskCollection,
-    config_file: str,
-    framework: str,
-    limit: Optional[int] = None,
-    specific_task_only: Optional[int | str] = None,
-    model_id: Optional[str] = None,
-    temperature: Optional[float] = None,
-    seed: Optional[int] = None,
-) -> List[Dict[str, Any]]:
-    """Load agent configurations from JSON file.
-
-    Args:
-        config_file: Path to agent configuration JSON file (singleagent.json or multiagent.json)
-        framework: Target framework ('smolagents', 'langgraph', 'llamaindex')
-        limit: Optional limit on number of configs to load (must match number of tasks)
-        specific_task_only: Optional index to load only a specific config (must match specific task)
-        model_id: Model identifier to inject into config
-        temperature: Model temperature to inject into config
-        seed: Base random seed for reproducibility (None for non-deterministic)
-        task_ids: List of task IDs corresponding to configs (for reproducible seeding)
-
-    Returns:
-        List of agent configuration dictionaries with framework and model_config added
-    """
-    config_path = Path(__file__).parent / config_file
-
-    with open(config_path, "r") as f:
-        configs = json.load(f)
-
-    if limit is not None and specific_task_only is not None:
-        raise ValueError("Cannot specify both limit and specific_task_only")
-
-    # assert length of agent config matches number of tasks if limit not specified
-    if limit is None and specific_task_only is None:
-        if len(configs) != len(tasks):
-            raise ValueError(f"Number of agent configs ({len(configs)}) does not match number of tasks ({len(tasks)})")
-    # if only specific task is specified, assert that only one config is loaded
-    if specific_task_only is not None and len(configs) > 1:
-        raise ValueError("When specific_task_only is specified, config file should contain only one config")
-
-    # Extract task_ids from tasks for reproducible seeding
-    task_ids = [task.metadata["task_id"] for i, task in enumerate(tasks.to_list())]
-
-    # Filter by specific task if specified
-    configs_data = []
-    for config_idx, config in enumerate(configs[:limit] if limit else configs):
-        if (specific_task_only is not None) and not (config_idx == specific_task_only):
-            continue
-        # Add framework to config
+        # Enrich config with framework and model info
         config["framework"] = framework
+        config["model_config"] = {"model_id": model_id, "temperature": temperature}
 
-        # Derive seeds for agents if base seed is provided
+        # Derive seeds for all agents in this config
         if seed is not None:
-            task_id = task_ids[config_idx]
+            for agent_spec in config["agents"]:
+                agent_spec["seed"] = derive_seed(seed, task_id, agent_spec["agent_id"])
 
-            # For single-agent configs
-            if "agent" in config:
-                agent_id = config["agent"]["agent_id"]
-                agent_seed = derive_seed(seed, task_id, agent_id)
-                config["agent"]["seed"] = agent_seed
-
-            # For multi-agent configs
-            elif "agents" in config:
-                for agent_spec in config["agents"]:
-                    agent_id = agent_spec["agent_id"]
-                    agent_seed = derive_seed(seed, task_id, agent_id)
-                    agent_spec["seed"] = agent_seed
-
-        # Create model_config from argparse arguments
-        config["model_config"] = {
-            "model_id": model_id,
-            "temperature": temperature,
-        }
         configs_data.append(config)
 
-    return configs_data
+    print(f"Loaded {len(tasks_data)} tasks and {len(configs_data)} agent configs\n")
+
+    return TaskCollection(tasks_data), configs_data
 
 
 # ============================================================================
@@ -1045,7 +967,7 @@ def load_agent_configs(
 
 
 if __name__ == "__main__":
-    from langfuse import get_client
+    from langfuse import get_client  # TODO remove
     from openinference.instrumentation.smolagents import SmolagentsInstrumentor
 
     SmolagentsInstrumentor().instrument()
@@ -1070,23 +992,19 @@ if __name__ == "__main__":
     print(f"Task limit: {args.limit or 'all'}")
     print(f"Specific task: {args.task if args.task is not None else 'all'}\n")
 
-    # Load tasks and agent configs
-    tasks = load_tasks(limit=args.limit, specific_task_only=args.task)
-
-    agent_configs = load_agent_configs(
-        tasks=tasks,
-        config_file=f"data/{args.config_type}agent.json",
+    # Load benchmark data
+    tasks, agent_configs = load_benchmark_data(
+        config_type=args.config_type,
         framework=args.framework,
-        limit=args.limit,
-        specific_task_only=args.task,
         model_id=args.model_id,
         temperature=args.temperature,
+        limit=args.limit,
+        specific_task=args.task,
         seed=args.seed,
     )
 
-    output_dir = Path(__file__).parent / "results"
     logger = FileResultLogger(
-        output_dir=str(output_dir),
+        output_dir=str(Path(__file__).parent / "results"),
         filename_pattern=f"{args.framework}_{args.config_type}agent_{{timestamp}}.jsonl",
         validate_on_completion=False,
     )
@@ -1101,4 +1019,4 @@ if __name__ == "__main__":
 
     print("\n--- Benchmark Complete ---")
     print(f"Total tasks: {len(tasks)}")
-    print(f"Results saved to: {output_dir}")
+    print(f"Results saved to: {logger.output_dir}")

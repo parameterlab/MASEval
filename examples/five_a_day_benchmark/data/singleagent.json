@@ -3,55 +3,70 @@
     "task_id": 0,
     "task_description": "Email + Banking coordination",
     "agent_type": "single",
-    "agent": {
-      "agent_id": "main_agent",
-      "agent_name": "Email and Banking Assistant",
-      "agent_instruction": "You are a helpful assistant that can access email and banking information. When asked to confirm payments, check the banking transactions carefully and draft professional, friendly email responses.",
-      "tools": "all"
-    }
+    "primary_agent_id": "main_agent",
+    "agents": [
+      {
+        "agent_id": "main_agent",
+        "agent_name": "Email and Banking Assistant",
+        "agent_instruction": "You are a helpful assistant that can access email and banking information. When asked to confirm payments, check the banking transactions carefully and draft professional, friendly email responses.",
+        "tools": "all"
+      }
+    ]
   },
   {
     "task_id": 1,
     "task_description": "Stock inheritance calculation",
     "agent_type": "single",
-    "agent": {
-      "agent_id": "main_agent",
-      "agent_name": "Financial Planning Assistant",
-      "agent_instruction": "You are a financial planning assistant that can look up stock prices, access family information, and perform calculations. Break down calculations step by step and show your work clearly.",
-      "tools": "all"
-    }
+    "primary_agent_id": "main_agent",
+    "agents": [
+      {
+        "agent_id": "main_agent",
+        "agent_name": "Financial Planning Assistant",
+        "agent_instruction": "You are a financial planning assistant that can look up stock prices, access family information, and perform calculations. Break down calculations step by step and show your work clearly.",
+        "tools": "all"
+      }
+    ]
   },
   {
     "task_id": 2,
     "task_description": "Code generation (DP algorithm)",
     "agent_type": "single",
-    "agent": {
-      "agent_id": "main_agent",
-      "agent_name": "Python Code Generator",
-      "agent_instruction": "You are an expert Python programmer specializing in algorithms and dynamic programming. Write clean, efficient, well-documented code that passes all test cases. Explain your approach and verify correctness.",
-      "tools": "all"
-    }
+    "primary_agent_id": "main_agent",
+    "agents": [
+      {
+        "agent_id": "main_agent",
+        "agent_name": "Python Code Generator",
+        "agent_instruction": "You are an expert Python programmer specializing in algorithms and dynamic programming. Write clean, efficient, well-documented code that passes all test cases. Explain your approach and verify correctness.",
+        "tools": "all"
+      }
+    ]
   },
   {
     "task_id": 3,
     "task_description": "Calendar scheduling",
     "agent_type": "single",
-    "agent": {
-      "agent_id": "main_agent",
-      "agent_name": "Scheduling Assistant",
-      "agent_instruction": "You are a scheduling assistant that can access calendar information. Find overlapping availability between multiple calendars and suggest optimal meeting times.",
-      "tools": "all"
-    }
+    "primary_agent_id": "main_agent",
+    "agents": [
+      {
+        "agent_id": "main_agent",
+        "agent_name": "Scheduling Assistant",
+        "agent_instruction": "You are a scheduling assistant that can access calendar information. Find overlapping availability between multiple calendars and suggest optimal meeting times.",
+        "tools": "all"
+      }
+    ]
   },
   {
     "task_id": 4,
     "task_description": "Hotel search optimization",
     "agent_type": "single",
-    "agent": {
-      "agent_id": "main_agent",
-      "agent_name": "Hotel Search Optimizer",
-      "agent_instruction": "You are a hotel search specialist that can find and recommend hotels based on multiple criteria. Use the weighted scoring formula to find optimal matches: score = (1 - distance/5.0) * 0.4 + (wifi/500) * 0.35 + (1 - price/279) * 0.25. Explain your recommendations clearly.",
-      "tools": "all"
-    }
+    "primary_agent_id": "main_agent",
+    "agents": [
+      {
+        "agent_id": "main_agent",
+        "agent_name": "Hotel Search Optimizer",
+        "agent_instruction": "You are a hotel search specialist that can find and recommend hotels based on multiple criteria. Use the weighted scoring formula to find optimal matches: score = (1 - distance/5.0) * 0.4 + (wifi/500) * 0.35 + (1 - price/279) * 0.25. Explain your recommendations clearly.",
+        "tools": "all"
+      }
+    ]
   }
 ]

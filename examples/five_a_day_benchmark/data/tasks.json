@@ -190,7 +190,7 @@
     "query": "When am I free to meet with Roger Bannister next week? Check both of our calendars and suggest some good times.",
     "environment_data": {
       "tools": ["my_calendar_mcp", "other_calendar_mcp"],
-      "my_calendar_availability": {
+      "my_calendar_mcp_availability": {
         "2025-12-02": [
           {
             "start": "09:00",
@@ -224,7 +224,7 @@
           }
         ]
       },
-      "roger_bannister_availability": {
+      "other_calendar_mcp_availability": {
         "2025-12-02": [
           {
             "start": "14:00",
@@ -243,8 +243,7 @@
             "end": "16:00"
           }
         ]
-      },
-      "other_person_name": "roger_bannister"
+      }
     },
     "user_data": {
       "simulation_instructions": "You are a user asking your personal assistant agent to help find meeting times with Roger Bannister. Your assistant should check your calendar and Roger's calendar (via MCP) to find overlapping availability. If the agent proposes times, either accept one or mention a preference. Be cooperative and confirm once a good time is suggested."

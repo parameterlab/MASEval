@@ -42,3 +42,27 @@ def derive_seed(base_seed: int, *components: str | int) -> int:
     # Convert first 4 bytes to int, use 31 bits to ensure positive int
     # (some RNG implementations expect positive seeds)
     return int.from_bytes(hash_bytes[:4], "big") & 0x7FFFFFFF
+
+
+def sanitize_name(name: str) -> str:
+    """Sanitize name to be a valid Python identifier.
+
+    Required for smolagents framework which uses names as Python identifiers.
+
+    Args:
+        name: Name to sanitize (may contain spaces, hyphens, etc.)
+
+    Returns:
+        Valid Python identifier (underscores instead of spaces/hyphens,
+        starts with letter or underscore)
+
+    Example:
+        >>> sanitize_name("Email Assistant")
+        "Email_Assistant"
+        >>> sanitize_name("123-agent")
+        "_123_agent"
+    """
+    sanitized = name.replace(" ", "_").replace("-", "_")
+    if not sanitized[0].isalpha() and sanitized[0] != "_":
+        sanitized = "_" + sanitized
+    return sanitized
