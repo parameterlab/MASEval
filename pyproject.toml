@@ -163,7 +163,7 @@ packages = ["maseval"]
 
 [tool.ruff]
 line-length = 144
-exclude = ["examples"]
+exclude = []
 
 [tool.pytest.ini_options]
 minversion = "6.0"
