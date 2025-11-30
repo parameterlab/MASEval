@@ -24,13 +24,13 @@ import os
 from typing import Any, Dict, List, Optional, Sequence
 from pathlib import Path
 
-from utils import derive_seed, sanitize_name
+from utils import derive_seed, sanitize_name  # type: ignore[unresolved-import]
 
 from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter
 from maseval.core.callbacks.result_logger import FileResultLogger
 
 # Import tool implementations
-from tools import (
+from tools import (  # type: ignore[unresolved-import]
     EmailToolCollection,
     BankingToolCollection,
     CalculatorToolCollection,
@@ -43,10 +43,11 @@ from tools import (
     HotelSearchToolCollection,
     MCPCalendarToolCollection,
     filter_tool_adapters_by_prefix,
+    get_states,
 )
 
 # Import all evaluators dynamically
-import evaluators
+import evaluators  # type: ignore[unresolved-import]
 
 # ============================================================================
 # Parse command-line arguments
@@ -102,7 +103,7 @@ def get_model(model_id: str, framework: str, temperature: float = 0.7, seed: Opt
             model=f"gemini/{model_id}",
             api_key=os.getenv("GOOGLE_API_KEY"),
             temperature=temperature,
-            seed=seed,
+            seed=seed,  # type: ignore[arg-type]
         )
 
     elif framework == "llamaindex":
@@ -148,7 +149,6 @@ class FiveADayEnvironment(Environment):
         Creates state objects for tools that require them (e.g., EmailState, BankingState).
         State objects are stored alongside raw environment data for tool initialization.
         """
-        from tools import get_states
 
         env_data = task_data["environment_data"].copy()
         tool_names = env_data.get("tools", [])
@@ -895,20 +895,6 @@ def load_benchmark_data(
 
 
 if __name__ == "__main__":
-    from langfuse import get_client  # TODO remove
-    from openinference.instrumentation.smolagents import SmolagentsInstrumentor
-
-    SmolagentsInstrumentor().instrument()
-
-    langfuse = get_client()
-
-    # Verify connection
-    if langfuse.auth_check():
-        print("Langfuse client is authenticated and ready!")
-    else:
-        print("Authentication failed. Please check your credentials and host.")
-        exit(1)
-
     args = parser.parse_args()
 
     print("Running 5-A-Day Benchmark")
