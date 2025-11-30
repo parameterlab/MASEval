@@ -205,6 +205,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Agents
+.claude/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

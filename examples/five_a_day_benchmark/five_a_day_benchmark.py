@@ -961,9 +961,9 @@ def load_tasks(data_file: str = "data/tasks.json", limit: Optional[int] = None, 
 
 
 def load_agent_configs(
-    config_file: str = "data/singleagent.json",
-    framework: str = "smolagents",
     tasks: TaskCollection,
+    config_file: str,
+    framework: str,
     limit: Optional[int] = None,
     specific_task_only: Optional[int | str] = None,
     model_id: Optional[str] = None,
@@ -993,14 +993,13 @@ def load_agent_configs(
     if limit is not None and specific_task_only is not None:
         raise ValueError("Cannot specify both limit and specific_task_only")
 
-    # assert length of agent config matches number of tasks if limit not specified
+    # assert length of agent config matches number of tasks if limit not specified
     if limit is None and specific_task_only is None:
         if len(configs) != len(tasks):
             raise ValueError(f"Number of agent configs ({len(configs)}) does not match number of tasks ({len(tasks)})")
     # if only specific task is specified, assert that only one config is loaded
     if specific_task_only is not None and len(configs) > 1:
         raise ValueError("When specific_task_only is specified, config file should contain only one config")
-
 
     # Extract task_ids from tasks for reproducible seeding
     task_ids = [task.metadata["task_id"] for i, task in enumerate(tasks.to_list())]
@@ -1075,9 +1074,9 @@ if __name__ == "__main__":
     tasks = load_tasks(limit=args.limit, specific_task_only=args.task)
 
     agent_configs = load_agent_configs(
+        tasks=tasks,
         config_file=f"data/{args.config_type}agent.json",
         framework=args.framework,
-        tasks=tasks,
         limit=args.limit,
         specific_task_only=args.task,
         model_id=args.model_id,
