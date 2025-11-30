@@ -73,34 +73,17 @@
       "tools": ["websearch", "family_info", "calculator", "banking"],
       "family_info": {
         "children": [
-          {
-            "name": "Emma",
-            "age": 16
-          },
-          {
-            "name": "Liam",
-            "age": 14
-          },
-          {
-            "name": "Sophia",
-            "age": 12
-          }
+          { "name": "Emma", "age": 16 },
+          { "name": "Liam", "age": 14 },
+          { "name": "Sophia", "age": 12 }
         ]
       },
       "banking": {
-        "assets": {
-          "AAPL": 180,
-          "GOOGL": 48,
-          "BMWG": 1301
-        },
+        "assets": { "AAPL": 180, "GOOGL": 48, "BMWG": 1301 },
         "current_balance": 0,
         "bank_transactions": []
       },
-      "stock_price_lookup": {
-        "AAPL": 237.5,
-        "GOOGLE": 145.3,
-        "BMWG": 85.0
-      }
+      "stock_price_lookup": { "AAPL": 237.5, "GOOGLE": 145.3, "BMWG": 85.0 }
     },
     "user_data": {
       "simulation_instructions": "You are a parent planning estate distribution for your children. You own Apple stock and want to understand its current value and how it would be split equally. If the agent provides the calculation, acknowledge it and perhaps ask a follow-up about whether this seems fair or if you should consider other factors."
@@ -136,18 +119,9 @@
     "environment_data": {
       "tools": ["python_executor"],
       "test_cases": [
-        {
-          "input": [1, 2, 3, 1],
-          "expected_output": 4
-        },
-        {
-          "input": [2, 7, 9, 3, 1],
-          "expected_output": 12
-        },
-        {
-          "input": [5, 3, 4, 11, 2],
-          "expected_output": 16
-        }
+        { "input": [1, 2, 3, 1], "expected_output": 4 },
+        { "input": [2, 7, 9, 3, 1], "expected_output": 12 },
+        { "input": [5, 3, 4, 11, 2], "expected_output": 16 }
       ]
     },
     "user_data": {
@@ -156,18 +130,9 @@
     "evaluation_data": {
       "function_name": "house_robber",
       "test_cases": [
-        {
-          "input": [1, 2, 3, 1],
-          "expected_output": 4
-        },
-        {
-          "input": [2, 7, 9, 3, 1],
-          "expected_output": 12
-        },
-        {
-          "input": [5, 3, 4, 11, 2],
-          "expected_output": 16
-        }
+        { "input": [1, 2, 3, 1], "expected_output": 4 },
+        { "input": [2, 7, 9, 3, 1], "expected_output": 12 },
+        { "input": [5, 3, 4, 11, 2], "expected_output": 16 }
       ],
       "task_type": "code_generation_dp_algorithm",
       "evaluators": [
@@ -195,57 +160,20 @@
       "tools": ["my_calendar_mcp", "other_calendar_mcp"],
       "my_calendar_mcp_availability": {
         "2025-12-02": [
-          {
-            "start": "09:00",
-            "end": "11:00"
-          },
-          {
-            "start": "14:00",
-            "end": "16:00"
-          }
+          { "start": "09:00", "end": "11:00" },
+          { "start": "14:00", "end": "16:00" }
         ],
-        "2025-12-03": [
-          {
-            "start": "10:00",
-            "end": "12:00"
-          }
-        ],
-        "2025-12-04": [
-          {
-            "start": "13:00",
-            "end": "17:00"
-          }
-        ],
+        "2025-12-03": [{ "start": "10:00", "end": "12:00" }],
+        "2025-12-04": [{ "start": "13:00", "end": "17:00" }],
         "2025-12-05": [
-          {
-            "start": "09:00",
-            "end": "10:00"
-          },
-          {
-            "start": "15:00",
-            "end": "16:00"
-          }
+          { "start": "09:00", "end": "10:00" },
+          { "start": "15:00", "end": "16:00" }
         ]
       },
       "other_calendar_mcp_availability": {
-        "2025-12-02": [
-          {
-            "start": "14:00",
-            "end": "16:00"
-          }
-        ],
-        "2025-12-03": [
-          {
-            "start": "10:00",
-            "end": "12:00"
-          }
-        ],
-        "2025-12-04": [
-          {
-            "start": "14:00",
-            "end": "16:00"
-          }
-        ]
+        "2025-12-02": [{ "start": "14:00", "end": "16:00" }],
+        "2025-12-03": [{ "start": "10:00", "end": "12:00" }],
+        "2025-12-04": [{ "start": "14:00", "end": "16:00" }]
       }
     },
     "user_data": {
@@ -254,21 +182,9 @@
     "evaluation_data": {
       "other_person": "Roger Bannister",
       "overlapping_slots": [
-        {
-          "date": "2025-12-02",
-          "start": "14:00",
-          "end": "16:00"
-        },
-        {
-          "date": "2025-12-03",
-          "start": "10:00",
-          "end": "12:00"
-        },
-        {
-          "date": "2025-12-04",
-          "start": "14:00",
-          "end": "16:00"
-        }
+        { "date": "2025-12-02", "start": "14:00", "end": "16:00" },
+        { "date": "2025-12-03", "start": "10:00", "end": "12:00" },
+        { "date": "2025-12-04", "start": "14:00", "end": "16:00" }
       ],
       "task_type": "calendar_scheduling_mcp",
       "evaluators": [
@@ -493,14 +409,14 @@
         "wifi_weight": 0.35,
         "price_weight": 0.25
       },
-      "optimal_hotel_id": "H018"
+      "optimal_hotel_id": "H003"
     },
     "user_data": {
       "simulation_instructions": "You are a business traveler planning a trip to a conference. You care most about being close to the venue, having fast WiFi for work, and keeping costs reasonable. If the agent suggests a hotel, ask why they chose it and whether they considered the key factors. Accept the recommendation if it seems well-reasoned."
     },
     "evaluation_data": {
-      "ground_truth_hotel_id": "H018",
-      "optimal_score": 0.891,
+      "ground_truth_hotel_id": "H003",
+      "optimal_score": 0.7369,
       "scoring_formula": "score = (1 - distance/5.0) * 0.4 + (wifi/500) * 0.35 + (1 - price/279) * 0.25",
       "task_type": "hotel_optimization",
       "evaluators": ["OptimizationQualityEvaluator", "SearchStrategyEvaluator"]

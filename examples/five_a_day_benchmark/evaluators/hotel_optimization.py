@@ -91,13 +91,17 @@ class OptimizationQualityEvaluator(Evaluator):
         return scores
 
     def _extract_hotel_choice(self, response: str) -> Optional[str]:
-        """Extract hotel ID from response."""
+        """Extract hotel ID from response.
+
+        Uses first hotel mention as the primary recommendation,
+        since agents typically state their choice first before alternatives.
+        """
         # Look for hotel IDs (H001, H002, etc.)
         hotel_id_pattern = r"\bH0*(\d{1,2})\b"
         matches = re.findall(hotel_id_pattern, response.upper())
 
         if matches:
-            hotel_num = int(matches[-1])
+            hotel_num = int(matches[0])  # Use first match, not last
             return f"H{hotel_num:03d}"
 
         # Try to find hotel name
@@ -130,15 +134,18 @@ class SearchStrategyEvaluator(Evaluator):
         """Filter to relevant tool traces only."""
         tools = traces.get("tools", {})
         return {
-            "hotel_search": tools.get("hotel_search_search", {}),
+            "hotel_search_search": tools.get("hotel_search_search", {}),
+            "hotel_search_get_all": tools.get("hotel_search_get_all", {}),
             "calculator": tools.get("calculator_calculate", {}),
         }
 
     def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate search strategy."""
 
-        # Check if hotel_search was used
-        used_hotel_search = bool(traces.get("hotel_search", {}).get("invocations", []))
+        # Check if any hotel_search tool was used (search, get, or get_all)
+        used_hotel_search = bool(traces.get("hotel_search_search", {}).get("invocations", [])) or bool(
+            traces.get("hotel_search_get_all", {}).get("invocations", [])
+        )
 
         # Check if calculator was used (for scoring)
         used_calculator = bool(traces.get("calculator", {}).get("invocations", []))
