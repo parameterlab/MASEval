@@ -122,10 +122,16 @@ class MCPCalendarAddEventTool(BaseTool):
 
 
 class MCPCalendarToolCollection:
-    """MCP Calendar tool collection factory."""
+    """MCP Calendar tool collection factory.
 
-    def __init__(self, name: str, calendar_data: Dict[str, Any]):
-        self.state = MCPCalendarState(name, calendar_data)
+    Usage:
+        mcp_state = MCPCalendarState(name, calendar_data)
+        collection = MCPCalendarToolCollection(mcp_state)
+        tools = collection.get_sub_tools()
+    """
+
+    def __init__(self, mcp_state: MCPCalendarState):
+        self.state = mcp_state
 
     def get_sub_tools(self) -> list[BaseTool]:
         """Return all MCP calendar sub-tools."""

@@ -42,6 +42,7 @@ from tools import (
     GymTrackerToolCollection,
     HotelSearchToolCollection,
     MCPCalendarToolCollection,
+    filter_tool_adapters_by_prefix,
 )
 
 # Import all evaluators dynamically
@@ -130,40 +131,33 @@ class FiveADayEnvironment(Environment):
     with task-specific data, and converts them to the target framework (smolagents, langgraph, llamaindex).
     """
 
-    def __init__(self, task_data: Dict[str, Any], framework: str = "smolagents", callbacks=None):
-        """Initialize environment with framework specification.
+    def __init__(self, task_data: Dict[str, Any], framework: str, callbacks: Optional[List] = None):
+        """Initialize environment with framework info.
 
         Args:
-            task_data: Task data containing environment_data with tool specifications
+            task_data: Task configuration dictionary
             framework: Target framework ('smolagents', 'langgraph', 'llamaindex')
-            callbacks: Optional callbacks
+            callbacks: Optional callback handlers
         """
         self.framework = framework
         super().__init__(task_data, callbacks)
 
     def setup_state(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Initialize environment state from task data."""
-        return task_data["environment_data"]
+        """Initialize environment state from task data.
 
-    def _get_mcp_calendar_data(self, calendar_key: str) -> Dict[str, Any]:
-        """Convert availability format to MCP events format.
-
-        Task data: {"2025-12-02": [{"start": "09:00", "end": "11:00"}]}
-        MCP format: {"events": [{"date": "2025-12-02", "start_time": "09:00", ...}]}
+        Creates state objects for tools that require them (e.g., EmailState, BankingState).
+        State objects are stored alongside raw environment data for tool initialization.
         """
-        availability = self.state[calendar_key]
+        from tools import get_states
 
-        events = [
-            {
-                "date": date,
-                "start_time": slot["start"],
-                "end_time": slot["end"],
-                "title": "Busy",
-            }
-            for date, slots in availability.items()
-            for slot in slots
-        ]
-        return {"events": events}
+        env_data = task_data["environment_data"].copy()
+        tool_names = env_data.get("tools", [])
+
+        # Initialize state objects for tools that need them
+        states = get_states(tool_names, env_data)
+        env_data.update(states)
+
+        return env_data
 
     def create_tools(self) -> list:
         """Create tool instances from environment_data and convert to framework-specific types.
@@ -177,32 +171,19 @@ class FiveADayEnvironment(Environment):
 
         # Map tool names to tool collection classes and their initialization data
         tool_mapping = {
-            "email": (EmailToolCollection, lambda: (self.state["email_inbox"],)),
-            "banking": (
-                BankingToolCollection,
-                lambda: (
-                    self.state["banking"]["bank_transactions"],
-                    self.state["banking"]["current_balance"],
-                    self.state["banking"]["assets"],
-                ),
-            ),
+            "email": (EmailToolCollection, lambda: (self.state["email_state"],)),
+            "banking": (BankingToolCollection, lambda: (self.state["banking_state"],)),
             "calculator": (CalculatorToolCollection, lambda: ()),
-            "python_executor": (CodeExecutionToolCollection, lambda: (self.state["test_cases"],)),
+            "python_executor": (CodeExecutionToolCollection, lambda: (self.state["python_executor_state"],)),
             "family_info": (FamilyInfoToolCollection, lambda: (self.state["family_info"],)),
             "stock_price": (StockPriceToolCollection, lambda: (self.state["stock_price_lookup"],)),
             "websearch": (StockPriceToolCollection, lambda: (self.state["stock_price_lookup"],)),
-            "calendar": (CalendarToolCollection, lambda: ("my_calendar", self.state["my_calendar_availability"])),
-            "running_app": (RunningAppToolCollection, lambda: (self.state["running_activities"],)),
-            "gym_tracker": (GymTrackerToolCollection, lambda: (self.state["gym_activities"],)),
-            "hotel_search": (HotelSearchToolCollection, lambda: (self.state["hotels"],)),
-            "my_calendar_mcp": (
-                MCPCalendarToolCollection,
-                lambda: ("my_calendar_mcp", self._get_mcp_calendar_data("my_calendar_mcp_availability")),
-            ),
-            "other_calendar_mcp": (
-                MCPCalendarToolCollection,
-                lambda: ("other_calendar_mcp", self._get_mcp_calendar_data("other_calendar_mcp_availability")),
-            ),
+            "calendar": (CalendarToolCollection, lambda: (self.state["calendar_state"],)),
+            "running_app": (RunningAppToolCollection, lambda: (self.state["running_app_state"],)),
+            "gym_tracker": (GymTrackerToolCollection, lambda: (self.state["gym_tracker_state"],)),
+            "hotel_search": (HotelSearchToolCollection, lambda: (self.state["hotel_search_state"],)),
+            "my_calendar_mcp": (MCPCalendarToolCollection, lambda: (self.state["my_calendar_mcp_state"],)),
+            "other_calendar_mcp": (MCPCalendarToolCollection, lambda: (self.state["other_calendar_mcp_state"],)),
         }
 
         for tool_name in self.state["tools"]:
@@ -213,13 +194,8 @@ class FiveADayEnvironment(Environment):
                 assert isinstance(init_args, tuple), f"Tool {tool_name} init_args must be a tuple"
                 tool_instance = ToolClass(*init_args)
 
-                # Check if it's a collection with get_sub_tools method
-                if hasattr(tool_instance, "get_sub_tools"):
-                    # Get all sub-tools from the collection
-                    base_tools = tool_instance.get_sub_tools()
-                else:
-                    # Legacy single tool
-                    base_tools = [tool_instance]
+                # Get all sub-tools from the collection
+                base_tools = tool_instance.get_sub_tools()
 
                 # Convert each base tool to framework-specific tool
                 for base_tool in base_tools:
@@ -261,7 +237,6 @@ def build_smolagents_single_agent(
     all_tool_adapters: List[Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-    filter_tools_fn,
 ) -> Any:
     """Build a single smolagents agent.
 
@@ -271,7 +246,6 @@ def build_smolagents_single_agent(
         all_tool_adapters: All available tool adapters
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
-        filter_tools_fn: Function to filter tools by name
 
     Returns:
         SmolAgentAdapter wrapping the created agent
@@ -281,7 +255,7 @@ def build_smolagents_single_agent(
 
     seed = primary_spec.get("seed")
     model = get_model(model_id, "smolagents", temperature, seed)
-    tool_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    tool_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
     tools = [adapter.tool for adapter in tool_adapters]
     sanitized_name = sanitize_name(primary_spec["agent_name"])
 
@@ -302,7 +276,6 @@ def build_langgraph_single_agent(
     all_tool_adapters: List[Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-    filter_tools_fn,
 ) -> Any:
     """Build a single langgraph agent.
 
@@ -312,7 +285,6 @@ def build_langgraph_single_agent(
         all_tool_adapters: All available tool adapters
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
-        filter_tools_fn: Function to filter tools by name
 
     Returns:
         LangGraphAgentAdapter wrapping the created graph
@@ -361,7 +333,6 @@ def build_llamaindex_single_agent(
     all_tool_adapters: List[Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-    filter_tools_fn,
 ) -> Any:
     """Build a single llamaindex agent.
 
@@ -371,7 +342,6 @@ def build_llamaindex_single_agent(
         all_tool_adapters: All available tool adapters
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
-        filter_tools_fn: Function to filter tools by name
 
     Returns:
         LlamaIndexAgentAdapter wrapping the created agent
@@ -406,7 +376,6 @@ def build_smolagents_multi_agent(
     all_tool_adapters: List[Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-    filter_tools_fn,
 ) -> Any:
     """Build smolagents multi-agent setup with orchestrator and specialists.
 
@@ -416,7 +385,6 @@ def build_smolagents_multi_agent(
         all_tool_adapters: All available tool adapters
         primary_spec: Primary agent specification
         specialist_specs: List of specialist agent specifications
-        filter_tools_fn: Function to filter tools by name
 
     Returns:
         SmolAgentAdapter wrapping the orchestrator agent
@@ -468,7 +436,6 @@ def build_langgraph_multi_agent(
     all_tool_adapters: List[Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-    filter_tools_fn,
 ) -> Any:
     """Build langgraph multi-agent setup with orchestrator and specialists.
 
@@ -478,7 +445,6 @@ def build_langgraph_multi_agent(
         all_tool_adapters: All available tool adapters
         primary_spec: Primary agent specification
         specialist_specs: List of specialist agent specifications
-        filter_tools_fn: Function to filter tools by name
 
     Returns:
         LangGraphAgentAdapter wrapping the multi-agent graph
@@ -627,7 +593,6 @@ def build_llamaindex_multi_agent(
     all_tool_adapters: List[Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-    filter_tools_fn,
 ) -> Any:
     """Build llamaindex multi-agent setup with orchestrator and specialists.
 
@@ -637,7 +602,6 @@ def build_llamaindex_multi_agent(
         all_tool_adapters: All available tool adapters
         primary_spec: Primary agent specification
         specialist_specs: List of specialist agent specifications
-        filter_tools_fn: Function to filter tools by name
 
     Returns:
         LlamaIndexAgentAdapter wrapping the orchestrator agent
@@ -754,36 +718,6 @@ class FiveADayBenchmark(Benchmark):
     Supports single-agent and multi-agent (orchestrator+specialist) configurations.
     """
 
-    @staticmethod
-    def _filter_tool_adapters(adapters: List[Any], tool_names: List[str]) -> List[Any]:
-        """Filter tool adapters by exact name or collection prefix.
-
-        Supports two matching modes (both used):
-        1. Exact match: "calculator" → adapter.name="calculator"
-        2. Collection prefix: "banking" → adapter.name="banking.get_balance"
-
-        Args:
-            adapters: List of tool adapters to filter
-            tool_names: Tool/collection names to match (e.g., ["banking", "calculator"])
-
-        Returns:
-            Filtered list of adapters matching the specified names
-        """
-        if not tool_names:
-            return []
-
-        filtered = []
-        for adapter in adapters:
-            if not hasattr(adapter, "name"):
-                continue
-
-            for tool_name in tool_names:
-                if adapter.name == tool_name or adapter.name.startswith(f"{tool_name}."):
-                    filtered.append(adapter)
-                    break
-
-        return filtered
-
     def setup_environment(self, agent_data: Dict[str, Any], task: Task) -> Environment:
         """Create environment from task data."""
         # Pass full task data to environment
@@ -794,7 +728,8 @@ class FiveADayBenchmark(Benchmark):
             "metadata": task.metadata,
         }
 
-        environment = FiveADayEnvironment(task_data, framework=agent_data["framework"])
+        framework = agent_data["framework"]
+        environment = FiveADayEnvironment(task_data, framework)
 
         # Register all tools with the benchmark for tracing
         for tool_adapter in environment.get_tools():
@@ -821,7 +756,7 @@ class FiveADayBenchmark(Benchmark):
 
         # Build agent using unified interface
         builder = get_agent_builder(framework, agent_type)
-        agent_adapter = builder(model_id, temperature, all_tool_adapters, primary_spec, specialist_specs, self._filter_tool_adapters)
+        agent_adapter = builder(model_id, temperature, all_tool_adapters, primary_spec, specialist_specs)
 
         # Use .visualize() when smolagents # TODO remove
         if framework == "smolagents":
@@ -927,6 +862,7 @@ def load_benchmark_data(
         task_dict = tasks_raw[idx]
         config = configs_raw[idx]
         task_id = task_dict["metadata"]["task_id"]
+        task_dict["environment_data"]["agent_framework"] = framework
 
         # Create task
         tasks_data.append(

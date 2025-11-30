@@ -171,18 +171,14 @@ class BankingToolCollection:
     This ensures transaction history and balance are consistent across all operations.
 
     Usage:
-        collection = BankingToolCollection(transactions_data, balance, assets_data)
+        banking_state = BankingState(transactions_data, balance, assets_data)
+        collection = BankingToolCollection(banking_state)
         tools = collection.get_sub_tools()
         # All tools share the same banking state
     """
 
-    def __init__(
-        self,
-        transactions_data: list[dict[str, Any]],
-        current_balance: float,
-        assets_data: dict[str, Any] | None = None,
-    ):
-        self.state = BankingState(transactions_data, current_balance, assets_data)
+    def __init__(self, banking_state: BankingState):
+        self.state = banking_state
 
     def get_sub_tools(self) -> list[BaseTool]:
         """Return all banking sub-tools with shared state."""

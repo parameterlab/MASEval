@@ -252,12 +252,13 @@ class CodeExecutionToolCollection:
     Creates a shared state with test cases and returns code execution sub-tools.
 
     Usage:
-        collection = CodeExecutionToolCollection(test_cases)
+        code_state = CodeExecutionState(test_cases)
+        collection = CodeExecutionToolCollection(code_state)
         tools = collection.get_sub_tools()
     """
 
-    def __init__(self, test_cases: list[dict[str, Any]] | None = None):
-        self.state = CodeExecutionState(test_cases)
+    def __init__(self, code_execution_state: CodeExecutionState):
+        self.state = code_execution_state
 
     def get_sub_tools(self) -> list[BaseTool]:
         """Return all code execution sub-tools."""

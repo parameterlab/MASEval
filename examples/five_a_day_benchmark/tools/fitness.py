@@ -116,10 +116,16 @@ class RunningAppGetActivityTool(BaseTool):
 
 
 class RunningAppToolCollection:
-    """Running app tool collection factory."""
+    """Running app tool collection factory.
 
-    def __init__(self, activities_data: list[dict[str, Any]]):
-        self.state = RunningAppState(activities_data)
+    Usage:
+        running_state = RunningAppState(activities_data)
+        collection = RunningAppToolCollection(running_state)
+        tools = collection.get_sub_tools()
+    """
+
+    def __init__(self, running_state: RunningAppState):
+        self.state = running_state
 
     def get_sub_tools(self) -> list[BaseTool]:
         """Return all running app sub-tools."""
@@ -207,10 +213,16 @@ class GymTrackerGetWorkoutTool(BaseTool):
 
 
 class GymTrackerToolCollection:
-    """Gym tracker tool collection factory."""
+    """Gym tracker tool collection factory.
 
-    def __init__(self, workouts_data: list[dict[str, Any]]):
-        self.state = GymTrackerState(workouts_data)
+    Usage:
+        gym_state = GymTrackerState(workouts_data)
+        collection = GymTrackerToolCollection(gym_state)
+        tools = collection.get_sub_tools()
+    """
+
+    def __init__(self, gym_state: GymTrackerState):
+        self.state = gym_state
 
     def get_sub_tools(self) -> list[BaseTool]:
         """Return all gym tracker sub-tools."""

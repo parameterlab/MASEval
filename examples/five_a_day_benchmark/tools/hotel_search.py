@@ -95,10 +95,16 @@ class HotelSearchGetAllTool(BaseTool):
 
 
 class HotelSearchToolCollection:
-    """Hotel search tool collection factory."""
+    """Hotel search tool collection factory.
 
-    def __init__(self, hotels_data: list[dict[str, Any]]):
-        self.state = HotelSearchState(hotels_data)
+    Usage:
+        hotel_state = HotelSearchState(hotels_data)
+        collection = HotelSearchToolCollection(hotel_state)
+        tools = collection.get_sub_tools()
+    """
+
+    def __init__(self, hotel_search_state: HotelSearchState):
+        self.state = hotel_search_state
 
     def get_sub_tools(self) -> list[BaseTool]:
         """Return all hotel search sub-tools."""

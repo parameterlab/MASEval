@@ -8,7 +8,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from maseval import Evaluator, Environment, Task, User, MessageHistory
-from .utils import extract_assistant_response, extract_tool_calls
+from .utils import extract_assistant_response
 
 
 class OptimizationQualityEvaluator(Evaluator):
@@ -25,9 +25,20 @@ class OptimizationQualityEvaluator(Evaluator):
         self.weights = task.environment_data.get("user_priorities", {"distance_weight": 0.4, "wifi_weight": 0.35, "price_weight": 0.25})
         self.hotel_scores = self._calculate_all_hotel_scores()
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to agent messages only."""
+        return {"agents": traces.get("agents", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate optimization quality."""
-        full_response = extract_assistant_response(trace)
+        # Extract messages from agent traces
+        agents = traces.get("agents", {})
+        message_history = MessageHistory()
+        if agents:
+            agent_trace = next(iter(agents.values()))
+            message_history._messages = agent_trace.get("messages", [])
+
+        full_response = extract_assistant_response(message_history)
 
         if not full_response:
             return {"found_optimal_hotel": False, "optimization_score": 0.0, "error": "No assistant response found"}
@@ -118,54 +129,23 @@ class SearchStrategyEvaluator(Evaluator):
         super().__init__(task, environment, user)
         self.total_hotels = len(task.environment_data.get("hotels", []))
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to tool traces only."""
+        return {"tools": traces.get("tools", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate search strategy."""
-        tools_used = extract_tool_calls(trace)
+        # Get tool invocations directly from traces
+        tools = traces.get("tools", {})
 
         # Check if hotel_search was used
-        used_hotel_search = any("hotel" in str(tool).lower() for tool in tools_used)
+        used_hotel_search = bool(tools.get("hotel_search.search", {}).get("invocations", []))
 
         # Check if calculator was used (for scoring)
-        used_calculator = any("calculator" in str(tool).lower() for tool in tools_used)
+        used_calculator = bool(tools.get("calculator.calculate", {}).get("invocations", []))
 
         # Calculate strategy score
         score_components = [int(used_hotel_search), int(used_calculator)]
         strategy_score = sum(score_components) / len(score_components)
 
         return {"used_hotel_search": used_hotel_search, "used_calculator": used_calculator, "search_strategy_score": strategy_score}
-
-
-class ReasoningTransparencyEvaluator(Evaluator):
-    """Evaluates explanation quality and transparency of decision-making.
-
-    Evaluation type: LLM-as-judge (simplified heuristics here)
-    Measures: Did the agent explain its reasoning and the tradeoffs?
-    """
-
-    def __init__(self, task: Task, environment: Environment, user: Optional[User] = None):
-        super().__init__(task, environment, user)
-
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
-        """Evaluate reasoning transparency."""
-        full_response = extract_assistant_response(trace).lower()
-
-        if not full_response:
-            return {"explained_tradeoffs": False, "mentioned_criteria": False, "transparency_score": 0.0}
-
-        # Check if agent explained tradeoffs
-        tradeoff_keywords = ["however", "but", "although", "tradeoff", "balance", "compromise"]
-        explained_tradeoffs = any(keyword in full_response for keyword in tradeoff_keywords)
-
-        # Check if agent mentioned evaluation criteria
-        criteria_keywords = ["distance", "wifi", "price", "speed", "cost"]
-        mentioned_count = sum(1 for keyword in criteria_keywords if keyword in full_response)
-        mentioned_criteria = mentioned_count >= 2
-
-        score = (int(explained_tradeoffs) + int(mentioned_criteria)) / 2.0
-
-        return {
-            "explained_tradeoffs": explained_tradeoffs,
-            "mentioned_criteria": mentioned_criteria,
-            "criteria_mentioned_count": mentioned_count,
-            "transparency_score": score,
-        }

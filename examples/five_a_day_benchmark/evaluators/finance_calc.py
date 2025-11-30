@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 import json
 
 from maseval import Evaluator, Environment, Task, User, MessageHistory
-from .utils import extract_assistant_response, extract_tool_calls, call_llm_judge
+from .utils import extract_assistant_response, call_llm_judge
 
 
 class ArithmeticAccuracyEvaluator(Evaluator):
@@ -22,9 +22,20 @@ class ArithmeticAccuracyEvaluator(Evaluator):
         super().__init__(task, environment, user)
         self.ground_truth = task.evaluation_data
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to agent messages only."""
+        return {"agents": traces.get("agents", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate arithmetic accuracy."""
-        full_response = extract_assistant_response(trace)
+        # Extract messages from agent traces
+        agents = traces.get("agents", {})
+        message_history = MessageHistory()
+        if agents:
+            agent_trace = next(iter(agents.values()))
+            message_history._messages = agent_trace.get("messages", [])
+
+        full_response = extract_assistant_response(message_history)
 
         if not full_response:
             return {
@@ -88,17 +99,25 @@ class InformationRetrievalEvaluator(Evaluator):
         super().__init__(task, environment, user)
         self.ground_truth = task.evaluation_data
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to tool traces only."""
+        return {"tools": traces.get("tools", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate information retrieval from tools."""
-        tools_used = extract_tool_calls(trace)
+        # Get tool invocations directly from traces
+        tools = traces.get("tools", {})
 
-        # Check for required tools
-        stock_price_retrieved = any("stock_price" in str(t).lower() or "StockPriceTool" in str(t) for t in tools_used)
-        family_info_retrieved = any("family_info" in str(t).lower() or "FamilyInfoTool" in str(t) for t in tools_used)
+        # Check for required tools by checking if they have invocations
+        stock_price_retrieved = bool(tools.get("stock_price.get", {}).get("invocations", []))
+        family_info_retrieved = bool(tools.get("family_info.get_children", {}).get("invocations", []))
 
-        # Check if correct stock symbol was used (AAPL)
-        full_trace_str = str(trace.to_list())
-        used_aapl = "AAPL" in full_trace_str or "Apple" in full_trace_str
+        # Check if correct stock symbol was used (AAPL) by checking banking.get_asset invocations
+        asset_invocations = tools.get("banking.get_asset", {}).get("invocations", [])
+        used_aapl = any(inv.get("inputs", {}).get("asset_name", "").upper() == "AAPL" for inv in asset_invocations)
+
+        # Create tools_used list for backwards compatibility
+        tools_used = [name for name, data in tools.items() if data.get("invocations", [])]
 
         # Calculate completeness
         required_retrievals = [stock_price_retrieved, family_info_retrieved, used_aapl]

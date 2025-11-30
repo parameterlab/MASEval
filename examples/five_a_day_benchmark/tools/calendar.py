@@ -105,10 +105,16 @@ class CalendarGetDateAvailabilityTool(BaseTool):
 
 
 class CalendarToolCollection:
-    """Calendar tool collection factory."""
+    """Calendar tool collection factory.
 
-    def __init__(self, calendar_id: str, availability_data: dict[str, list[dict[str, str]]]):
-        self.state = CalendarState(calendar_id, availability_data)
+    Usage:
+        calendar_state = CalendarState(calendar_id, availability_data)
+        collection = CalendarToolCollection(calendar_state)
+        tools = collection.get_sub_tools()
+    """
+
+    def __init__(self, calendar_state: CalendarState):
+        self.state = calendar_state
 
     def get_sub_tools(self) -> list[BaseTool]:
         """Return all calendar sub-tools."""

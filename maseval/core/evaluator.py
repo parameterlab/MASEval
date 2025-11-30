@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional
 from .environment import Environment
 from .task import Task
 from .user import User
-from .history import MessageHistory
 
 
 class Evaluator(ABC):
@@ -15,6 +14,12 @@ class Evaluator(ABC):
 
     @abstractmethod
     def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        # trace[0] is the instruction
+        # user is the userclass with user specific data
+        pass
+
+    @abstractmethod
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         # trace[0] is the instruction
         # user is the userclass with user specific data
         pass

@@ -1,11 +1,13 @@
 [
   {
-    "query": "Sarah Johnson asked me to confirm that I received her payment for the deposit and first month's rent. Please check my transactions and respond accordingly.",
+    "query": "Sarah Johnson asked me to confirm that I received her payment for the deposit and first month's rent. Please check my transactions and send an email reply accordingly.",
     "environment_data": {
       "tools": ["email", "banking"],
+      "user_email": "sean.crane85@mymail-online.biz",
       "email_inbox": [
         {
           "from": "sarah.johnson@email.com",
+          "to": "sean.crane85@mymail-online.biz",
           "subject": "Rental Payment Confirmation",
           "body": "Hi Sean, I just transferred the deposit ($2,000) and first month's rent ($1,500) to your account. Can you please confirm you received it? Thanks, Sarah",
           "timestamp": "2025-11-18T09:30:00Z"
@@ -44,6 +46,7 @@
       "expected_rent_amount": 1500,
       "total_expected": 3500,
       "tenant_name": "Sarah Johnson",
+      "tenant_email": "sarah.johnson@email.com",
       "landlord_name": "Sean Crane",
       "task_type": "email_confirmation_with_banking",
       "evaluators": [
@@ -500,11 +503,7 @@
       "optimal_score": 0.891,
       "scoring_formula": "score = (1 - distance/5.0) * 0.4 + (wifi/500) * 0.35 + (1 - price/279) * 0.25",
       "task_type": "hotel_optimization",
-      "evaluators": [
-        "OptimizationQualityEvaluator",
-        "SearchStrategyEvaluator",
-        "ReasoningTransparencyEvaluator"
-      ]
+      "evaluators": ["OptimizationQualityEvaluator", "SearchStrategyEvaluator"]
     },
     "metadata": {
       "description": "Tests retrieval and optimization over a large dataset. Agent must search through 20 hotels, understand user priorities, calculate weighted scores, and find the optimal choice. Evaluates how close the agent gets to the true optimum.",

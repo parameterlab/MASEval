@@ -7,7 +7,7 @@ Success criteria: Agent correctly identifies overlapping available time slots.
 from typing import Any, Dict, Optional
 
 from maseval import Evaluator, Environment, Task, User, MessageHistory
-from .utils import extract_tool_calls, extract_assistant_response
+from .utils import extract_assistant_response
 
 
 class SchedulingAccuracyEvaluator(Evaluator):
@@ -21,9 +21,20 @@ class SchedulingAccuracyEvaluator(Evaluator):
         super().__init__(task, environment, user)
         self.expected_slots = task.evaluation_data["overlapping_slots"]
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to agent messages only."""
+        return {"agents": traces.get("agents", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate scheduling accuracy."""
-        full_response = extract_assistant_response(trace)
+        # Extract messages from agent traces
+        agents = traces.get("agents", {})
+        message_history = MessageHistory()
+        if agents:
+            agent_trace = next(iter(agents.values()))
+            message_history._messages = agent_trace.get("messages", [])
+
+        full_response = extract_assistant_response(message_history)
 
         if not full_response:
             return {
@@ -103,16 +114,24 @@ class MCPIntegrationEvaluator(Evaluator):
     def __init__(self, task: Task, environment: Environment, user: Optional[User] = None):
         super().__init__(task, environment, user)
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to tool traces only."""
+        return {"tools": traces.get("tools", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate MCP tool usage for task completion."""
-        tools_used = extract_tool_calls(trace)
+        # Get tool invocations directly from traces
+        tools = traces.get("tools", {})
 
         # Check if both calendars were accessed
-        my_calendar_used = any("my_calendar" in str(tool).lower() for tool in tools_used)
-        other_calendar_used = any("other_calendar" in str(tool).lower() or "roger" in str(tool).lower() for tool in tools_used)
+        my_calendar_used = bool(tools.get("my_calendar.get_events", {}).get("invocations", []))
+        other_calendar_used = bool(tools.get("other_calendar.get_events", {}).get("invocations", []))
 
         used_both_calendars = my_calendar_used and other_calendar_used
         score = 1.0 if used_both_calendars else 0.0
+
+        # Create tools_used list for backwards compatibility
+        tools_used = [name for name, data in tools.items() if data.get("invocations", [])]
 
         return {"used_both_calendars": used_both_calendars, "mcp_integration_score": score, "tools_used": tools_used}
 
@@ -128,9 +147,20 @@ class ConstraintSatisfactionEvaluator(Evaluator):
         super().__init__(task, environment, user)
         self.expected_slots = task.evaluation_data["overlapping_slots"]
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to agent messages only."""
+        return {"agents": traces.get("agents", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate constraint satisfaction logic."""
-        full_response = extract_assistant_response(trace).lower()
+        # Extract messages from agent traces
+        agents = traces.get("agents", {})
+        message_history = MessageHistory()
+        if agents:
+            agent_trace = next(iter(agents.values()))
+            message_history._messages = agent_trace.get("messages", [])
+
+        full_response = extract_assistant_response(message_history).lower()
 
         if not full_response:
             return {"understands_overlap_logic": False, "constraint_satisfaction_score": 0.0}

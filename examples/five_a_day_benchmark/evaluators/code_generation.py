@@ -27,9 +27,20 @@ class UnitTestEvaluator(Evaluator):
         self.test_cases = task.evaluation_data["test_cases"]
         self.function_name = task.evaluation_data["function_name"]
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to agent messages only."""
+        return {"agents": traces.get("agents", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate code by running unit tests."""
-        code = extract_python_code(trace)
+        # Extract messages from agent traces
+        agents = traces.get("agents", {})
+        message_history = MessageHistory()
+        if agents:
+            agent_trace = next(iter(agents.values()))
+            message_history._messages = agent_trace.get("messages", [])
+
+        code = extract_python_code(message_history)
 
         if not code:
             return {"test_cases_passed": 0, "test_pass_rate": 0.0, "all_tests_passed": False, "error": "No code found in trace"}
@@ -108,9 +119,20 @@ class AlgorithmicComplexityEvaluator(Evaluator):
     def __init__(self, task: Task, environment: Environment, user: Optional[User] = None):
         super().__init__(task, environment, user)
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to agent messages only."""
+        return {"agents": traces.get("agents", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate algorithmic complexity."""
-        code = extract_python_code(trace)
+        # Extract messages from agent traces
+        agents = traces.get("agents", {})
+        message_history = MessageHistory()
+        if agents:
+            agent_trace = next(iter(agents.values()))
+            message_history._messages = agent_trace.get("messages", [])
+
+        code = extract_python_code(message_history)
 
         if not code:
             return {"time_complexity": "unknown", "is_optimal": False, "uses_dynamic_programming": False, "algorithm_efficiency_score": 0.0}
@@ -190,9 +212,20 @@ class CodeQualityEvaluator(Evaluator):
     def __init__(self, task: Task, environment: Environment, user: Optional[User] = None):
         super().__init__(task, environment, user)
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter to agent messages only."""
+        return {"agents": traces.get("agents", {})}
+
+    def __call__(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate code quality."""
-        code = extract_python_code(trace)
+        # Extract messages from agent traces
+        agents = traces.get("agents", {})
+        message_history = MessageHistory()
+        if agents:
+            agent_trace = next(iter(agents.values()))
+            message_history._messages = agent_trace.get("messages", [])
+
+        code = extract_python_code(message_history)
 
         if not code:
             return {"has_docstring": False, "handles_edge_cases": False, "code_quality_score": 0.0}

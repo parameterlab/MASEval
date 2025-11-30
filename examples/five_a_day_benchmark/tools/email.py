@@ -9,7 +9,7 @@ Tools:
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, List
 
 from .base import BaseTool, ToolResult
 
@@ -45,10 +45,12 @@ class EmailState:
     Maintains inbox and sent emails across all sub-tool invocations.
     """
 
-    def __init__(self, inbox_data: list[dict[str, Any]]):
-        self.inbox: list[EmailMessage] = []
-        self.sent: list[EmailMessage] = []
+    def __init__(self, user_email: str, inbox_data: List[dict[str, Any]]):
+        self.inbox: List[EmailMessage] = []
+        self.sent: List[EmailMessage] = []
+        self.drafts: List[EmailMessage] = []
         self._next_id = len(inbox_data) + 1
+        self.mail_address = user_email
 
         # Load inbox
         for i, email_data in enumerate(inbox_data):
@@ -56,7 +58,7 @@ class EmailState:
                 EmailMessage(
                     id=str(i + 1),
                     from_address=email_data["from"],
-                    to_address=None,
+                    to_address=email_data["to"],
                     subject=email_data["subject"],
                     body=email_data["body"],
                     timestamp=email_data["timestamp"],
@@ -138,7 +140,7 @@ class EmailSendTool(BaseTool):
 
         email = EmailMessage(
             id=str(self.state._next_id),
-            from_address="me@example.com",
+            from_address=self.state.mail_address,
             to_address=to,
             subject=subject,
             body=body,
@@ -178,14 +180,22 @@ class EmailDraftTool(BaseTool):
                 error="to, subject, and body are required",
             )
 
-        draft = {
-            "to": to,
-            "subject": subject,
-            "body": body,
-            "status": "draft",
-        }
+        draft = EmailMessage(
+            id=str(self.state._next_id),
+            from_address=self.state.mail_address,
+            to_address=to,
+            subject=subject,
+            body=body,
+            timestamp=datetime.now().isoformat(),
+            read=True,
+        )
+        self.state._next_id += 1
+        self.state.drafts.append(draft)
 
-        return ToolResult(success=True, data=draft)
+        return ToolResult(
+            success=True,
+            data={"status": "draft", "id": draft.id, "to": to},
+        )
 
 
 class EmailToolCollection:
@@ -195,15 +205,16 @@ class EmailToolCollection:
     This ensures sent emails are visible across all email operations.
 
     Usage:
-        collection = EmailToolCollection(inbox_data)
+        email_state = EmailState(user_email, inbox_data)
+        collection = EmailToolCollection(email_state)
         tools = collection.get_sub_tools()
         # All tools share the same inbox and sent folder
     """
 
-    def __init__(self, inbox_data: list[dict[str, Any]]):
-        self.state = EmailState(inbox_data)
+    def __init__(self, email_state: EmailState):
+        self.state = email_state
 
-    def get_sub_tools(self) -> list[BaseTool]:
+    def get_sub_tools(self) -> List[BaseTool]:
         """Return all email sub-tools with shared state."""
         return [
             EmailGetInboxTool(self.state),
