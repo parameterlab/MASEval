@@ -271,7 +271,7 @@ def build_smolagents_single_agent(
         all_tool_adapters: All available tool adapters
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
-        filter_tools_fn: Function to filter tools (ignored for single-agent, uses all)
+        filter_tools_fn: Function to filter tools by name
 
     Returns:
         SmolAgentAdapter wrapping the created agent
@@ -281,7 +281,8 @@ def build_smolagents_single_agent(
 
     seed = primary_spec.get("seed")
     model = get_model(model_id, "smolagents", temperature, seed)
-    tools = [adapter.tool for adapter in all_tool_adapters]
+    tool_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    tools = [adapter.tool for adapter in tool_adapters]
     sanitized_name = sanitize_name(primary_spec["agent_name"])
 
     agent = ToolCallingAgent(
@@ -311,7 +312,7 @@ def build_langgraph_single_agent(
         all_tool_adapters: All available tool adapters
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
-        filter_tools_fn: Function to filter tools (ignored for single-agent, uses all)
+        filter_tools_fn: Function to filter tools by name
 
     Returns:
         LangGraphAgentAdapter wrapping the created graph
@@ -325,7 +326,8 @@ def build_langgraph_single_agent(
 
     seed = primary_spec.get("seed")
     model = get_model(model_id, "langgraph", temperature, seed)
-    tools = [adapter.tool for adapter in all_tool_adapters]
+    tool_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    tools = [adapter.tool for adapter in tool_adapters]
 
     class AgentState(TypedDict):
         messages: Annotated[List[Any], add_messages]
@@ -369,7 +371,7 @@ def build_llamaindex_single_agent(
         all_tool_adapters: All available tool adapters
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
-        filter_tools_fn: Function to filter tools (ignored for single-agent, uses all)
+        filter_tools_fn: Function to filter tools by name
 
     Returns:
         LlamaIndexAgentAdapter wrapping the created agent
@@ -379,7 +381,8 @@ def build_llamaindex_single_agent(
 
     seed = primary_spec.get("seed")
     model = get_model(model_id, "llamaindex", temperature, seed)
-    tools = [adapter.tool for adapter in all_tool_adapters]
+    tool_adapters = filter_tools_fn(all_tool_adapters, primary_spec["tools"])
+    tools = [adapter.tool for adapter in tool_adapters]
 
     agent = ReActAgent(
         tools=tools,

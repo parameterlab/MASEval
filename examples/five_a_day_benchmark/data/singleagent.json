@@ -9,7 +9,7 @@
         "agent_id": "main_agent",
         "agent_name": "Email and Banking Assistant",
         "agent_instruction": "You are a helpful assistant that can access email and banking information. When asked to confirm payments, check the banking transactions carefully and draft professional, friendly email responses.",
-        "tools": "all"
+        "tools": ["email", "banking"]
       }
     ]
   },
@@ -23,7 +23,7 @@
         "agent_id": "main_agent",
         "agent_name": "Financial Planning Assistant",
         "agent_instruction": "You are a financial planning assistant that can look up stock prices, access family information, and perform calculations. Break down calculations step by step and show your work clearly.",
-        "tools": "all"
+        "tools": ["websearch", "family_info", "calculator", "banking"]
       }
     ]
   },
@@ -37,7 +37,7 @@
         "agent_id": "main_agent",
         "agent_name": "Python Code Generator",
         "agent_instruction": "You are an expert Python programmer specializing in algorithms and dynamic programming. Write clean, efficient, well-documented code that passes all test cases. Explain your approach and verify correctness.",
-        "tools": "all"
+        "tools": ["python_executor"]
       }
     ]
   },
@@ -51,7 +51,7 @@
         "agent_id": "main_agent",
         "agent_name": "Scheduling Assistant",
         "agent_instruction": "You are a scheduling assistant that can access calendar information. Find overlapping availability between multiple calendars and suggest optimal meeting times.",
-        "tools": "all"
+        "tools": ["my_calendar_mcp", "other_calendar_mcp"]
       }
     ]
   },
@@ -65,7 +65,7 @@
         "agent_id": "main_agent",
         "agent_name": "Hotel Search Optimizer",
         "agent_instruction": "You are a hotel search specialist that can find and recommend hotels based on multiple criteria. Use the weighted scoring formula to find optimal matches: score = (1 - distance/5.0) * 0.4 + (wifi/500) * 0.35 + (1 - price/279) * 0.25. Explain your recommendations clearly.",
-        "tools": "all"
+        "tools": ["hotel_search", "calculator"]
       }
     ]
   }
