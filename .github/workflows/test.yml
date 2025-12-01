@@ -78,6 +78,13 @@ jobs:
           uv run coverage html
           uv run coverage report
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Coverage comment
         if: github.event_name == 'pull_request'
         uses: py-cov-action/python-coverage-comment-action@v3
