@@ -358,13 +358,8 @@ def build_llamaindex_single_agent(
         llm=model,
         verbose=True,
         max_iterations=10,
+        system_prompt=primary_spec.get("agent_instruction"),
     )
-
-    if hasattr(agent, "update_prompts") and primary_spec["agent_instruction"]:
-        try:
-            agent.update_prompts({"agent_worker:system_prompt": primary_spec["agent_instruction"]})
-        except Exception:
-            pass
 
     return LlamaIndexAgentAdapter(agent, primary_spec["agent_id"])
 
@@ -625,13 +620,8 @@ def build_llamaindex_multi_agent(
             llm=specialist_model,
             verbose=True,
             max_iterations=10,
+            system_prompt=agent_instruction,
         )
-
-        if hasattr(specialist_agent, "update_prompts") and agent_instruction:
-            try:
-                specialist_agent.update_prompts({"agent_worker:system_prompt": agent_instruction})
-            except Exception:
-                pass
 
         specialist_agents_dict[agent_id] = {
             "agent": specialist_agent,
@@ -673,14 +663,8 @@ def build_llamaindex_multi_agent(
         llm=primary_model,
         verbose=True,
         max_iterations=15,
+        system_prompt=primary_spec.get("agent_instruction"),
     )
-
-    primary_instruction = primary_spec["agent_instruction"]
-    if hasattr(orchestrator, "update_prompts") and primary_instruction:
-        try:
-            orchestrator.update_prompts({"agent_worker:system_prompt": primary_instruction})
-        except Exception:
-            pass
 
     return LlamaIndexAgentAdapter(orchestrator, primary_spec["agent_id"])
 
