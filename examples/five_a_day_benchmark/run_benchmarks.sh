@@ -4,19 +4,19 @@
 cd ../../
 
 
-# Run benchmarks for SmolAgents
-uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework smolagents --config-type single
-uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework smolagents --config-type multi
+# # Run benchmarks for SmolAgents
+# uv run python examples/five_a_day_benchmark/five_a_day_benchmark.py --framework smolagents --config-type single --seed 0
+# uv run python examples/five_a_day_benchmark/five_a_day_benchmark.py --framework smolagents --config-type multi --seed 0
 
 # Run benchmarks for Langgraph
-uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework langgraph --config-type single
-uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework langgraph --config-type multi
+uv run python examples/five_a_day_benchmark/five_a_day_benchmark.py --framework langgraph --config-type single --seed 0
+uv run python examples/five_a_day_benchmark/five_a_day_benchmark.py --framework langgraph --config-type multi --seed 0
 
 # Run benchmarks for LLamaIndex
-uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework llamaindex --config-type single
-uv run python examples/5_a_day_benchmark/five_a_day_benchmark.py --framework llamaindex --config-type multi 
+uv run python examples/five_a_day_benchmark/five_a_day_benchmark.py --framework llamaindex --config-type single --seed 0
+uv run python examples/five_a_day_benchmark/five_a_day_benchmark.py --framework llamaindex --config-type multi --seed 0
 
 # Navigate back to the example directory
-cd examples/5_a_day_benchmark/
+cd examples/five_a_day_benchmark/
 
 echo "Benchmarking completed."
