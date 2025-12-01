@@ -94,7 +94,7 @@
         "agent_id": "calendar_specialist",
         "agent_name": "Calendar Specialist",
         "agent_instruction": "You access and analyze calendar information. Retrieve availability data and identify patterns as requested.",
-        "tools": ["calendar"]
+        "tools": ["my_calendar_mcp", "other_calendar_mcp"]
       }
     ]
   },
