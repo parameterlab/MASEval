@@ -2,16 +2,39 @@ site_name: Multi-Agent System Evaluation
 site_description: "System-level multi-agent benchmarks"
 docs_dir: docs
 site_dir: site
+site_author: ParameterLab
+site_url: https://maseval.readthedocs.io/en/stable/
+repo_name: parameterlab/maseval
+repo_url: https://github.com/parameterlab/maseval
+edit_uri: edit/main/docs/
 
 theme:
   name: material
   logo: assets/logo-short.svg
+  favicon: assets/favicon.svg
   palette:
-    primary: teal
-    accent: teal
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
   features:
     - navigation.sections
     - content.code.copy
+
 extra_css:
   - css/mkdocstrings.css
 
