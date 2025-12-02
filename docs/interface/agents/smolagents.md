@@ -19,4 +19,12 @@ pip install smolagents
 
 ## API Reference
 
-::: maseval.interface.agents.smolagents
+[:material-github: View source](https://github.com/parameterlab/maseval/blob/main/maseval/interface/agents/smolagents.py){ .md-source-file }
+
+::: maseval.interface.agents.smolagents.SmolAgentAdapter
+
+::: maseval.interface.agents.smolagents.SmolAgentUser
+
+[:material-github: View source](https://github.com/parameterlab/maseval/blob/main/maseval/interface/agents/smolagents_optional.py){ .md-source-file }
+
+::: maseval.interface.agents.smolagents_optional.SmolAgentUserSimulationInputTool

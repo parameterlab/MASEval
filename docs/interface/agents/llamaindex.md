@@ -19,4 +19,8 @@ pip install llama-index-core
 
 ## API Reference
 
-::: maseval.interface.agents.llamaindex
+[:material-github: View source](https://github.com/parameterlab/maseval/blob/main/maseval/interface/agents/llamaindex.py){ .md-source-file }
+
+::: maseval.interface.agents.llamaindex.LlamaIndexAgentAdapter
+
+::: maseval.interface.agents.llamaindex.LlamaIndexUser

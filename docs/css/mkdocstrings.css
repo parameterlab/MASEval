@@ -157,3 +157,16 @@
 .md-typeset ol {
   margin: 0.6rem 0 0.6rem 1.2rem;
 }
+
+/* Source file link - floats right aligned with class headings */
+.md-source-file {
+  float: right;
+  margin-left: 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--maseval-slate);
+}
+
+.md-source-file:hover {
+  color: var(--maseval-teal-primary);
+}

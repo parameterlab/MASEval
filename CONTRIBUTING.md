@@ -147,6 +147,18 @@ mkdocs serve
 
 > **Tip**: You can also use `uv run mkdocs build --strict` and `uv run mkdocs serve` if you prefer not to activate the environment.
 
+#### View Source Code Links
+
+API reference pages should include links to source files on GitHub. Use the following pattern:
+
+```markdown
+[:material-github: View source](https://github.com/parameterlab/maseval/blob/main/maseval/path/to/YOUR_NEW_CLASS.py){ .md-source-file align=right }
+
+::: maseval.path.to.YOUR_NEW_CLASS
+```
+
+This renders a right-aligned GitHub link above the auto-generated API documentation. See `docs/reference/agent.md` for a complete example.
+
 #### Including Jupyter Notebooks in Documentation
 
 You may include jupyter notebook examples directly into the documentation. We use the `mkdocs-jupyter` plugin to render Jupyter notebooks in the documentation. To avoid duplicating notebook files, we use **symbolic links**.
