@@ -10,18 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - [LlamaIndex](https://github.com/run-llama/llama_index) integration: `LlamaIndexAgentAdapter` and `LlamaIndexUser` for evaluating LlamaIndex workflow-based agents (PR: #7)
-
   - Supports async workflow execution with proper event loop handling
-
+- Added a new example: The `5_a_day_benchmark` (PR: #10)
 - The `logs` property inside `SmolAgentAdapter` and `LanggraphAgentAdapter` are now properly filled. (PR: #3)
 
 ### Changed
 
 - Documentation formatting improved. Added darkmode and links to `Github` (PR: #11).
 - `FileResultLogger` now accepts `pathlib.Path` for argument `output_dir` and has an `overwrite` argument to prevent overwriting of existing logs files.
+- `Benchmark` class now has a `fail_on_setup_error` flag that raises errors observed during setup of task (PR: #10)
+- The `Evaluator` class now has a `filter_traces` base method to conveniently adapt the same evaluator to different entities in the traces (PR: #10).
+- Improved Quick Start Guide in `docs/getting-started/quickstart.md`. (PR: #10)
 
 ### Fixed
 
+- `LlamaIndexAgentAdapter` now supports multiple LlamaIndex agent types including `ReActAgent` (workflow-based), `FunctionAgent`, and legacy agents by checking for `.chat()`, `.query()`, and `.run()` methods in priority order (PR: #10)
 - Consistent naming of agent `adapter` over `wrapper` (PR: #3)
 
 ### Removed

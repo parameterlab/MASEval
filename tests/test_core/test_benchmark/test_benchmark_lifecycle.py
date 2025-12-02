@@ -368,11 +368,14 @@ class TestFailureSafeExecution:
 
     def test_evaluation_failure_graceful(self):
         """Test that evaluation failures are caught and recorded when fail_on_evaluation_error=False."""
-        from maseval import TaskExecutionStatus, Evaluator, MessageHistory
+        from maseval import TaskExecutionStatus, Evaluator
         from conftest import DummyBenchmark
 
         class FailingEvaluator(Evaluator):
-            def __call__(self, trace: MessageHistory):
+            def filter_traces(self, traces):
+                return traces
+
+            def __call__(self, traces, final_answer=None):
                 raise ValueError("Evaluation failed!")
 
         class EvaluationFailureBenchmark(DummyBenchmark):
@@ -397,11 +400,14 @@ class TestFailureSafeExecution:
 
     def test_evaluation_failure_strict(self):
         """Test that evaluation failures raise when fail_on_evaluation_error=True."""
-        from maseval import Evaluator, MessageHistory
+        from maseval import Evaluator
         from conftest import DummyBenchmark
 
         class FailingEvaluator(Evaluator):
-            def __call__(self, trace: MessageHistory):
+            def filter_traces(self, traces):
+                return traces
+
+            def __call__(self, traces, final_answer=None):
                 raise ValueError("Evaluation failed!")
 
         class EvaluationFailureBenchmark(DummyBenchmark):
@@ -415,6 +421,48 @@ class TestFailureSafeExecution:
         )
 
         with pytest.raises(ValueError, match="Evaluation failed!"):
+            benchmark.run(tasks)
+
+    def test_setup_failure_graceful(self):
+        """Test that setup failures are caught and recorded when fail_on_setup_error=False."""
+        from maseval import TaskExecutionStatus
+        from conftest import DummyBenchmark
+
+        class SetupFailureBenchmark(DummyBenchmark):
+            def setup_environment(self, agent_data, task):
+                raise RuntimeError("Environment setup failed!")
+
+        tasks = TaskCollection.from_list([{"query": "Test query", "environment_data": {}}])
+        benchmark = SetupFailureBenchmark(
+            agent_data={"model": "test"},
+            fail_on_setup_error=False,
+        )
+
+        reports = benchmark.run(tasks)
+
+        assert len(reports) == 1
+        report = reports[0]
+        assert report["status"] == TaskExecutionStatus.SETUP_FAILED.value
+        assert "error" in report
+        assert report["error"]["error_type"] == "RuntimeError"
+        assert "Environment setup failed!" in report["error"]["error_message"]
+        assert report["eval"] is None
+
+    def test_setup_failure_strict(self):
+        """Test that setup failures raise when fail_on_setup_error=True."""
+        from conftest import DummyBenchmark
+
+        class SetupFailureBenchmark(DummyBenchmark):
+            def setup_environment(self, agent_data, task):
+                raise RuntimeError("Environment setup failed!")
+
+        tasks = TaskCollection.from_list([{"query": "Test query", "environment_data": {}}])
+        benchmark = SetupFailureBenchmark(
+            agent_data={"model": "test"},
+            fail_on_setup_error=True,
+        )
+
+        with pytest.raises(RuntimeError, match="Environment setup failed!"):
             benchmark.run(tasks)
 
     def test_get_failed_tasks(self):
@@ -528,6 +576,7 @@ class TestFailureSafeExecution:
 
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
+        assert benchmark.fail_on_setup_error is False
         assert benchmark.fail_on_task_error is False
         assert benchmark.fail_on_evaluation_error is False
 

@@ -79,8 +79,8 @@ nav:
   - Guides:
       - Message Tracing: guides/message-tracing.md
   - Examples:
-      - Example 1: examples/example1.md
-      - Example 2: examples/example2.md
+      - Example 1: examples/tutorial.ipynb
+      - Example 2: examples/five_a_day_benchmark.ipynb
       # - AWS Collaboration Benchmark: examples/amazon_collab.ipynb
   - Reference:
       - Core:

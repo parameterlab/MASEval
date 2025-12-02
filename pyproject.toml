@@ -41,18 +41,24 @@ examples = [
     "datasets>=4.0.0",
     "google-genai>=1.37.0",
     "langchain>=0.3.27",
+    "langchain-litellm>=0.1.0",
     "langchain-google-genai>=2.1.12",
     "langgraph>=0.6.0",
     "langfuse>=3.3.4",
     "neptune>=1.14.0",
     "openai>=1.107.2",
     "smolagents>=1.21.3",
+    "llama-index-core>=0.12.0",
+    "llama-index-llms-litellm>=0.3.0",
+    "litellm>=1.0.0",
     "addict>=2.4.0",
     "deepdiff>=8.6.1",
     "docstring-parser>=0.17.0",
     "loguru>=0.7.3",
     "toml>=0.10.2",
     "typing-extensions>=4.0.0",
+    "restrictedpython>=8.1",
+    "mcp>=1.22.0",
     # Jupyter notebook support
     "jupyter>=1.0.0",
     "ipykernel>=6.0.0",
@@ -75,6 +81,7 @@ all = [
     # Examples dependencies
     "datasets>=4.0.0",
     "langchain>=0.3.27",
+    "langchain-litellm>=0.1.0",
     "langchain-google-genai>=2.1.12",
     "addict>=2.4.0",
     "deepdiff>=8.6.1",
@@ -133,16 +140,22 @@ examples = [
     "smolagents>=1.21.3",
     "langchain-google-genai>=2.1.12",
     "langgraph>=0.6.0",
+    "llama-index-core>=0.12.0",
+    "llama-index-llms-litellm>=0.3.0",
+    "litellm>=1.0.0",
     "addict>=2.4.0",
     "deepdiff>=8.6.1",
     "docstring-parser>=0.17.0",
     "loguru>=0.7.3",
     "toml>=0.10.2",
     "typing-extensions>=4.0.0",
+    "restrictedpython>=8.1",
+    "mcp>=1.22.0",
     # Jupyter notebook support
     "jupyter>=1.0.0",
     "ipykernel>=6.0.0",
     "ipywidgets>=8.0.0",
+    "openinference-instrumentation-smolagents>=0.1.20",
 ]
 
 [tool.setuptools]
@@ -150,7 +163,7 @@ packages = ["maseval"]
 
 [tool.ruff]
 line-length = 144
-exclude = ["examples"]
+exclude = []
 
 [tool.pytest.ini_options]
 minversion = "6.0"

@@ -184,7 +184,11 @@ class DummyEvaluator(Evaluator):
         self.environment = environment
         self.user = user
 
-    def __call__(self, trace: MessageHistory) -> Dict[str, Any]:
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Return traces as-is for testing."""
+        return traces
+
+    def __call__(self, traces: Dict[str, Any], final_answer: Optional[str] = None) -> Dict[str, Any]:
         return {"score": 1.0, "passed": True}
 
 
@@ -231,11 +235,13 @@ class DummyBenchmark(Benchmark):
         self, evaluators: Sequence[Evaluator], agents: Dict[str, AgentAdapter], final_answer: Any, traces: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         self.evaluate_calls.append((evaluators, agents, final_answer, traces))
-        # Get first agent's messages (works with any agent name)
-        first_agent = next(iter(agents.values())) if agents else None
-        if first_agent:
-            return [evaluator(first_agent.get_messages()) for evaluator in evaluators]
-        return [{"passed": True, "score": 1.0} for _ in evaluators]
+        # Call evaluators with new API signature: filter_traces first, then call with filtered traces and final_answer
+        results = []
+        for evaluator in evaluators:
+            filtered_traces = evaluator.filter_traces(traces)
+            result = evaluator(filtered_traces, final_answer)
+            results.append(result)
+        return results
 
 
 # ==================== Fixtures ====================

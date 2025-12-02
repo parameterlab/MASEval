@@ -12,18 +12,23 @@ class TestEvaluator:
     """Tests for Evaluator integration."""
 
     def test_evaluator_receives_message_history(self):
-        """Test that evaluator receives message history."""
+        """Test that evaluator receives message history in traces."""
         from conftest import DummyBenchmark
-        from maseval import Evaluator, MessageHistory
+        from maseval import Evaluator
 
         received_traces = []
+        received_final_answers = []
 
         class TracingEvaluator(Evaluator):
             def __init__(self, task, environment, user=None):
                 super().__init__(task, environment, user)
 
-            def __call__(self, trace: MessageHistory):
-                received_traces.append(trace)
+            def filter_traces(self, traces):
+                return traces
+
+            def __call__(self, traces, final_answer=None):
+                received_traces.append(traces)
+                received_final_answers.append(final_answer)
                 return {"score": 1.0}
 
         class TestBenchmark(DummyBenchmark):
@@ -36,7 +41,10 @@ class TestEvaluator:
         benchmark.run(tasks)
 
         assert len(received_traces) == 1
-        assert isinstance(received_traces[0], MessageHistory)
+        assert isinstance(received_traces[0], dict)
+        assert "agents" in received_traces[0]
+        # Verify message history is accessible within traces
+        assert len(received_final_answers) == 1
 
     def test_evaluator_receives_agents_dict(self):
         """Test that evaluate() receives agents dictionary."""
@@ -105,7 +113,10 @@ class TestEvaluator:
             def __init__(self, task, environment, user=None):
                 super().__init__(task, environment, user)
 
-            def __call__(self, trace):
+            def filter_traces(self, traces):
+                return traces
+
+            def __call__(self, traces, final_answer=None):
                 call_counts["eval1"] += 1
                 return {"score": 1.0, "evaluator": "eval1"}
 
@@ -113,7 +124,10 @@ class TestEvaluator:
             def __init__(self, task, environment, user=None):
                 super().__init__(task, environment, user)
 
-            def __call__(self, trace):
+            def filter_traces(self, traces):
+                return traces
+
+            def __call__(self, traces, final_answer=None):
                 call_counts["eval2"] += 1
                 return {"score": 0.8, "evaluator": "eval2"}
 

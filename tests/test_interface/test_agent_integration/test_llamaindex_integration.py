@@ -282,6 +282,8 @@ def test_llamaindex_adapter_async_coroutine_execution():
 
     mock_agent.run = async_run
     del mock_agent.run_sync  # No sync wrapper
+    del mock_agent.chat  # No chat method
+    del mock_agent.query  # No query method
 
     adapter = LlamaIndexAgentAdapter(mock_agent, "test_agent")
 
@@ -290,6 +292,53 @@ def test_llamaindex_adapter_async_coroutine_execution():
 
     # Verify result
     assert result.response.content == "Async result"
+
+
+def test_llamaindex_adapter_chat_method():
+    """Test that adapter uses .chat() method when available (ReActAgent pattern)."""
+    from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
+    from llama_index.core.base.llms.types import ChatMessage, MessageRole
+    from unittest.mock import Mock
+
+    # Create mock agent with chat method
+    mock_agent = Mock()
+    mock_result = Mock()
+    mock_result.response = ChatMessage(role=MessageRole.ASSISTANT, content="Chat result")
+    mock_agent.chat = Mock(return_value=mock_result)
+    del mock_agent.run_sync  # No run_sync wrapper
+
+    adapter = LlamaIndexAgentAdapter(mock_agent, "test_agent")
+
+    # Run agent (should use .chat() method)
+    result = adapter._run_agent_sync("test query")
+
+    # Verify chat was called
+    mock_agent.chat.assert_called_once_with("test query")
+    assert result.response.content == "Chat result"
+
+
+def test_llamaindex_adapter_query_method():
+    """Test that adapter uses .query() method when available."""
+    from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
+    from llama_index.core.base.llms.types import ChatMessage, MessageRole
+    from unittest.mock import Mock
+
+    # Create mock agent with query method
+    mock_agent = Mock()
+    mock_result = Mock()
+    mock_result.response = ChatMessage(role=MessageRole.ASSISTANT, content="Query result")
+    mock_agent.query = Mock(return_value=mock_result)
+    del mock_agent.run_sync  # No run_sync wrapper
+    del mock_agent.chat  # No chat method
+
+    adapter = LlamaIndexAgentAdapter(mock_agent, "test_agent")
+
+    # Run agent (should use .query() method)
+    result = adapter._run_agent_sync("test query")
+
+    # Verify query was called
+    mock_agent.query.assert_called_once_with("test query")
+    assert result.response.content == "Query result"
 
 
 def test_llamaindex_adapter_logging():

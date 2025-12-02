@@ -85,7 +85,8 @@ class Benchmark(ABC):
             benchmark = MyBenchmark(
                 agent_data=config,
                 fail_on_task_error=True,
-                fail_on_evaluation_error=True
+                fail_on_evaluation_error=True,
+                fail_on_setup_error=True
             )
             ```
 
@@ -99,6 +100,7 @@ class Benchmark(ABC):
         agent_data: Dict[str, Any] | Iterable[Dict[str, Any]],
         callbacks: Optional[List[BenchmarkCallback]] = None,
         n_task_repeats: int = 1,
+        fail_on_setup_error: bool = False,
         fail_on_task_error: bool = False,
         fail_on_evaluation_error: bool = False,
         progress_bar: bool | str = True,
@@ -113,6 +115,9 @@ class Benchmark(ABC):
                 or collecting custom metrics during the benchmark run.
             n_task_repeats: Number of times to repeat each task. Useful for measuring variance in
                 stochastic agent behaviors. Must be at least 1.
+            fail_on_setup_error: If True, raise exceptions when setup fails (environment, agents, evaluators).
+                If False (default), catch exceptions during setup and record them in the report with status
+                SETUP_FAILED. This allows the benchmark to continue running remaining tasks even if setup fails.
             fail_on_task_error: If True, raise exceptions when task execution fails. If False (default),
                 catch exceptions during task execution and record them in the report with status
                 TASK_EXECUTION_FAILED. This allows the benchmark to continue running remaining tasks.
@@ -157,7 +162,8 @@ class Benchmark(ABC):
             benchmark = MyBenchmark(
                 agent_data=config,
                 fail_on_task_error=True,
-                fail_on_evaluation_error=True
+                fail_on_evaluation_error=True,
+                fail_on_setup_error=True
             )
 
             # Progress bar configuration (automatically adds a callback)
@@ -204,6 +210,7 @@ class Benchmark(ABC):
         # Failure handling configuration
         self.fail_on_task_error = fail_on_task_error
         self.fail_on_evaluation_error = fail_on_evaluation_error
+        self.fail_on_setup_error = fail_on_setup_error
 
         # Registry for Traceable components (cleared after each task repetition)
         self._trace_registry: Dict[str, TraceableMixin] = {}
@@ -864,9 +871,10 @@ class Benchmark(ABC):
             benchmark after implementing the setup and execution methods.
 
             By default, the benchmark will continue executing remaining tasks even if some fail.
-            You can change this behavior by setting `fail_on_task_error=True` or `fail_on_evaluation_error=True`
-            when instantiating the benchmark. Each task execution returns a status indicating success
-            or the specific failure type (see [`TaskExecutionStatus`][maseval.core.benchmark.TaskExecutionStatus]).
+            You can change this behavior by setting `fail_on_task_error=True`,
+            `fail_on_evaluation_error=True`, or `fail_on_setup_error=True` when instantiating
+            the benchmark. Each task execution returns a status indicating success or the specific
+            failure type (see [`TaskExecutionStatus`][maseval.core.benchmark.TaskExecutionStatus]).
 
             For each task execution, the framework:
 
@@ -987,7 +995,7 @@ class Benchmark(ABC):
                             self.register("agents", agent_name, agent)
 
                 except Exception as e:
-                    # Setup failed - this is always critical, so we record and re-raise
+                    # Setup failed - record error and optionally re-raise
                     execution_status = TaskExecutionStatus.SETUP_FAILED
                     error_info = {
                         "error_type": type(e).__name__,
@@ -1010,8 +1018,13 @@ class Benchmark(ABC):
                     for cb in self.callbacks:
                         cb.on_task_repeat_end(self, report)
 
-                    # Clear registry and continue to next task
+                    # Clear registry before potentially re-raising
                     self.clear_registry()
+
+                    if self.fail_on_setup_error:
+                        raise
+
+                    # Continue to next task repetition
                     continue
 
                 # 2. Execute agent system
