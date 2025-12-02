@@ -7,7 +7,3 @@ In here, utilities are documented that are used across the library.
 
 [:material-github: View source](https://github.com/parameterlab/maseval/blob/main/maseval/core/config.py){ .md-source-file }
 ::: maseval.core.config.ConfigurableMixin
-
-::: maseval.core.config.Test
-
-::: maseval.core.config.TestChild
