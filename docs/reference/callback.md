@@ -1,6 +1,12 @@
 # Callback
 
-::: maseval.core.callback
+Callbacks allow you to hook into benchmark execution at various points. Use them for logging, monitoring, tracing, or custom side effects during agent runs.
+
+::: maseval.core.callback.BenchmarkCallback
+
+::: maseval.core.callback.EnvironmentCallback
+
+::: maseval.core.callback.AgentCallback
 
 ## Built-in Callbacks
 

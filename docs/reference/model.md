@@ -6,7 +6,7 @@ Model Adapters provide a uniform runtime interface to heterogeneous model provid
 
     `Benchmark` expects `AgentAdapter` instances; it does not consume model adapters directly. ModelAdapters are used by agents, simulators, others that directly invoke models.
 
-::: maseval.core.model
+::: maseval.core.model.ModelAdapter
 
 ## Interfaces
 

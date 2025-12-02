@@ -473,28 +473,6 @@ class SmolAgentAdapter(AgentAdapter):
         return MessageHistory(converted_messages)
 
 
-def _create_user_simulation_tool(user: "SmolAgentUser"):
-    """Factory function to create SmolAgentUserSimulationInputTool dynamically.
-
-    This allows us to lazily import UserInputTool and create a proper subclass.
-    """
-    _check_smolagents_installed()
-    from smolagents import UserInputTool
-
-    class SmolAgentUserSimulationInputTool(UserInputTool):
-        """A tool that simulates user input for smolagent using the UserLLMSimulator."""
-
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self._user = user
-
-        def forward(self, question: str) -> str:
-            """Simulates asking the user a question and getting a response from the user object."""
-            return self._user.simulate_response(question)
-
-    return SmolAgentUserSimulationInputTool()
-
-
 class SmolAgentUser(User):
     """A smol-agent specific user that provides a tool for user interaction.
 
@@ -502,7 +480,7 @@ class SmolAgentUser(User):
 
     Example:
         ```python
-        from maseval.interface.smolagents import SmolAgentUser
+        from maseval.interface.agents.smolagents import SmolAgentUser
 
         user = SmolAgentUser(...)
         tool = user.get_tool()  # Returns a SmolAgentUserSimulationInputTool
@@ -510,5 +488,22 @@ class SmolAgentUser(User):
     """
 
     def get_tool(self):
-        """Get the tool for the user."""
-        return _create_user_simulation_tool(user=self)
+        """Get a smolagents-compatible tool for user interaction.
+
+        Returns a `SmolAgentUserSimulationInputTool` instance that wraps this user
+        and can be passed directly to a smolagents agent.
+
+        Returns:
+            A tool instance compatible with smolagents that simulates user responses.
+
+        Example:
+            ```python
+            user = SmolAgentUser(model=model, persona="...", scenario="...")
+            tool = user.get_tool()
+            agent = CodeAgent(tools=[tool, ...], model=model)
+            ```
+        """
+        _check_smolagents_installed()
+        from maseval.interface.agents.smolagents_optional import SmolAgentUserSimulationInputTool
+
+        return SmolAgentUserSimulationInputTool(user=self)

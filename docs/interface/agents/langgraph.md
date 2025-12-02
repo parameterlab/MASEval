@@ -19,4 +19,6 @@ pip install langgraph
 
 ## API Reference
 
-::: maseval.interface.agents.langgraph
+::: maseval.interface.agents.langgraph.LangGraphAgentAdapter
+
+::: maseval.interface.agents.langgraph.LangGraphUser

@@ -19,4 +19,8 @@ pip install smolagents
 
 ## API Reference
 
-::: maseval.interface.agents.smolagents
+::: maseval.interface.agents.smolagents.SmolAgentAdapter
+
+::: maseval.interface.agents.smolagents.SmolAgentUser
+
+::: maseval.interface.agents.smolagents_optional.SmolAgentUserSimulationInputTool

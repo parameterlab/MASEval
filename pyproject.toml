@@ -112,6 +112,7 @@ docs = [
     "mkdocstrings[python]>=0.17.0",
     "pymdown-extensions>=9.0.0",
     "mkdocs-jupyter>=0.24.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.5.0",
 ]
 
 # Dependencies needed for static type checking

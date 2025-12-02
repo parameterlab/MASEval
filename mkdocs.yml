@@ -45,6 +45,9 @@ markdown_extensions:
 
 plugins:
   - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: date
   - mkdocs-jupyter:
       include_source: True
       execute: False
@@ -62,7 +65,7 @@ plugins:
             separate_signature: true
             # Keep type paths brief in signatures
             annotations_path: brief
-            show_root_full_path: true
+            show_root_full_path: false
             show_root_heading: true
             type_parameter_headings: true
             show_source: false
@@ -103,6 +106,7 @@ nav:
               - OpenAI: interface/inference/openai.md
               - HuggingFace: interface/inference/huggingface.md
               - Google GenAI: interface/inference/google_genai.md
+              - LiteLLM: interface/inference/litellm.md
       # - Benchmarks:
       # - GAIA: benchmarks/gaia.md
       # - AgentBench: benchmarks/agentbench.md

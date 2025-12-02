@@ -1,6 +1,8 @@
 # Agents
 
-::: maseval.core.agent
+Agent adapters wrap agents from any framework to provide a unified interface for benchmarking. They handle execution, message history tracking, and callback hooks.
+
+::: maseval.core.agent.AgentAdapter
 
 ## Interfaces
 

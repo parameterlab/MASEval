@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Benchmark` class now has a `fail_on_setup_error` flag that raises errors observed during setup of task (PR: #10)
 - The `Evaluator` class now has a `filter_traces` base method to conveniently adapt the same evaluator to different entities in the traces (PR: #10).
 - Improved Quick Start Guide in `docs/getting-started/quickstart.md`. (PR: #10)
+- `maseval.interface.agents` structure changed. Tools requiring framework imports (beyond just typing) now in `<framework>_optional.py` and imported dynamically from `<framework>.py`.
 
 ### Fixed
 
