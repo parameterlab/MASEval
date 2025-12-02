@@ -73,6 +73,7 @@ plugins:
             show_root_heading: true
             type_parameter_headings: true
             show_source: false
+            inherited_members: true # Include inherited members in the documentation
 
             # Hide private members (methods/attributes starting with _)
             extra:
@@ -101,16 +102,17 @@ nav:
           - Simulator: reference/simulator.md
           - Task: reference/task.md
           - User: reference/user.md
+          - Utilities: reference/utilities.md
       - Interface:
           - Agents:
-              - SmolAgents: interface/agents/smolagents.md
               - LangGraph: interface/agents/langgraph.md
               - LlamaIndex: interface/agents/llamaindex.md
+              - SmolAgents: interface/agents/smolagents.md
           - Models:
-              - OpenAI: interface/inference/openai.md
-              - HuggingFace: interface/inference/huggingface.md
               - Google GenAI: interface/inference/google_genai.md
+              - HuggingFace: interface/inference/huggingface.md
               - LiteLLM: interface/inference/litellm.md
+              - OpenAI: interface/inference/openai.md
       # - Benchmarks:
       # - GAIA: benchmarks/gaia.md
       # - AgentBench: benchmarks/agentbench.md
