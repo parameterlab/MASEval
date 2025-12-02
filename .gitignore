@@ -207,6 +207,8 @@ cython_debug/
 
 # Agents
 .claude/
+.gemini/
+.codex/
 
 # Marimo
 marimo/_static/
