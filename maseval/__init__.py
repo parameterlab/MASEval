@@ -2,6 +2,10 @@
 
 Expose a small, stable surface area for users to import core abstractions directly from `maseval`,
 for example: `from maseval import Task, Benchmark`.
+
+Core library sits in the top namespace for easy access.
+Interfaces sit in the `maseval.interface` submodule.
+Benchmarks sit in the `maseval.benchmark` submodule.
 """
 
 from .core.task import Task, TaskCollection
