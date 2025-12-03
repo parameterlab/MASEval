@@ -65,24 +65,24 @@ def sample_agents_data() -> Dict[str, Any]:
 
 @pytest.fixture
 def sample_scenarios_data() -> Dict[str, Any]:
-    """Sample scenarios.json data matching AWS format."""
+    """Sample scenarios.json data matching AWS format (no IDs - they get generated)."""
     return {
         "scenarios": [
             {
-                "id": "11111111-1111-1111-1111-111111111111",
+                "scenario": "Bicycle tour planning",
                 "input_problem": "Book a flight to New York",
                 "assertions": [
-                    {"type": "user_side", "content": "Flight booked"},
-                    {"type": "system_side", "content": "Database updated"},
+                    "user: Flight booked",
+                    "agent: Database updated",
                 ],
                 "category": "travel",
                 "complexity": "simple",
             },
             {
-                "id": "22222222-2222-2222-2222-222222222222",
+                "scenario": "Reservation cancellation",
                 "input_problem": "Cancel my reservation",
                 "assertions": [
-                    {"type": "user_side", "content": "Reservation cancelled"},
+                    "user: Reservation cancelled",
                 ],
                 "category": "travel",
                 "complexity": "simple",
@@ -204,18 +204,19 @@ class TestCreateTasksList:
     """Tests for _create_tasks_list function."""
 
     def test_basic_conversion(self, sample_scenarios_data, sample_agents_data):
-        """Converts scenarios to task format."""
+        """Converts scenarios to task format with sequential IDs."""
         tools = _create_tools_list(sample_agents_data)
         tasks = _create_tasks_list(sample_scenarios_data, tools)
 
         assert len(tasks) == 2
 
         task1 = tasks[0]
-        assert task1["id"] == "11111111-1111-1111-1111-111111111111"
+        assert task1["id"] == "task-000001"  # Sequential ID generated
         assert task1["query"] == "Book a flight to New York"
         assert "tools" in task1["environment_data"]
         assert "assertions" in task1["evaluation_data"]
         assert task1["metadata"]["category"] == "travel"
+        assert task1["metadata"]["scenario"] == "Bicycle tour planning"
 
     def test_list_of_scenarios(self, sample_scenarios_data, sample_agents_data):
         """Also works with list of scenarios directly."""
@@ -733,8 +734,8 @@ class TestDataLocation:
 class TestSequentialIdGeneration:
     """Tests for task ID generation."""
 
-    def test_generates_sequential_ids_when_missing(self):
-        """_create_tasks_list generates sequential IDs when not present."""
+    def test_generates_sequential_ids(self):
+        """_create_tasks_list always generates sequential IDs."""
         scenarios = {
             "scenarios": [
                 {"input_problem": "Task 1", "assertions": []},
@@ -748,17 +749,22 @@ class TestSequentialIdGeneration:
         assert tasks[1]["id"] == "task-000002"
         assert tasks[2]["id"] == "task-000003"
 
-    def test_preserves_existing_ids(self):
-        """_create_tasks_list preserves existing IDs."""
+    def test_sequential_ids_ignore_original_ids(self):
+        """_create_tasks_list ignores any existing id/uuid fields in scenarios."""
         scenarios = {
             "scenarios": [
-                {"id": "custom-id-1", "input_problem": "Task 1", "assertions": []},
-                {"uuid": "uuid-based-2", "input_problem": "Task 2", "assertions": []},
-                {"input_problem": "Task 3", "assertions": []},  # No ID
+                {"id": "should-be-ignored", "input_problem": "Task 1", "assertions": []},
+                {"uuid": "also-ignored", "input_problem": "Task 2", "assertions": []},
+                {"input_problem": "Task 3", "assertions": []},
             ]
         }
         tasks = _create_tasks_list(scenarios, [])
 
-        assert tasks[0]["id"] == "custom-id-1"
-        assert tasks[1]["id"] == "uuid-based-2"
-        assert tasks[2]["id"] == "task-000003"  # Generated
+        # All get sequential IDs regardless of original id/uuid fields
+        assert tasks[0]["id"] == "task-000001"
+        assert tasks[1]["id"] == "task-000002"
+        assert tasks[2]["id"] == "task-000003"
+
+        # Original id/uuid are preserved in metadata
+        assert tasks[0]["metadata"].get("id") == "should-be-ignored"
+        assert tasks[1]["metadata"].get("uuid") == "also-ignored"

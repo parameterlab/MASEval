@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
-from uuid import UUID
 
 from maseval import Task, TaskCollection
 
@@ -283,7 +282,7 @@ def _create_agents_list(agents_obj: object) -> Dict[str, Any]:
 
 
 def _create_tasks_list(scenarios_obj: object, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Convert scenarios to task format."""
+    """Convert scenarios to task format with sequential IDs."""
     tasks: List[Dict[str, Any]] = []
 
     if isinstance(scenarios_obj, dict) and isinstance(scenarios_obj.get("scenarios"), list):
@@ -298,15 +297,15 @@ def _create_tasks_list(scenarios_obj: object, tools: List[Dict[str, Any]]) -> Li
             continue
 
         query = scen.get("input_problem") or scen.get("query") or ""
-        # Use existing ID if present, otherwise generate sequential task ID
-        tid = scen.get("id") or scen.get("uuid") or f"task-{idx:06d}"
+        # Always generate sequential task ID
+        tid = f"task-{idx:06d}"
 
         task = {
             "id": tid,
             "query": query,
             "environment_data": {"tools": tools},
             "evaluation_data": {"assertions": scen.get("assertions", [])},
-            "metadata": {k: v for k, v in scen.items() if k not in ("input_problem", "query", "id", "uuid", "assertions")},
+            "metadata": {k: v for k, v in scen.items() if k not in ("input_problem", "query", "assertions")},
         }
         tasks.append(task)
 
@@ -459,8 +458,9 @@ def load_tasks(
             "evaluation_data": t.get("evaluation_data", {}),
             "metadata": t.get("metadata", {}),
         }
+        # Store task ID in metadata (format: task-NNNNNN)
         if t.get("id"):
-            task_kwargs["id"] = UUID(t["id"])
+            task_kwargs["metadata"]["task_id"] = t["id"]
         tasks.append(Task(**task_kwargs))
 
     return TaskCollection(tasks)
