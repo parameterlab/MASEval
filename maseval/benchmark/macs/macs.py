@@ -355,7 +355,7 @@ class MACSEvaluator(Evaluator):
 # =============================================================================
 
 
-class MACSUserSimulator(User):
+class MACSUser(User):
     """MACS-specific user simulator with conversation limits.
 
     Extends the base User class with MACS-specific behavior:
@@ -420,7 +420,7 @@ class MACSUserSimulator(User):
             NotImplementedError: Always, as this must be implemented by subclass.
         """
         raise NotImplementedError(
-            "MACSUserSimulator.get_tool() must be overridden by framework-specific subclass. "
+            "MACSUser.get_tool() must be overridden by framework-specific subclass. "
             "Use SmolAgentMACSUser for smolagents or LangGraphMACSUser for langgraph."
         )
 
@@ -649,13 +649,13 @@ class MACSBenchmark(Benchmark):
         agent_data: Dict[str, Any],
         environment: Environment,
         task: Task,
-    ) -> MACSUserSimulator:
+    ) -> MACSUser:
         """Create MACS user simulator.
 
-        Creates a MACSUserSimulator with scenario and query from the task.
+        Creates a MACSUser with scenario and query from the task.
         The user profile is automatically extracted from the scenario text.
 
-        Note: MACSUserSimulator.get_tool() raises NotImplementedError.
+        Note: MACSUser.get_tool() raises NotImplementedError.
         Framework-specific subclasses in examples should wrap this user
         or override setup_user() to return a user with get_tool() implemented.
 
@@ -665,10 +665,10 @@ class MACSBenchmark(Benchmark):
             task: Current task with scenario and user profile
 
         Returns:
-            MACSUserSimulator instance
+            MACSUser instance
         """
         scenario = task.metadata.get("scenario", "")
-        return MACSUserSimulator(
+        return MACSUser(
             model=self._model,
             scenario=scenario,
             initial_prompt=task.query,

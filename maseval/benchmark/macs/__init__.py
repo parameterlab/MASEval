@@ -13,7 +13,7 @@ from .macs import (
     MACSEnvironment,
     MACSEvaluator,
     MACSGenericTool,
-    MACSUserSimulator,
+    MACSUser,
     compute_benchmark_metrics,
 )
 from .data_loader import (
@@ -34,7 +34,7 @@ __all__ = [
     "MACSEnvironment",
     "MACSEvaluator",
     "MACSGenericTool",
-    "MACSUserSimulator",
+    "MACSUser",
     # Data loading
     "load_tasks",
     "load_agent_config",

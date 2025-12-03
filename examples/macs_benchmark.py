@@ -17,11 +17,14 @@ Reference:
     Data: https://github.com/aws-samples/multiagent-collab-scenario-benchmark
 
 Usage:
-    # Run with smolagents
-    python examples/macs_benchmark.py --framework smolagents --domain travel --limit 5
+    # Run with smolagents on travel domain
+    uv run python examples/macs_benchmark.py --framework smolagents --domain travel --limit 5
 
-    # Run with langgraph
-    python examples/macs_benchmark.py --framework langgraph --domain travel --limit 5
+    # Run with langgraph on mortgage domain
+    uv run python examples/macs_benchmark.py --framework langgraph --domain mortgage --limit 5
+
+    # Run a single task by ID for debugging
+    uv run python examples/macs_benchmark.py --framework smolagents --domain travel --task-id task_001
 """
 
 import argparse
@@ -29,18 +32,34 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
+# Third-party imports (both frameworks will be installed)
 from google.genai import Client as GoogleGenAIClient
 
+# smolagents imports
+from smolagents import Tool as SmolagentsTool, ToolCallingAgent, OpenAIServerModel, FinalAnswerTool
+
+# langgraph imports
+from langchain_core.tools import StructuredTool
+from langchain_core.messages import SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.graph import StateGraph, END
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode, tools_condition
+from typing_extensions import TypedDict, Annotated
+
+# MASEval imports
 from maseval import AgentAdapter, Environment, Task, User
 from maseval.core.callbacks.result_logger import FileResultLogger
 from maseval.core.config import ConfigurableMixin
 from maseval.core.tracing import TraceableMixin
+from maseval.interface.agents.smolagents import SmolAgentAdapter
+from maseval.interface.agents.langgraph import LangGraphAgentAdapter
 from maseval.interface.inference.google_genai import GoogleGenAIModelAdapter
 
 from maseval.benchmark.macs import (
     MACSBenchmark,
     MACSGenericTool,
-    MACSUserSimulator,
+    MACSUser,
     compute_benchmark_metrics,
     ensure_data_exists,
     load_agent_config,
@@ -75,162 +94,156 @@ def create_model(model_id: str = "gemini-2.5-flash") -> GoogleGenAIModelAdapter:
 # =============================================================================
 
 
-def _create_smolagents_benchmark():
-    """Create smolagents-specific benchmark class with multi-agent hierarchy."""
-    from smolagents import Tool as SmolagentsTool, ToolCallingAgent, OpenAIServerModel, FinalAnswerTool
-    from maseval.interface.agents.smolagents import SmolAgentAdapter
+class SmolagentsToolWrapper(SmolagentsTool, ConfigurableMixin, TraceableMixin):
+    """Smolagents wrapper for MACSGenericTool."""
 
-    class SmolagentsToolWrapper(SmolagentsTool, ConfigurableMixin, TraceableMixin):
-        """Smolagents wrapper for MACSGenericTool."""
+    skip_forward_signature_validation = True
 
-        skip_forward_signature_validation = True
+    def __init__(self, generic_tool: MACSGenericTool):
+        self.generic_tool = generic_tool
+        self.name = generic_tool.name
+        self.description = generic_tool.description
+        self.inputs = generic_tool.inputs
+        self.output_type = generic_tool.output_type
+        super().__init__()
 
-        def __init__(self, generic_tool: MACSGenericTool):
-            self.generic_tool = generic_tool
-            self.name = generic_tool.name
-            self.description = generic_tool.description
-            self.inputs = generic_tool.inputs
-            self.output_type = generic_tool.output_type
-            super().__init__()
+    def forward(self, **kwargs) -> str:
+        return self.generic_tool(**kwargs)
 
-        def forward(self, **kwargs) -> str:
-            return self.generic_tool(**kwargs)
+    def gather_traces(self) -> Dict[str, Any]:
+        return self.generic_tool.gather_traces()
 
-        def gather_traces(self) -> Dict[str, Any]:
-            return self.generic_tool.gather_traces()
+    def gather_config(self) -> Dict[str, Any]:
+        return self.generic_tool.gather_config()
 
-        def gather_config(self) -> Dict[str, Any]:
-            return self.generic_tool.gather_config()
 
-    class SmolagentsMACSUser(MACSUserSimulator):
-        """MACS User Simulator with smolagents tool integration."""
+class SmolagentsMACSUser(MACSUser):
+    """MACS User with smolagents tool integration."""
 
-        def get_tool(self):
-            """Return a smolagents-compatible user input tool."""
-            # Create a simple smolagents tool that wraps simulate_response
-            user = self
+    def get_tool(self):
+        """Return a smolagents-compatible user input tool."""
+        user = self
 
-            class UserInputTool(SmolagentsTool):
-                name = "user_input"
-                description = "Ask the user a question to clarify their request or get additional information."
-                inputs = {"question": {"type": "string", "description": "The question to ask the user."}}
-                output_type = "string"
+        class UserInputTool(SmolagentsTool):
+            name = "user_input"
+            description = "Ask the user a question to clarify their request or get additional information."
+            inputs = {"question": {"type": "string", "description": "The question to ask the user."}}
+            output_type = "string"
 
-                def forward(self, question: str) -> str:
-                    return user.simulate_response(question)
+            def forward(self, question: str) -> str:
+                return user.simulate_response(question)
 
-            return UserInputTool()
+        return UserInputTool()
 
-    class SmolagentsMACSBenchmark(MACSBenchmark):
-        """MACS Benchmark implementation for smolagents with multi-agent hierarchy."""
 
-        def setup_user(
-            self,
-            agent_data: Dict[str, Any],
-            environment: Environment,
-            task: Task,
-        ) -> SmolagentsMACSUser:
-            """Create smolagents-compatible user simulator."""
-            scenario = task.metadata.get("scenario", "")
+class SmolagentsMACSBenchmark(MACSBenchmark):
+    """MACS Benchmark implementation for smolagents with multi-agent hierarchy."""
 
-            return SmolagentsMACSUser(
-                name="Simulated User",
-                model=self._model,
-                scenario=scenario,
-                initial_prompt=task.query,
+    def setup_user(
+        self,
+        agent_data: Dict[str, Any],
+        environment: Environment,
+        task: Task,
+    ) -> SmolagentsMACSUser:
+        """Create smolagents-compatible user simulator."""
+        scenario = task.metadata.get("scenario", "")
+
+        return SmolagentsMACSUser(
+            name="Simulated User",
+            model=self._model,
+            scenario=scenario,
+            initial_prompt=task.query,
+        )
+
+    def setup_agents(
+        self,
+        agent_data: Dict[str, Any],
+        environment: Environment,
+        task: Task,
+        user: Optional[User],
+    ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
+        """Create smolagents multi-agent hierarchy.
+
+        Implements the exact agent topology from agents.json:
+        - Travel/Mortgage: 2-level hierarchy (supervisor -> specialists)
+        - Software: 3-level hierarchy (supervisor -> deploy_agent -> infra/app agents)
+        """
+        # Create smolagents model
+        smol_model = OpenAIServerModel(
+            model_id="gemini-2.5-flash",
+            api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
+            api_key=os.getenv("GOOGLE_API_KEY"),
+        )
+
+        # Build agent lookup
+        agents_config = agent_data.get("agents", [])
+        agent_lookup = {a["agent_id"]: a for a in agents_config}
+        primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
+
+        # Wrap all generic tools for smolagents
+        generic_tools = environment.create_tools()
+        tool_lookup = {t.name: SmolagentsToolWrapper(t) for t in generic_tools}
+
+        # Helper to get tools for an agent
+        def get_agent_tools(agent_spec: Dict[str, Any]) -> List[Any]:
+            """Get wrapped tools for an agent based on tool group names."""
+            tool_groups = agent_spec.get("tools", [])
+            tools = []
+            for tool_group in tool_groups:
+                # Find actions in this tool group
+                for tool_spec in environment.state.get("tool_specs", []):
+                    if tool_spec.get("tool_name") == tool_group:
+                        for action in tool_spec.get("actions", []):
+                            action_name = action.get("name")
+                            if action_name and action_name in tool_lookup:
+                                tools.append(tool_lookup[action_name])
+            return tools
+
+        # Recursive function to build agent hierarchy
+        def build_agent(agent_id: str, depth: int = 0) -> ToolCallingAgent:
+            """Build an agent with its sub-agents (managed_agents)."""
+            agent_spec = agent_lookup.get(agent_id, {})
+
+            # Get this agent's tools
+            agent_tools = get_agent_tools(agent_spec)
+            agent_tools.append(FinalAnswerTool())
+
+            # Build managed agents from reachable_agents
+            managed_agents = []
+            reachable = agent_spec.get("reachable_agents", [])
+
+            for reachable_spec in reachable:
+                sub_agent_id = reachable_spec.get("agent_id")
+                if sub_agent_id and sub_agent_id in agent_lookup:
+                    sub_agent = build_agent(sub_agent_id, depth + 1)
+                    managed_agents.append(sub_agent)
+
+            # Create the agent
+            agent = ToolCallingAgent(
+                model=smol_model,
+                tools=agent_tools,
+                managed_agents=managed_agents if managed_agents else None,
+                name=agent_spec.get("agent_name", agent_id),
+                description=agent_spec.get("agent_instruction", ""),
+                max_steps=15,  # Allow more steps for multi-agent coordination
+                verbosity_level=0,
             )
 
-        def setup_agents(
-            self,
-            agent_data: Dict[str, Any],
-            environment: Environment,
-            task: Task,
-            user: Optional[User],
-        ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
-            """Create smolagents multi-agent hierarchy.
+            return agent
 
-            Implements the exact agent topology from agents.json:
-            - Travel/Mortgage: 2-level hierarchy (supervisor -> specialists)
-            - Software: 3-level hierarchy (supervisor -> deploy_agent -> infra/app agents)
-            """
-            # Create smolagents model
-            smol_model = OpenAIServerModel(
-                model_id="gemini-2.5-flash",
-                api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
-                api_key=os.getenv("GOOGLE_API_KEY"),
-            )
+        # Build the primary agent with full hierarchy
+        primary_agent = build_agent(primary_agent_id)
 
-            # Build agent lookup
-            agents_config = agent_data.get("agents", [])
-            agent_lookup = {a["agent_id"]: a for a in agents_config}
-            primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
+        # Add user tool to primary agent if user simulator is available
+        if user and hasattr(user, "get_tool"):
+            user_tool = user.get_tool()
+            if user_tool:
+                primary_agent.tools[user_tool.name] = user_tool
 
-            # Wrap all generic tools for smolagents
-            generic_tools = environment.create_tools()
-            tool_lookup = {t.name: SmolagentsToolWrapper(t) for t in generic_tools}
+        # Wrap with adapter
+        adapter = SmolAgentAdapter(primary_agent, name=primary_agent_id)
 
-            # Helper to get tools for an agent
-            def get_agent_tools(agent_spec: Dict[str, Any]) -> List[Any]:
-                """Get wrapped tools for an agent based on tool group names."""
-                tool_groups = agent_spec.get("tools", [])
-                tools = []
-                for tool_group in tool_groups:
-                    # Find actions in this tool group
-                    for tool_spec in environment.state.get("tool_specs", []):
-                        if tool_spec.get("tool_name") == tool_group:
-                            for action in tool_spec.get("actions", []):
-                                action_name = action.get("name")
-                                if action_name and action_name in tool_lookup:
-                                    tools.append(tool_lookup[action_name])
-                return tools
-
-            # Recursive function to build agent hierarchy
-            def build_agent(agent_id: str, depth: int = 0) -> ToolCallingAgent:
-                """Build an agent with its sub-agents (managed_agents)."""
-                agent_spec = agent_lookup.get(agent_id, {})
-
-                # Get this agent's tools
-                agent_tools = get_agent_tools(agent_spec)
-                agent_tools.append(FinalAnswerTool())
-
-                # Build managed agents from reachable_agents
-                managed_agents = []
-                reachable = agent_spec.get("reachable_agents", [])
-
-                for reachable_spec in reachable:
-                    sub_agent_id = reachable_spec.get("agent_id")
-                    if sub_agent_id and sub_agent_id in agent_lookup:
-                        sub_agent = build_agent(sub_agent_id, depth + 1)
-                        managed_agents.append(sub_agent)
-
-                # Create the agent
-                agent = ToolCallingAgent(
-                    model=smol_model,
-                    tools=agent_tools,
-                    managed_agents=managed_agents if managed_agents else None,
-                    name=agent_spec.get("agent_name", agent_id),
-                    description=agent_spec.get("agent_instruction", ""),
-                    max_steps=15,  # Allow more steps for multi-agent coordination
-                    verbosity_level=0,
-                )
-
-                return agent
-
-            # Build the primary agent with full hierarchy
-            primary_agent = build_agent(primary_agent_id)
-
-            # Add user tool to primary agent if user simulator is available
-            if user and hasattr(user, "get_tool"):
-                user_tool = user.get_tool()
-                if user_tool:
-                    primary_agent.tools.append(user_tool)  # type: ignore[attr-defined]
-
-            # Wrap with adapter
-            adapter = SmolAgentAdapter(primary_agent, name=primary_agent_id)
-
-            return [adapter], {primary_agent_id: adapter}
-
-    return SmolagentsMACSBenchmark
+        return [adapter], {primary_agent_id: adapter}
 
 
 # =============================================================================
@@ -238,185 +251,135 @@ def _create_smolagents_benchmark():
 # =============================================================================
 
 
-def _create_langgraph_benchmark():
-    """Create langgraph-specific benchmark class with multi-agent hierarchy."""
-    from langchain_core.tools import StructuredTool
-    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    from langgraph.graph import StateGraph, END
-    from langgraph.graph.message import add_messages
-    from langgraph.prebuilt import ToolNode, tools_condition
-    from typing_extensions import TypedDict, Annotated
-    from maseval.interface.agents.langgraph import LangGraphAgentAdapter
+class LangGraphToolWrapper(ConfigurableMixin, TraceableMixin):
+    """LangGraph wrapper for MACSGenericTool."""
 
-    class LanggraphToolWrapper(ConfigurableMixin, TraceableMixin):
-        """LangGraph wrapper for MACSGenericTool."""
+    def __init__(self, generic_tool: MACSGenericTool):
+        self.generic_tool = generic_tool
+        self.tool = StructuredTool.from_function(
+            func=generic_tool,
+            name=generic_tool.name,
+            description=generic_tool.description,
+        )
 
-        def __init__(self, generic_tool: MACSGenericTool):
-            self.generic_tool = generic_tool
-            self.name = generic_tool.name
-            self.tool = StructuredTool.from_function(
-                func=generic_tool.__call__,
-                name=generic_tool.name,
-                description=generic_tool.description,
-            )
+    def __call__(self, *args, **kwargs):
+        return self.tool(*args, **kwargs)
 
-        def __call__(self, *args, **kwargs):
-            return self.tool(*args, **kwargs)
+    def gather_traces(self) -> Dict[str, Any]:
+        return self.generic_tool.gather_traces()
 
-        def gather_traces(self) -> Dict[str, Any]:
-            return self.generic_tool.gather_traces()
+    def gather_config(self) -> Dict[str, Any]:
+        return self.generic_tool.gather_config()
 
-        def gather_config(self) -> Dict[str, Any]:
-            return self.generic_tool.gather_config()
 
-    class LangGraphMACSUser(MACSUserSimulator):
-        """MACS User Simulator with LangGraph tool integration."""
+class LangGraphMACSUser(MACSUser):
+    """MACS User with LangGraph tool integration."""
 
-        def get_tool(self):
-            """Return a LangGraph-compatible user input tool."""
+    def get_tool(self):
+        """Return a LangGraph-compatible user input tool."""
 
-            def user_input(question: str) -> str:
-                """Ask the user a question and get their response."""
-                return self.simulate_response(question)
+        def user_input(question: str) -> str:
+            """Ask the user a question and get their response."""
+            return self.simulate_response(question)
 
-            return StructuredTool.from_function(
-                func=user_input,
-                name="user_input",
-                description="Ask the user a question. Use this to clarify requirements or get additional information.",
-            )
+        return StructuredTool.from_function(
+            func=user_input,
+            name="user_input",
+            description="Ask the user a question. Use this to clarify requirements or get additional information.",
+        )
 
-    class LanggraphMACSBenchmark(MACSBenchmark):
-        """MACS Benchmark implementation for langgraph with multi-agent hierarchy."""
 
-        def setup_user(
-            self,
-            agent_data: Dict[str, Any],
-            environment: Environment,
-            task: Task,
-        ) -> "LangGraphMACSUser":
-            """Create langgraph-compatible user simulator."""
-            scenario = task.metadata.get("scenario", "")
+# LangGraph agent state
+class AgentState(TypedDict):
+    messages: Annotated[list, add_messages]
 
-            return LangGraphMACSUser(
-                name="Simulated User",
-                model=self._model,
-                scenario=scenario,
-                initial_prompt=task.query,
-            )
 
-        def setup_agents(
-            self,
-            agent_data: Dict[str, Any],
-            environment: Environment,
-            task: Task,
-            user: Optional[User],
-        ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
-            """Create langgraph multi-agent hierarchy.
+class LangGraphMACSBenchmark(MACSBenchmark):
+    """MACS Benchmark implementation for langgraph with multi-agent hierarchy."""
 
-            Uses subgraphs to implement the agent hierarchy from agents.json.
-            """
-            # Create LangChain model
-            llm = ChatGoogleGenerativeAI(
-                model="gemini-2.5-flash",
-                google_api_key=os.getenv("GOOGLE_API_KEY"),
-            )
+    def setup_user(
+        self,
+        agent_data: Dict[str, Any],
+        environment: Environment,
+        task: Task,
+    ) -> LangGraphMACSUser:
+        """Create langgraph-compatible user simulator."""
+        scenario = task.metadata.get("scenario", "")
 
-            # Build agent lookup
-            agents_config = agent_data.get("agents", [])
-            agent_lookup = {a["agent_id"]: a for a in agents_config}
-            primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
+        return LangGraphMACSUser(
+            name="Simulated User",
+            model=self._model,
+            scenario=scenario,
+            initial_prompt=task.query,
+        )
 
-            # Wrap all generic tools
-            generic_tools = environment.create_tools()
-            tool_lookup = {t.name: LanggraphToolWrapper(t) for t in generic_tools}
+    def setup_agents(
+        self,
+        agent_data: Dict[str, Any],
+        environment: Environment,
+        task: Task,
+        user: Optional[User],
+    ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
+        """Create langgraph multi-agent hierarchy.
 
-            # State type for langgraph
-            class AgentState(TypedDict):
-                messages: Annotated[list, add_messages]
+        Uses subgraphs to implement the agent hierarchy from agents.json.
+        """
+        # Create LangChain model
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            google_api_key=os.getenv("GOOGLE_API_KEY"),
+        )
 
-            # Helper to get langchain tools for an agent
-            def get_agent_langchain_tools(agent_spec: Dict[str, Any]) -> List:
-                """Get langchain tools for an agent."""
-                tool_groups = agent_spec.get("tools", [])
-                tools = []
-                for tool_group in tool_groups:
-                    for tool_spec in environment.state.get("tool_specs", []):
-                        if tool_spec.get("tool_name") == tool_group:
-                            for action in tool_spec.get("actions", []):
-                                action_name = action.get("name")
-                                if action_name and action_name in tool_lookup:
-                                    tools.append(tool_lookup[action_name].tool)
-                return tools
+        # Build agent lookup
+        agents_config = agent_data.get("agents", [])
+        agent_lookup = {a["agent_id"]: a for a in agents_config}
+        primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
 
-            # Build a simple graph for leaf agents (no sub-agents)
-            def build_leaf_agent_graph(agent_id: str):
-                """Build a compiled graph for a leaf agent."""
-                agent_spec = agent_lookup.get(agent_id, {})
-                agent_tools = get_agent_langchain_tools(agent_spec)
-                agent_name = agent_spec.get("agent_name", agent_id)
-                agent_instruction = agent_spec.get("agent_instruction", "")
+        # Wrap all generic tools
+        generic_tools = environment.create_tools()
+        tool_lookup = {t.name: LangGraphToolWrapper(t) for t in generic_tools}
 
-                if agent_tools:
-                    llm_with_tools = llm.bind_tools(agent_tools)
-                else:
-                    llm_with_tools = llm
+        # Helper to get tools for an agent
+        def get_agent_tools(agent_spec: Dict[str, Any]) -> List[StructuredTool]:
+            """Get wrapped tools for an agent based on tool group names."""
+            tool_groups = agent_spec.get("tools", [])
+            tools = []
+            for tool_group in tool_groups:
+                for tool_spec in environment.state.get("tool_specs", []):
+                    if tool_spec.get("tool_name") == tool_group:
+                        for action in tool_spec.get("actions", []):
+                            action_name = action.get("name")
+                            if action_name and action_name in tool_lookup:
+                                tools.append(tool_lookup[action_name].tool)
+            return tools
 
-                def call_agent(state: AgentState):
-                    messages = state["messages"]
-                    # Add system message
-                    has_system = any(isinstance(m, SystemMessage) for m in messages)
-                    if not has_system:
-                        system_msg = SystemMessage(content=f"You are {agent_name}. {agent_instruction}")
-                        messages = [system_msg] + list(messages)
-                    response = llm_with_tools.invoke(messages)
-                    return {"messages": [response]}
+        # Build agent graph recursively
+        def build_agent_graph(agent_id: str) -> StateGraph:
+            """Build a LangGraph for an agent with potential sub-agents."""
+            agent_spec = agent_lookup.get(agent_id, {})
 
-                graph = StateGraph(AgentState)
-                graph.add_node("agent", call_agent)
+            # Get this agent's tools
+            agent_tools = get_agent_tools(agent_spec)
 
-                if agent_tools:
-                    graph.add_node("tools", ToolNode(agent_tools))
-                    graph.add_conditional_edges("agent", tools_condition)
-                    graph.add_edge("tools", "agent")
-                else:
-                    graph.add_edge("agent", END)
+            # Build sub-agent tools from reachable_agents
+            reachable = agent_spec.get("reachable_agents", [])
 
-                graph.set_entry_point("agent")
-                return graph.compile()
-
-            # For the primary agent, we build a graph that can delegate to sub-agents
-            primary_spec = agent_lookup.get(primary_agent_id, {})
-            primary_tools = get_agent_langchain_tools(primary_spec)
-
-            # Add user tool if available
-            if user and hasattr(user, "get_tool"):
-                user_tool = user.get_tool()
-                if user_tool:
-                    primary_tools.append(user_tool)
-
-            # Create sub-agent tools (delegation)
-            reachable = primary_spec.get("reachable_agents", [])
             for reachable_spec in reachable:
                 sub_agent_id = reachable_spec.get("agent_id")
                 if sub_agent_id and sub_agent_id in agent_lookup:
                     sub_spec = agent_lookup[sub_agent_id]
-                    sub_graph = build_leaf_agent_graph(sub_agent_id)
+                    sub_graph = build_agent_graph(sub_agent_id).compile()
 
                     # Create a tool that invokes the sub-agent
                     def make_sub_agent_tool(graph, name, description):
                         def invoke_sub_agent(query: str) -> str:
-                            """Delegate to sub-agent."""
+                            """Delegate task to sub-agent."""
+                            from langchain_core.messages import HumanMessage
+
                             result = graph.invoke({"messages": [HumanMessage(content=query)]})
-                            # Get last AI message
-                            for msg in reversed(result.get("messages", [])):
-                                if isinstance(msg, AIMessage):
-                                    content = msg.content
-                                    if isinstance(content, str):
-                                        return content
-                                    # Handle list content (e.g., multimodal responses)
-                                    return str(content)
-                            return "No response from sub-agent"
+                            if result["messages"]:
+                                return result["messages"][-1].content
+                            return "No response from sub-agent."
 
                         return StructuredTool.from_function(
                             func=invoke_sub_agent,
@@ -429,45 +392,115 @@ def _create_langgraph_benchmark():
                         sub_spec.get("agent_name", sub_agent_id),
                         reachable_spec.get("scenario", sub_spec.get("agent_instruction", "")),
                     )
-                    primary_tools.append(sub_tool)
+                    agent_tools.append(sub_tool)
 
-            # Build primary agent graph
-            if primary_tools:
-                llm_with_tools = llm.bind_tools(primary_tools)
+            # Build this agent's graph
+            agent_name = agent_spec.get("agent_name", agent_id)
+            agent_instruction = agent_spec.get("agent_instruction", "")
+
+            if agent_tools:
+                llm_with_tools = llm.bind_tools(agent_tools)
             else:
                 llm_with_tools = llm
 
-            primary_name = primary_spec.get("agent_name", primary_agent_id)
-            primary_instruction = primary_spec.get("agent_instruction", "")
-
-            def call_primary(state: AgentState):
+            def call_agent(state: AgentState):
                 messages = state["messages"]
                 has_system = any(isinstance(m, SystemMessage) for m in messages)
                 if not has_system:
-                    system_msg = SystemMessage(content=f"You are {primary_name}. {primary_instruction}")
+                    system_msg = SystemMessage(content=f"You are {agent_name}. {agent_instruction}")
                     messages = [system_msg] + list(messages)
                 response = llm_with_tools.invoke(messages)
                 return {"messages": [response]}
 
             graph = StateGraph(AgentState)
-            graph.add_node("chatbot", call_primary)
+            graph.add_node("chatbot", call_agent)
 
-            if primary_tools:
-                graph.add_node("tools", ToolNode(tools=primary_tools))
+            if agent_tools:
+                graph.add_node("tools", ToolNode(tools=agent_tools))
                 graph.add_conditional_edges("chatbot", tools_condition)
                 graph.add_edge("tools", "chatbot")
             else:
                 graph.add_edge("chatbot", END)
 
             graph.set_entry_point("chatbot")
-            compiled_graph = graph.compile()
+            return graph
 
-            # Wrap with adapter
-            adapter = LangGraphAgentAdapter(compiled_graph, name=primary_agent_id)
+        # Build primary agent graph
+        primary_spec = agent_lookup.get(primary_agent_id, {})
+        primary_tools: List[StructuredTool] = get_agent_tools(primary_spec)
 
-            return [adapter], {primary_agent_id: adapter}
+        # Add user tool if available
+        if user and hasattr(user, "get_tool"):
+            user_tool = user.get_tool()
+            if user_tool:
+                primary_tools.append(user_tool)
 
-    return LanggraphMACSBenchmark
+        # Build sub-agent tools for primary agent
+        reachable = primary_spec.get("reachable_agents", [])
+        for reachable_spec in reachable:
+            sub_agent_id = reachable_spec.get("agent_id")
+            if sub_agent_id and sub_agent_id in agent_lookup:
+                sub_spec = agent_lookup[sub_agent_id]
+                sub_graph = build_agent_graph(sub_agent_id).compile()
+
+                def make_sub_agent_tool(graph, name, description):
+                    def invoke_sub_agent(query: str) -> str:
+                        """Delegate task to sub-agent."""
+                        from langchain_core.messages import HumanMessage
+
+                        result = graph.invoke({"messages": [HumanMessage(content=query)]})
+                        if result["messages"]:
+                            return result["messages"][-1].content
+                        return "No response from sub-agent."
+
+                    return StructuredTool.from_function(
+                        func=invoke_sub_agent,
+                        name=name,
+                        description=description,
+                    )
+
+                sub_tool = make_sub_agent_tool(
+                    sub_graph,
+                    sub_spec.get("agent_name", sub_agent_id),
+                    reachable_spec.get("scenario", sub_spec.get("agent_instruction", "")),
+                )
+                primary_tools.append(sub_tool)
+
+        # Build primary agent graph
+        if primary_tools:
+            llm_with_tools = llm.bind_tools(primary_tools)
+        else:
+            llm_with_tools = llm
+
+        primary_name = primary_spec.get("agent_name", primary_agent_id)
+        primary_instruction = primary_spec.get("agent_instruction", "")
+
+        def call_primary(state: AgentState):
+            messages = state["messages"]
+            has_system = any(isinstance(m, SystemMessage) for m in messages)
+            if not has_system:
+                system_msg = SystemMessage(content=f"You are {primary_name}. {primary_instruction}")
+                messages = [system_msg] + list(messages)
+            response = llm_with_tools.invoke(messages)
+            return {"messages": [response]}
+
+        graph = StateGraph(AgentState)
+        graph.add_node("chatbot", call_primary)
+
+        if primary_tools:
+            graph.add_node("tools", ToolNode(tools=primary_tools))
+            graph.add_conditional_edges("chatbot", tools_condition)
+            graph.add_edge("tools", "chatbot")
+        else:
+            graph.add_edge("chatbot", END)
+
+        graph.set_entry_point("chatbot")
+        compiled_graph = graph.compile()
+
+        # Wrap with adapter
+        adapter = LangGraphAgentAdapter(compiled_graph, name=primary_agent_id)
+
+        return [adapter], {primary_agent_id: adapter}
 
 
 # =============================================================================
@@ -485,9 +518,9 @@ def get_benchmark_class(framework: Literal["smolagents", "langgraph"]) -> type:
         The appropriate MACSBenchmark subclass
     """
     if framework == "smolagents":
-        return _create_smolagents_benchmark()
+        return SmolagentsMACSBenchmark
     elif framework == "langgraph":
-        return _create_langgraph_benchmark()
+        return LangGraphMACSBenchmark
     else:
         raise ValueError(f"Unsupported framework: {framework}. Choose 'smolagents' or 'langgraph'.")
 
@@ -496,6 +529,7 @@ def run_benchmark(
     framework: Literal["smolagents", "langgraph"],
     domain: Literal["travel", "mortgage", "software"],
     limit: Optional[int] = None,
+    task_id: Optional[str] = None,
     n_task_repeats: int = 1,
     output_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
@@ -505,6 +539,7 @@ def run_benchmark(
         framework: Agent framework to use
         domain: MACS domain (travel, mortgage, or software)
         limit: Maximum number of tasks to run (None for all)
+        task_id: Specific task ID to run (for debugging)
         n_task_repeats: Number of times to repeat each task
         output_dir: Directory for results (default: examples/results/)
 
@@ -526,6 +561,14 @@ def run_benchmark(
     # Load data
     print(f"Loading {domain} domain tasks...")
     tasks = load_tasks(domain, limit=limit)
+
+    # Filter to specific task if requested
+    if task_id:
+        tasks = [t for t in tasks if str(t.id) == task_id]
+        if not tasks:
+            raise ValueError(f"Task with ID '{task_id}' not found in {domain} domain")
+        print(f"Running single task: {task_id}")
+
     agent_config = load_agent_config(domain)
 
     # Print agent hierarchy info
@@ -584,13 +627,16 @@ def main():
         epilog="""
 Examples:
     # Run with smolagents on travel domain
-    python examples/macs_benchmark.py --framework smolagents --domain travel
+    uv run python examples/macs_benchmark.py --framework smolagents --domain travel
 
     # Run with langgraph on mortgage domain, limited to 5 tasks
-    python examples/macs_benchmark.py --framework langgraph --domain mortgage --limit 5
+    uv run python examples/macs_benchmark.py --framework langgraph --domain mortgage --limit 5
+
+    # Run a single task by ID for debugging
+    uv run python examples/macs_benchmark.py --framework smolagents --domain travel --task-id task_001
 
     # Run with 3 repetitions per task
-    python examples/macs_benchmark.py --framework smolagents --domain software --repeats 3
+    uv run python examples/macs_benchmark.py --framework smolagents --domain software --repeats 3
         """,
     )
 
@@ -615,6 +661,12 @@ Examples:
         help="Maximum number of tasks to run (default: all)",
     )
     parser.add_argument(
+        "--task-id",
+        type=str,
+        default=None,
+        help="Run a single task by ID (for debugging)",
+    )
+    parser.add_argument(
         "--repeats",
         type=int,
         default=1,
@@ -633,6 +685,7 @@ Examples:
         framework=args.framework,
         domain=args.domain,
         limit=args.limit,
+        task_id=args.task_id,
         n_task_repeats=args.repeats,
         output_dir=args.output_dir,
     )
