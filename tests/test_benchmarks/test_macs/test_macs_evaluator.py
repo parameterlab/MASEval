@@ -6,7 +6,7 @@ import pytest
 from maseval import MessageHistory, Task
 from maseval.benchmark.macs import MACSEvaluator
 
-from .conftest import MACSModelAdapter
+from conftest import DummyModelAdapter
 
 
 # =============================================================================
@@ -18,33 +18,22 @@ from .conftest import MACSModelAdapter
 class TestMACSEvaluatorInit:
     """Tests for MACSEvaluator initialization."""
 
-    def test_init_user_type(self, macs_model, sample_task):
-        """Initializes with gsr_type='user'."""
+    def test_init_user_type_with_template(self, macs_model, sample_task):
+        """Initializes with gsr_type='user' and loads appropriate template."""
         evaluator = MACSEvaluator(macs_model, sample_task, gsr_type="user")
 
         assert evaluator.gsr_type == "user"
         assert evaluator.model == macs_model
         assert evaluator.task == sample_task
-
-    def test_init_system_type(self, macs_model, sample_task):
-        """Initializes with gsr_type='system'."""
-        evaluator = MACSEvaluator(macs_model, sample_task, gsr_type="system")
-
-        assert evaluator.gsr_type == "system"
-
-    def test_init_loads_default_template(self, macs_model, sample_task):
-        """Loads default template from file."""
-        evaluator = MACSEvaluator(macs_model, sample_task, gsr_type="user")
-
-        # Template should contain placeholders
         assert "{{scenario}}" in evaluator.template
         assert "{{history}}" in evaluator.template
         assert "{{assertions}}" in evaluator.template
 
-    def test_init_system_template_has_invocations(self, macs_model, sample_task):
-        """System template includes tool invocations placeholder."""
+    def test_init_system_type_with_template(self, macs_model, sample_task):
+        """Initializes with gsr_type='system' and includes invocations placeholder."""
         evaluator = MACSEvaluator(macs_model, sample_task, gsr_type="system")
 
+        assert evaluator.gsr_type == "system"
         assert "{{invocations}}" in evaluator.template
 
     def test_init_custom_template(self, macs_model, sample_task):
@@ -330,7 +319,7 @@ class TestEvaluationCall:
                 {"assertion": "User received confirmation number", "answer": "TRUE", "evidence": "ABC123 mentioned"},
             ]
         )
-        model = MACSModelAdapter(responses=[response])
+        model = DummyModelAdapter(responses=[response])
         evaluator = MACSEvaluator(model, sample_task, gsr_type="user")
 
         traces = {"messages": sample_trace}
@@ -344,7 +333,7 @@ class TestEvaluationCall:
 
     def test_call_handles_json_error(self, sample_task, sample_trace):
         """Graceful handling of JSON parse error."""
-        model = MACSModelAdapter(responses=["This is not valid JSON"])
+        model = DummyModelAdapter(responses=["This is not valid JSON"])
         evaluator = MACSEvaluator(model, sample_task, gsr_type="user")
 
         traces = {"messages": sample_trace}
@@ -359,7 +348,7 @@ class TestEvaluationCall:
     def test_call_handles_wrapped_response(self, sample_task, sample_trace):
         """Handles {'assertions': [...]} wrapper."""
         response = json.dumps({"assertions": [{"assertion": "Test", "answer": "TRUE", "evidence": "Found"}]})
-        model = MACSModelAdapter(responses=[response])
+        model = DummyModelAdapter(responses=[response])
         evaluator = MACSEvaluator(model, sample_task, gsr_type="user")
 
         traces = {"messages": sample_trace}
@@ -371,7 +360,7 @@ class TestEvaluationCall:
     def test_call_handles_results_wrapper(self, sample_task, sample_trace):
         """Handles {'results': [...]} wrapper."""
         response = json.dumps({"results": [{"assertion": "Test", "answer": "FALSE", "evidence": "Not found"}]})
-        model = MACSModelAdapter(responses=[response])
+        model = DummyModelAdapter(responses=[response])
         evaluator = MACSEvaluator(model, sample_task, gsr_type="user")
 
         traces = {"messages": sample_trace}
@@ -383,7 +372,7 @@ class TestEvaluationCall:
     def test_call_handles_single_dict_response(self, sample_task, sample_trace):
         """Handles single dict instead of list."""
         response = json.dumps({"assertion": "Test", "answer": "TRUE", "evidence": "Found"})
-        model = MACSModelAdapter(responses=[response])
+        model = DummyModelAdapter(responses=[response])
         evaluator = MACSEvaluator(model, sample_task, gsr_type="user")
 
         traces = {"messages": sample_trace}
@@ -399,7 +388,7 @@ class TestEvaluationCall:
             evaluation_data={"assertions": ["user: Test assertion"]},
             metadata={},  # No scenario!
         )
-        model = MACSModelAdapter()
+        model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         evaluator = MACSEvaluator(model, task, gsr_type="user")
 
         traces = {"messages": sample_trace}
@@ -408,7 +397,7 @@ class TestEvaluationCall:
 
     def test_call_no_assertions_returns_perfect(self, sample_task_no_assertions, sample_trace):
         """No assertions → perfect score."""
-        model = MACSModelAdapter()
+        model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         evaluator = MACSEvaluator(model, sample_task_no_assertions, gsr_type="user")
 
         traces = {"messages": sample_trace}
@@ -421,7 +410,7 @@ class TestEvaluationCall:
     def test_call_adds_assertion_type(self, sample_task, sample_trace):
         """Report items include assertion_type."""
         response = json.dumps([{"assertion": "Test", "answer": "TRUE", "evidence": "Found"}])
-        model = MACSModelAdapter(responses=[response])
+        model = DummyModelAdapter(responses=[response])
         evaluator = MACSEvaluator(model, sample_task, gsr_type="user")
 
         traces = {"messages": sample_trace}
@@ -431,15 +420,28 @@ class TestEvaluationCall:
 
     def test_call_system_includes_tool_invocations(self, sample_task, sample_trace, sample_tool_traces):
         """System evaluation includes tool invocations in prompt."""
+        from unittest.mock import patch
+
         response = json.dumps([{"assertion": "Test", "answer": "TRUE", "evidence": "Found"}])
-        model = MACSModelAdapter(responses=[response])
+        model = DummyModelAdapter(responses=[response])
         evaluator = MACSEvaluator(model, sample_task, gsr_type="system")
 
         traces = {"messages": sample_trace, "tool_traces": sample_tool_traces}
-        evaluator(traces)
+
+        # Capture the prompt sent to the model
+        captured_prompts = []
+        original_generate = model._generate_impl
+
+        def capture_prompt(prompt, *args, **kwargs):
+            captured_prompts.append(prompt)
+            return original_generate(prompt, *args, **kwargs)
+
+        with patch.object(model, "_generate_impl", side_effect=capture_prompt):
+            evaluator(traces)
 
         # Check that tool invocations were included in the prompt
-        prompt = model.prompts[0]
+        assert len(captured_prompts) > 0
+        prompt = captured_prompts[0]
         assert "search_flights" in prompt or "book_flight" in prompt
 
 
@@ -467,7 +469,7 @@ class TestMACSEvaluatorIntegration:
         )
 
         response = json.dumps([{"assertion": "Booking was successful", "answer": "TRUE", "evidence": "Confirmed"}])
-        model = MACSModelAdapter(responses=[response])
+        model = DummyModelAdapter(responses=[response])
         evaluator = MACSEvaluator(model, task, gsr_type="user")
 
         trace = MessageHistory(
@@ -498,7 +500,7 @@ class TestMACSEvaluatorIntegration:
         )
 
         response = json.dumps([{"assertion": "Database was updated", "answer": "TRUE", "evidence": "DB log shows update"}])
-        model = MACSModelAdapter(responses=[response])
+        model = DummyModelAdapter(responses=[response])
         evaluator = MACSEvaluator(model, task, gsr_type="system")
 
         trace = MessageHistory([{"role": "assistant", "content": "Done"}])

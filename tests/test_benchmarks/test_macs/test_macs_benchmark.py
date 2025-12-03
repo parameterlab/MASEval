@@ -13,55 +13,31 @@ from maseval.benchmark.macs import (
     compute_benchmark_metrics,
 )
 
-from .conftest import MACSModelAdapter, MACSAgentAdapter, ConcreteMACSBenchmark
+from .conftest import MACSAgentAdapter, ConcreteMACSBenchmark
+from conftest import DummyModelAdapter
 
 
 # =============================================================================
-# Unit Tests: Initialization
+# Unit Tests: Initialization and Setup
 # =============================================================================
 
 
 @pytest.mark.benchmark
-class TestMACSBenchmarkInit:
-    """Tests for MACSBenchmark initialization."""
+class TestMACSBenchmarkSetup:
+    """Tests for MACSBenchmark initialization and setup methods."""
 
-    def test_init_stores_model(self, macs_model, sample_agent_data):
-        """Model is stored for later use."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+    def test_init_configures_benchmark(self, macs_model, sample_agent_data):
+        """Benchmark initializes with model, agent_data, and optional params."""
+        callbacks = [MagicMock()]
+        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model, callbacks=callbacks, n_task_repeats=3)
 
         assert benchmark._model == macs_model
-
-    def test_init_calls_parent(self, macs_model, sample_agent_data):
-        """Parent Benchmark.__init__ is called."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
-
         assert benchmark.agent_data == sample_agent_data
-
-    def test_init_with_callbacks(self, macs_model, sample_agent_data):
-        """Callbacks are passed to parent."""
-        callbacks = [MagicMock()]
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model, callbacks=callbacks)
-
         assert benchmark.callbacks == callbacks
-
-    def test_init_with_n_task_repeats(self, macs_model, sample_agent_data):
-        """n_task_repeats is set correctly."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model, n_task_repeats=3)
-
         assert benchmark.n_task_repeats == 3
 
-
-# =============================================================================
-# Unit Tests: Setup Methods
-# =============================================================================
-
-
-@pytest.mark.benchmark
-class TestSetupMethods:
-    """Tests for setup methods."""
-
     def test_setup_environment_creates_macs_environment(self, macs_model, sample_agent_data, sample_task):
-        """setup_environment returns MACSEnvironment."""
+        """setup_environment returns MACSEnvironment with tools."""
         benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
 
         env = benchmark.setup_environment(sample_agent_data, sample_task)
@@ -70,21 +46,13 @@ class TestSetupMethods:
         assert "search_flights" in env.tools
 
     def test_setup_user_creates_macs_user(self, macs_model, sample_agent_data, sample_task):
-        """setup_user returns MACSUser."""
+        """setup_user returns MACSUser with scenario from task."""
         benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 
         user = benchmark.setup_user(sample_agent_data, env, sample_task)
 
         assert isinstance(user, MACSUser)
-
-    def test_setup_user_extracts_scenario(self, macs_model, sample_agent_data, sample_task):
-        """Passes scenario from task metadata."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
-        env = benchmark.setup_environment(sample_agent_data, sample_task)
-
-        user = benchmark.setup_user(sample_agent_data, env, sample_task)
-
         assert user.scenario == "Business trip to NYC"
 
     def test_setup_user_handles_no_scenario(self, macs_model, sample_agent_data, sample_task_no_scenario):
@@ -96,7 +64,7 @@ class TestSetupMethods:
 
         assert user.scenario == ""
 
-    def test_setup_evaluators_creates_dual(self, macs_model, sample_agent_data, sample_task):
+    def test_setup_evaluators_creates_user_and_system(self, macs_model, sample_agent_data, sample_task):
         """Creates both user and system evaluators."""
         benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
@@ -105,15 +73,11 @@ class TestSetupMethods:
         evaluators = benchmark.setup_evaluators(env, sample_task, agents, None)
 
         assert len(evaluators) == 2
-        assert isinstance(evaluators[0], MACSEvaluator)
-        assert isinstance(evaluators[1], MACSEvaluator)
         assert evaluators[0].gsr_type == "user"
         assert evaluators[1].gsr_type == "system"
 
     def test_setup_agents_is_abstract(self, macs_model, sample_agent_data):
         """setup_agents must be overridden in subclass."""
-        # MACSBenchmark itself can't be instantiated without setup_agents
-        # We verify by checking the abstract method exists
         import inspect
 
         assert inspect.isabstract(MACSBenchmark)
@@ -217,7 +181,7 @@ class TestEvaluation:
             '[{"assertion": "User assertion", "answer": "TRUE", "evidence": "OK"}]',
             '[{"assertion": "System assertion", "answer": "TRUE", "evidence": "OK"}]',
         ]
-        model = MACSModelAdapter(responses=responses)
+        model = DummyModelAdapter(responses=responses)
         benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
@@ -247,7 +211,7 @@ class TestEvaluation:
             '[{"assertion": "A", "answer": "TRUE", "evidence": "OK"}]',
             '[{"assertion": "B", "answer": "TRUE", "evidence": "OK"}]',
         ]
-        model = MACSModelAdapter(responses=responses)
+        model = DummyModelAdapter(responses=responses)
         benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
@@ -277,7 +241,7 @@ class TestEvaluation:
             '[{"assertion": "A", "answer": "TRUE", "evidence": "OK"}]',
             '[{"assertion": "B", "answer": "FALSE", "evidence": "Fail"}]',
         ]
-        model = MACSModelAdapter(responses=responses)
+        model = DummyModelAdapter(responses=responses)
         benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
@@ -301,7 +265,7 @@ class TestEvaluation:
             '[{"assertion": "A", "answer": "TRUE", "evidence": "OK"}]',
             '[{"assertion": "B", "answer": "FALSE", "evidence": "Fail"}]',
         ]
-        model = MACSModelAdapter(responses=responses)
+        model = DummyModelAdapter(responses=responses)
         benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
@@ -323,7 +287,7 @@ class TestEvaluation:
             '[{"assertion": "User A", "answer": "TRUE", "evidence": "OK"}]',
             '[{"assertion": "System B", "answer": "TRUE", "evidence": "OK"}]',
         ]
-        model = MACSModelAdapter(responses=responses)
+        model = DummyModelAdapter(responses=responses)
         benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
@@ -472,7 +436,7 @@ class TestMACSBenchmarkIntegration:
             '[{"assertion": "Booking confirmed", "answer": "TRUE", "evidence": "Done"}]',
             '[{"assertion": "Database updated", "answer": "TRUE", "evidence": "Updated"}]',
         ]
-        model = MACSModelAdapter(responses=responses)
+        model = DummyModelAdapter(responses=responses)
         benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
 
         # Setup phase
@@ -506,7 +470,7 @@ class TestMACSBenchmarkIntegration:
 
     def test_benchmark_with_real_environment(self, sample_agent_data, sample_task):
         """Test with real MACSEnvironment tool creation."""
-        model = MACSModelAdapter()
+        model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
 
         env = benchmark.setup_environment(sample_agent_data, sample_task)

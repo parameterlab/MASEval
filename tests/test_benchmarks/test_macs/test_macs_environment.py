@@ -5,69 +5,37 @@ from unittest.mock import patch
 
 from maseval.benchmark.macs import MACSEnvironment, MACSGenericTool
 
-from .conftest import MACSModelAdapter
+from conftest import DummyModelAdapter
 
 
 # =============================================================================
-# Unit Tests: Initialization
+# Unit Tests: Initialization and State Setup
 # =============================================================================
 
 
 @pytest.mark.benchmark
-class TestMACSEnvironmentInit:
-    """Tests for MACSEnvironment initialization."""
+class TestMACSEnvironmentSetup:
+    """Tests for MACSEnvironment initialization and state setup."""
 
-    def test_init_with_task_data(self, macs_model, sample_task_data):
-        """Initializes from task data."""
-        env = MACSEnvironment(sample_task_data, macs_model)
-
-        assert env is not None
-        assert "tool_specs" in env.state
-
-    def test_init_stores_model(self, macs_model, sample_task_data):
-        """Model is stored for tool creation."""
+    def test_init_extracts_tool_specs(self, macs_model, sample_task_data):
+        """Initializes from task data and extracts tool_specs."""
         env = MACSEnvironment(sample_task_data, macs_model)
 
         assert env._model == macs_model
-
-    def test_init_calls_parent(self, macs_model, sample_task_data):
-        """Parent Environment.__init__ is called."""
-        env = MACSEnvironment(sample_task_data, macs_model)
-
-        # Parent sets up state and creates tools
         assert hasattr(env, "state")
         assert hasattr(env, "tools")
-
-
-# =============================================================================
-# Unit Tests: State Setup
-# =============================================================================
-
-
-@pytest.mark.benchmark
-class TestSetupState:
-    """Tests for setup_state method."""
-
-    def test_setup_state_extracts_tool_specs(self, macs_model, sample_task_data):
-        """setup_state extracts tool_specs from task_data."""
-        env = MACSEnvironment(sample_task_data, macs_model)
-
         assert "tool_specs" in env.state
         assert len(env.state["tool_specs"]) == 2
 
-    def test_setup_state_empty_tools(self, macs_model):
-        """Handles missing or empty tools."""
-        task_data = {"environment_data": {}}
-        env = MACSEnvironment(task_data, macs_model)
+    def test_handles_empty_or_missing_tools(self, macs_model):
+        """Handles missing environment_data or empty tools gracefully."""
+        # Missing environment_data
+        env1 = MACSEnvironment({}, macs_model)
+        assert env1.state["tool_specs"] == []
 
-        assert env.state["tool_specs"] == []
-
-    def test_setup_state_no_environment_data(self, macs_model):
-        """Handles missing environment_data."""
-        task_data = {}
-        env = MACSEnvironment(task_data, macs_model)
-
-        assert env.state["tool_specs"] == []
+        # Empty tools
+        env2 = MACSEnvironment({"environment_data": {}}, macs_model)
+        assert env2.state["tool_specs"] == []
 
 
 # =============================================================================
@@ -251,7 +219,7 @@ class TestMACSEnvironmentIntegration:
     def test_tools_are_callable(self, sample_task_data):
         """Created tools can be called."""
         # Use a model that returns valid JSON responses (ToolLLMSimulator expects {"text": ..., "details": ...})
-        model = MACSModelAdapter(responses=['{"text": "Found flights: AA123, UA456", "details": {}}'])
+        model = DummyModelAdapter(responses=['{"text": "Found flights: AA123, UA456", "details": {}}'])
         env = MACSEnvironment(sample_task_data, model)
 
         search_flights = env.tools["search_flights"]

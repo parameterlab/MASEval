@@ -2,86 +2,34 @@
 
 Fixture Hierarchy
 -----------------
-- tests/conftest.py: Generic fixtures (dummy_model, dummy_agent_adapter, dummy_task, etc.)
+- tests/conftest.py: Generic fixtures (DummyModelAdapter, dummy_model, dummy_agent_adapter, etc.)
   These are automatically available via pytest's conftest inheritance.
 - tests/test_benchmarks/test_macs/conftest.py: MACS-specific fixtures (this file)
 
 MACS tests can use fixtures from both levels - pytest handles this automatically.
 
-Why MACS-Specific Mock Classes Exist
-------------------------------------
-The MACS benchmark uses ToolLLMSimulator and UserLLMSimulator which parse JSON responses
-in a specific format: {"text": "...", "details": {...}}
+MACS-Specific Components
+------------------------
+- MACSAgentAdapter: Returns MessageHistory (not strings) matching the AgentAdapter contract.
+  Used for testing MACSBenchmark.run_agents() without a real agent implementation.
+- ConcreteMACSBenchmark: Concrete implementation of MACSBenchmark for testing.
 
-The generic DummyModelAdapter from tests/conftest.py returns simple strings like
-"test response", which would cause JSON parsing failures in MACS components.
-
-Therefore, we define MACS-specific adapters that:
-1. MACSModelAdapter: Returns valid JSON in the ToolLLMSimulator format by default
-2. MACSAgentAdapter: Returns MessageHistory (not strings) matching the AgentAdapter contract
-
-These are NOT duplicates - they serve a different purpose than the generic test fixtures.
+For model adapters, MACS tests use DummyModelAdapter from tests/conftest.py with JSON
+responses passed explicitly (e.g., DummyModelAdapter(responses=['{"text": "..."}'])).
 """
 
 import pytest
 from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock
 
+from conftest import DummyModelAdapter
 from maseval import AgentAdapter, Task, User, MessageHistory, TaskCollection
 from maseval.benchmark.macs import MACSBenchmark, MACSEnvironment
-from maseval.core.model import ModelAdapter
 
 
 # =============================================================================
 # MACS-Specific Mock Components
-#
-# These exist because MACS components (ToolLLMSimulator, UserLLMSimulator, MACSEvaluator)
-# expect JSON responses in specific formats. The generic DummyModelAdapter returns
-# plain strings which would cause parsing failures.
 # =============================================================================
-
-
-class MACSModelAdapter(ModelAdapter):
-    """Model adapter for testing MACS components.
-
-    Unlike DummyModelAdapter (which returns plain strings), this adapter returns
-    JSON responses in the format expected by MACS simulators:
-
-        {"text": "response text", "details": {...}}
-
-    This format is required by:
-    - ToolLLMSimulator._parse_output() for tool responses
-    - UserLLMSimulator._parse_output() for user responses
-    - MACSEvaluator for assertion evaluation (different format)
-
-    Attributes:
-        prompts: List of all prompts sent to the model (for verification in tests).
-        _call_count: Number of times generate() was called.
-    """
-
-    def __init__(self, responses: Optional[List[str]] = None):
-        """Initialize with optional canned responses.
-
-        Args:
-            responses: List of JSON strings to return. Cycles through if more
-                calls are made than responses provided. Defaults to a valid
-                ToolLLMSimulator response format.
-        """
-        super().__init__()
-        self._model_id = "macs-test-model"
-        self._responses = responses or ['{"text": "Default response", "details": {}}']
-        self._call_count = 0
-        self.prompts: List[str] = []
-
-    @property
-    def model_id(self) -> str:
-        return self._model_id
-
-    def _generate_impl(self, prompt: str, generation_params: Optional[Dict[str, Any]] = None, **kwargs: Any) -> str:
-        self.prompts.append(prompt)
-        response = self._responses[self._call_count % len(self._responses)]
-        self._call_count += 1
-        return response
 
 
 class MACSAgentAdapter(AgentAdapter):
@@ -143,39 +91,38 @@ class ConcreteMACSBenchmark(MACSBenchmark):
 # =============================================================================
 # Model Fixtures
 #
-# These use MACSModelAdapter because MACS components require JSON responses.
-# For generic model testing, use dummy_model from parent conftest.
+# These use DummyModelAdapter from tests/conftest.py with JSON responses.
 # =============================================================================
 
 
 @pytest.fixture
 def macs_model():
-    """MACS model adapter with default JSON responses.
+    """Model adapter with default JSON responses for MACS tests.
 
     Returns responses in ToolLLMSimulator format: {"text": "...", "details": {...}}
     """
-    return MACSModelAdapter()
+    return DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
 
 
 @pytest.fixture
 def macs_model_evaluator():
-    """MACS model configured for MACSEvaluator tests.
+    """Model configured for MACSEvaluator tests.
 
     Returns JSON array format expected by MACSEvaluator._parse_evaluation_response().
     """
-    return MACSModelAdapter(responses=['[{"assertion": "Test", "answer": "TRUE", "evidence": "OK"}]'])
+    return DummyModelAdapter(responses=['[{"assertion": "Test", "answer": "TRUE", "evidence": "OK"}]'])
 
 
 @pytest.fixture
 def macs_model_tool():
-    """MACS model configured for ToolLLMSimulator tests."""
-    return MACSModelAdapter(responses=['{"text": "Tool executed successfully", "details": {}}'])
+    """Model configured for ToolLLMSimulator tests."""
+    return DummyModelAdapter(responses=['{"text": "Tool executed successfully", "details": {}}'])
 
 
 @pytest.fixture
 def macs_model_user():
-    """MACS model configured for UserLLMSimulator tests."""
-    return MACSModelAdapter(responses=['{"text": "Yes, that works for me.", "details": {}}'])
+    """Model configured for UserLLMSimulator tests."""
+    return DummyModelAdapter(responses=['{"text": "Yes, that works for me.", "details": {}}'])
 
 
 # =============================================================================

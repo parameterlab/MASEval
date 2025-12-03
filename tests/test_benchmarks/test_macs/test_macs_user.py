@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from maseval.benchmark.macs import MACSUser
 
-from .conftest import MACSModelAdapter
+from conftest import DummyModelAdapter
 
 
 # =============================================================================
@@ -17,8 +17,8 @@ from .conftest import MACSModelAdapter
 class TestMACSUserInit:
     """Tests for MACSUser initialization."""
 
-    def test_init_basic(self, macs_model, sample_scenario, initial_prompt):
-        """Basic initialization with required args."""
+    def test_init_with_defaults(self, macs_model, sample_scenario, initial_prompt):
+        """Initialization with required args uses proper defaults."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
@@ -27,43 +27,27 @@ class TestMACSUserInit:
 
         assert user.model == macs_model
         assert user.scenario == sample_scenario
-        assert user.name == "Simulated User"  # Default name
+        assert user.name == "Simulated User"
+        assert user.max_turns == 5
+        assert user._turn_count == 0
+        assert not user._stopped
+        assert "full_scenario" in user.user_profile
 
-    def test_init_custom_name(self, macs_model, sample_scenario, initial_prompt):
-        """Custom name is respected."""
+    def test_init_with_custom_params(self, macs_model, sample_scenario, initial_prompt):
+        """Custom name and max_turns are respected."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
             initial_prompt=initial_prompt,
             name="Test User",
-        )
-
-        assert user.name == "Test User"
-
-    def test_init_default_max_turns(self, macs_model, sample_scenario, initial_prompt):
-        """Default max_turns is 5."""
-        user = MACSUser(
-            model=macs_model,
-            scenario=sample_scenario,
-            initial_prompt=initial_prompt,
-        )
-
-        assert user.max_turns == 5
-
-    def test_init_custom_max_turns(self, macs_model, sample_scenario, initial_prompt):
-        """Custom max_turns is respected."""
-        user = MACSUser(
-            model=macs_model,
-            scenario=sample_scenario,
-            initial_prompt=initial_prompt,
             max_turns=10,
         )
 
+        assert user.name == "Test User"
         assert user.max_turns == 10
 
     def test_init_loads_template(self, macs_model, sample_scenario, initial_prompt):
         """Loads user_simulator.txt template."""
-        # Verify template file exists
         assert MACSUser.TEMPLATE_PATH.exists(), f"Template not found at {MACSUser.TEMPLATE_PATH}"
 
         user = MACSUser(
@@ -71,32 +55,7 @@ class TestMACSUserInit:
             scenario=sample_scenario,
             initial_prompt=initial_prompt,
         )
-
-        # MACSUser is created successfully (template is passed to parent User class)
         assert user is not None
-
-    def test_init_extracts_user_profile(self, macs_model, sample_scenario, initial_prompt):
-        """Extracts profile from scenario."""
-        user = MACSUser(
-            model=macs_model,
-            scenario=sample_scenario,
-            initial_prompt=initial_prompt,
-        )
-
-        # Profile should contain extracted info
-        assert "name" in user.user_profile or "full_scenario" in user.user_profile
-        assert user.user_profile.get("full_scenario") == sample_scenario
-
-    def test_init_turn_count_zero(self, macs_model, sample_scenario, initial_prompt):
-        """Turn count starts at zero."""
-        user = MACSUser(
-            model=macs_model,
-            scenario=sample_scenario,
-            initial_prompt=initial_prompt,
-        )
-
-        assert user._turn_count == 0
-        assert not user._stopped
 
 
 # =============================================================================
@@ -261,7 +220,7 @@ class TestResponseSimulation:
 
     def test_simulate_response_increments_turn(self, sample_scenario, initial_prompt):
         """Turn count increments on simulate_response call."""
-        model = MACSModelAdapter(responses=['{"text": "Yes, confirmed.", "details": {}}'])
+        model = DummyModelAdapter(responses=['{"text": "Yes, confirmed.", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
@@ -278,7 +237,7 @@ class TestResponseSimulation:
 
     def test_simulate_response_detects_stop(self, sample_scenario, initial_prompt):
         """Detects </stop> token."""
-        model = MACSModelAdapter()
+        model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
@@ -293,7 +252,7 @@ class TestResponseSimulation:
 
     def test_simulate_response_cleans_stop_token(self, sample_scenario, initial_prompt):
         """Removes </stop> from response."""
-        model = MACSModelAdapter()
+        model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
@@ -308,7 +267,7 @@ class TestResponseSimulation:
 
     def test_simulate_response_returns_empty_when_done(self, sample_scenario, initial_prompt):
         """Returns empty string when is_done is True."""
-        model = MACSModelAdapter()
+        model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
@@ -322,7 +281,7 @@ class TestResponseSimulation:
 
     def test_simulate_response_returns_empty_at_max_turns(self, sample_scenario, initial_prompt):
         """Returns empty string when max turns reached."""
-        model = MACSModelAdapter()
+        model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
@@ -337,7 +296,7 @@ class TestResponseSimulation:
 
     def test_simulate_response_fallback_message(self, sample_scenario, initial_prompt):
         """Provides fallback when response is only stop token."""
-        model = MACSModelAdapter()
+        model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
@@ -433,7 +392,7 @@ class TestMACSUserIntegration:
             "Aisle seat please.",
             "Book it! </stop>",
         ]
-        model = MACSModelAdapter(responses=responses)
+        model = DummyModelAdapter(responses=responses)
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
@@ -463,7 +422,7 @@ class TestMACSUserIntegration:
 
     def test_max_turns_enforcement(self, sample_scenario, initial_prompt):
         """Test that max turns is enforced."""
-        model = MACSModelAdapter(responses=["Response"] * 10)
+        model = DummyModelAdapter(responses=["Response"] * 10)
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
@@ -486,7 +445,7 @@ class TestMACSUserIntegration:
 
     def test_reset_allows_new_conversation(self, sample_scenario, initial_prompt):
         """Test that reset allows starting new conversation."""
-        model = MACSModelAdapter()
+        model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,

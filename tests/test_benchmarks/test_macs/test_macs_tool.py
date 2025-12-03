@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from maseval.benchmark.macs import MACSGenericTool
 
-from .conftest import MACSModelAdapter
+from conftest import DummyModelAdapter
 
 
 # =============================================================================
@@ -17,43 +17,24 @@ from .conftest import MACSModelAdapter
 class TestMACSGenericToolInit:
     """Tests for MACSGenericTool initialization."""
 
-    def test_init_from_spec(self, simple_tool_spec, macs_model):
-        """Tool initializes correctly from specification dict."""
+    def test_init_and_defaults(self, simple_tool_spec, minimal_tool_spec, macs_model):
+        """Tool initializes correctly and handles defaults."""
+        # Standard initialization
         tool = MACSGenericTool(simple_tool_spec, macs_model)
-
         assert tool.name == "search_flights"
         assert tool.description == "Search for available flights"
+        assert tool.output_type == "string"
         assert "origin" in tool.inputs
         assert "destination" in tool.inputs
-
-    def test_name_and_description(self, simple_tool_spec, macs_model):
-        """Tool exposes correct name and description."""
-        tool = MACSGenericTool(simple_tool_spec, macs_model)
-
-        assert tool.name == simple_tool_spec["name"]
-        assert tool.description == simple_tool_spec["description"]
-        assert tool.output_type == "string"
-
-    def test_minimal_spec(self, minimal_tool_spec, macs_model):
-        """Tool handles minimal specification with defaults."""
-        tool = MACSGenericTool(minimal_tool_spec, macs_model)
-
-        assert tool.name == "simple_action"
-        assert tool.description == ""
-        assert tool.inputs == {}
-
-    def test_creates_simulator(self, simple_tool_spec, macs_model):
-        """Tool creates a ToolLLMSimulator."""
-        tool = MACSGenericTool(simple_tool_spec, macs_model)
-
         assert tool.simulator is not None
         assert tool.simulator.tool_name == "search_flights"
-
-    def test_empty_history_on_init(self, simple_tool_spec, macs_model):
-        """Tool starts with empty invocation history."""
-        tool = MACSGenericTool(simple_tool_spec, macs_model)
-
         assert len(tool.history.to_list()) == 0
+
+        # Minimal spec with defaults
+        minimal_tool = MACSGenericTool(minimal_tool_spec, macs_model)
+        assert minimal_tool.name == "simple_action"
+        assert minimal_tool.description == ""
+        assert minimal_tool.inputs == {}
 
 
 # =============================================================================
@@ -132,7 +113,7 @@ class TestMACSGenericToolInvocation:
     def test_call_invokes_model(self, simple_tool_spec):
         """Calling tool invokes the model via simulator."""
         # Create model that returns valid JSON (ToolLLMSimulator expects {"text": ..., "details": ...})
-        model = MACSModelAdapter(responses=['{"text": "Found flights", "details": {}}'])
+        model = DummyModelAdapter(responses=['{"text": "Found flights", "details": {}}'])
         tool = MACSGenericTool(simple_tool_spec, model)
 
         _ = tool(origin="LAX", destination="JFK")
@@ -143,7 +124,7 @@ class TestMACSGenericToolInvocation:
     def test_call_returns_response(self, simple_tool_spec):
         """Tool call returns the simulated response."""
         # Create model that returns valid JSON
-        model = MACSModelAdapter(responses=['{"text": "Flight found: AA123", "details": {}}'])
+        model = DummyModelAdapter(responses=['{"text": "Flight found: AA123", "details": {}}'])
         tool = MACSGenericTool(simple_tool_spec, model)
 
         result = tool(origin="LAX", destination="JFK")
@@ -153,7 +134,7 @@ class TestMACSGenericToolInvocation:
 
     def test_call_records_history(self, simple_tool_spec):
         """Tool invocation recorded in history."""
-        model = MACSModelAdapter(responses=['{"text": "success", "details": {"booking_id": "123"}}'])
+        model = DummyModelAdapter(responses=['{"text": "success", "details": {"booking_id": "123"}}'])
         tool = MACSGenericTool(simple_tool_spec, model)
 
         tool(origin="LAX", destination="JFK")
@@ -167,7 +148,7 @@ class TestMACSGenericToolInvocation:
 
     def test_multiple_invocations(self, simple_tool_spec):
         """Multiple calls tracked in history."""
-        model = MACSModelAdapter(responses=['{"text": "success", "details": {}}'])
+        model = DummyModelAdapter(responses=['{"text": "success", "details": {}}'])
         tool = MACSGenericTool(simple_tool_spec, model)
 
         tool(origin="LAX", destination="JFK")
@@ -278,7 +259,7 @@ class TestMACSGenericToolIntegration:
     def test_end_to_end_flow(self, simple_tool_spec):
         """Complete flow from creation to trace gathering."""
         # Create model with specific response
-        model = MACSModelAdapter(responses=['{"status": "found", "flights": ["AA123", "UA456"]}'])
+        model = DummyModelAdapter(responses=['{"status": "found", "flights": ["AA123", "UA456"]}'])
         tool = MACSGenericTool(simple_tool_spec, model)
 
         # Invoke tool (simulator will use the model)
