@@ -103,6 +103,7 @@ def temp_data_dir() -> Path:
 # =============================================================================
 
 
+@pytest.mark.benchmark
 class TestDedupeToolsByName:
     """Tests for _dedupe_tools_by_name function."""
 
@@ -150,6 +151,7 @@ class TestDedupeToolsByName:
         assert len(result) == 3
 
 
+@pytest.mark.benchmark
 class TestCreateToolsList:
     """Tests for _create_tools_list function."""
 
@@ -175,6 +177,7 @@ class TestCreateToolsList:
         assert _create_tools_list(None) == []
 
 
+@pytest.mark.benchmark
 class TestCreateAgentsList:
     """Tests for _create_agents_list function."""
 
@@ -200,6 +203,7 @@ class TestCreateAgentsList:
         assert _create_agents_list([]) == {}
 
 
+@pytest.mark.benchmark
 class TestCreateTasksList:
     """Tests for _create_tasks_list function."""
 
@@ -235,6 +239,7 @@ class TestCreateTasksList:
 # =============================================================================
 
 
+@pytest.mark.benchmark
 class TestDownloadFunctions:
     """Tests for download functions using mocks."""
 
@@ -272,6 +277,7 @@ class TestDownloadFunctions:
                 download_json("http://example.com/test.json")
 
 
+@pytest.mark.benchmark
 class TestDownloadOriginalData:
     """Tests for download_original_data function."""
 
@@ -322,6 +328,7 @@ class TestDownloadOriginalData:
 # =============================================================================
 
 
+@pytest.mark.benchmark
 class TestRestructureData:
     """Tests for restructure_data function."""
 
@@ -360,6 +367,7 @@ class TestRestructureData:
             restructure_data(data_dir=temp_data_dir, domain="travel", verbose=0)
 
 
+@pytest.mark.benchmark
 class TestEnsureDataExists:
     """Tests for ensure_data_exists function."""
 
@@ -436,6 +444,7 @@ class TestEnsureDataExists:
 # =============================================================================
 
 
+@pytest.mark.benchmark
 class TestLoadTasks:
     """Tests for load_tasks function."""
 
@@ -482,6 +491,7 @@ class TestLoadTasks:
             load_tasks("travel", data_dir=temp_data_dir)
 
 
+@pytest.mark.benchmark
 class TestLoadAgentConfig:
     """Tests for load_agent_config function."""
 
@@ -514,7 +524,7 @@ class TestLoadAgentConfig:
 # =============================================================================
 
 
-@pytest.mark.core
+@pytest.mark.benchmark
 class TestDataLoaderIntegration:
     """Integration tests for the full data loading pipeline."""
 
@@ -575,6 +585,7 @@ class TestDataLoaderIntegration:
 # =============================================================================
 
 
+@pytest.mark.benchmark
 class TestConnectionErrorHandling:
     """Tests for graceful handling of network errors."""
 
@@ -625,6 +636,7 @@ class TestConnectionErrorHandling:
 # =============================================================================
 
 
+@pytest.mark.benchmark
 class TestDataLocation:
     """Tests for custom and default data location handling."""
 
@@ -731,6 +743,7 @@ class TestDataLocation:
 # =============================================================================
 
 
+@pytest.mark.benchmark
 class TestSequentialIdGeneration:
     """Tests for task ID generation."""
 
