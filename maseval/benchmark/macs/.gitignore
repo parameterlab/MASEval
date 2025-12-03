@@ -1,0 +1,3 @@
+(# Ignore generated data files created by the aws_collab data processor)
+**/*.json
+**/*.txt

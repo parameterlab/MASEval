@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- MACS Benchmark: Multi-Agent Collaboration Scenarios benchmark (PR: #13)
 - [LlamaIndex](https://github.com/run-llama/llama_index) integration: `LlamaIndexAgentAdapter` and `LlamaIndexUser` for evaluating LlamaIndex workflow-based agents (PR: #7)
   - Supports async workflow execution with proper event loop handling
 - Added a new example: The `5_a_day_benchmark` (PR: #10)
