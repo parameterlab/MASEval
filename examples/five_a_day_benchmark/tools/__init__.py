@@ -116,24 +116,24 @@ def _create_mcp_calendar_state(calendar_name: str, env_data: Dict[str, Any], ava
     return MCPCalendarState(calendar_name, {"events": events})
 
 
-def filter_tool_adapters_by_prefix(adapters: List[Any], tool_names: List[str]) -> List[Any]:
-    """Filter tool adapters by exact name.
+def filter_tool_adapters_by_prefix(adapters: Dict[str, Any], tool_names: List[str]) -> Dict[str, Any]:
+    """Filter tool adapters by exact name prefix.
 
     Args:
-        adapters: List of tool adapters to filter
+        adapters: Dict of tool adapters to filter, keyed by tool name
         tool_names: Tool/collection names to match (e.g., ["banking", "calculator"])
 
     Returns:
-        Filtered list of adapters matching the specified names
+        Filtered dict of adapters matching the specified names
     """
     if not tool_names:
-        return []
+        return {}
 
-    filtered = []
-    for adapter in adapters:
+    filtered: Dict[str, Any] = {}
+    for adapter_name, adapter in adapters.items():
         for tool_name in tool_names:
-            if adapter.name.startswith(f"{tool_name}_"):
-                filtered.append(adapter)
+            if adapter_name.startswith(f"{tool_name}_"):
+                filtered[adapter_name] = adapter
                 break
 
     return filtered

@@ -58,6 +58,7 @@ from maseval.interface.inference.google_genai import GoogleGenAIModelAdapter
 
 from maseval.benchmark.macs import (
     MACSBenchmark,
+    MACSEnvironment,
     MACSGenericTool,
     MACSUser,
     compute_benchmark_metrics,
@@ -126,7 +127,7 @@ class SmolagentsMACSUser(MACSUser):
 
         class UserInputTool(SmolagentsTool):
             name = "user_input"
-            description = "Ask the user a question to clarify their request or get additional information."
+            description = "Asks for user's input on a specific question."
             inputs = {"question": {"type": "string", "description": "The question to ask the user."}}
             output_type = "string"
 
@@ -158,7 +159,7 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
     def setup_agents(
         self,
         agent_data: Dict[str, Any],
-        environment: Environment,
+        environment: MACSEnvironment,  # type: ignore[override]
         task: Task,
         user: Optional[User],
     ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
@@ -180,24 +181,18 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
         agent_lookup = {a["agent_id"]: a for a in agents_config}
         primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
 
-        # Wrap all generic tools for smolagents
-        generic_tools = environment.create_tools()
-        tool_lookup = {t.name: SmolagentsToolWrapper(t) for t in generic_tools}
+        # Wrap all generic tools for smolagents and register them for tracing
+        tool_wrappers: Dict[str, SmolagentsToolWrapper] = {}
+        for name, tool in environment.tools.items():
+            wrapper = SmolagentsToolWrapper(tool)
+            tool_wrappers[name] = wrapper
+            self.register("tools", name, wrapper)
 
         # Helper to get tools for an agent
-        def get_agent_tools(agent_spec: Dict[str, Any]) -> List[Any]:
-            """Get wrapped tools for an agent based on tool group names."""
-            tool_groups = agent_spec.get("tools", [])
-            tools = []
-            for tool_group in tool_groups:
-                # Find actions in this tool group
-                for tool_spec in environment.state.get("tool_specs", []):
-                    if tool_spec.get("tool_name") == tool_group:
-                        for action in tool_spec.get("actions", []):
-                            action_name = action.get("name")
-                            if action_name and action_name in tool_lookup:
-                                tools.append(tool_lookup[action_name])
-            return tools
+        def get_agent_tools(agent_spec: Dict[str, Any]) -> List[SmolagentsTool]:
+            """Get wrapped tools for an agent based on its tool groups."""
+            agent_tools = environment.get_tools_for_agent(agent_spec)
+            return [tool_wrappers[name] for name in agent_tools if name in tool_wrappers]
 
         # Recursive function to build agent hierarchy
         def build_agent(agent_id: str, depth: int = 0) -> ToolCallingAgent:
@@ -205,7 +200,7 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
             agent_spec = agent_lookup.get(agent_id, {})
 
             # Get this agent's tools
-            agent_tools = get_agent_tools(agent_spec)
+            agent_tools: List[SmolagentsTool] = get_agent_tools(agent_spec)
             agent_tools.append(FinalAnswerTool())
 
             # Build managed agents from reachable_agents
@@ -225,7 +220,7 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
                 managed_agents=managed_agents if managed_agents else None,
                 name=agent_spec.get("agent_name", agent_id),
                 description=agent_spec.get("agent_instruction", ""),
-                max_steps=15,  # Allow more steps for multi-agent coordination
+                max_steps=25,  # Allow more steps for complex multi-agent tasks
                 verbosity_level=0,
             )
 
@@ -279,7 +274,7 @@ class LangGraphMACSUser(MACSUser):
         """Return a LangGraph-compatible user input tool."""
 
         def user_input(question: str) -> str:
-            """Ask the user a question and get their response."""
+            """Ask the user a question to understand their complete requirements."""
             return self.simulate_response(question)
 
         return StructuredTool.from_function(
@@ -316,7 +311,7 @@ class LangGraphMACSBenchmark(MACSBenchmark):
     def setup_agents(
         self,
         agent_data: Dict[str, Any],
-        environment: Environment,
+        environment: MACSEnvironment,  # type: ignore[override]
         task: Task,
         user: Optional[User],
     ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
@@ -335,23 +330,18 @@ class LangGraphMACSBenchmark(MACSBenchmark):
         agent_lookup = {a["agent_id"]: a for a in agents_config}
         primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
 
-        # Wrap all generic tools
-        generic_tools = environment.create_tools()
-        tool_lookup = {t.name: LangGraphToolWrapper(t) for t in generic_tools}
+        # Wrap all generic tools and register for tracing
+        tool_wrappers: Dict[str, LangGraphToolWrapper] = {}
+        for name, tool in environment.tools.items():
+            wrapper = LangGraphToolWrapper(tool)
+            tool_wrappers[name] = wrapper
+            self.register("tools", name, wrapper)
 
         # Helper to get tools for an agent
         def get_agent_tools(agent_spec: Dict[str, Any]) -> List[StructuredTool]:
-            """Get wrapped tools for an agent based on tool group names."""
-            tool_groups = agent_spec.get("tools", [])
-            tools = []
-            for tool_group in tool_groups:
-                for tool_spec in environment.state.get("tool_specs", []):
-                    if tool_spec.get("tool_name") == tool_group:
-                        for action in tool_spec.get("actions", []):
-                            action_name = action.get("name")
-                            if action_name and action_name in tool_lookup:
-                                tools.append(tool_lookup[action_name].tool)
-            return tools
+            """Get wrapped tools for an agent based on its tool groups."""
+            agent_tools = environment.get_tools_for_agent(agent_spec)
+            return [tool_wrappers[name].tool for name in agent_tools if name in tool_wrappers]
 
         # Build agent graph recursively
         def build_agent_graph(agent_id: str) -> StateGraph:

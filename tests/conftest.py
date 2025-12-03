@@ -130,8 +130,8 @@ class DummyEnvironment(Environment):
     def setup_state(self, task_data: dict) -> Any:
         return task_data.copy()
 
-    def create_tools(self) -> list:
-        return []
+    def create_tools(self) -> dict:
+        return {}
 
 
 class DummyUser(User):

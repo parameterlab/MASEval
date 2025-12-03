@@ -159,15 +159,13 @@ class FiveADayEnvironment(Environment):
 
         return env_data
 
-    def create_tools(self) -> list:
+    def create_tools(self) -> Dict[str, Any]:
         """Create tool instances from environment_data and convert to framework-specific types.
 
-        The base Environment class stores tools in self._tools_dict for tracing.
-
         Returns:
-            List of framework-specific tool objects (smolagents Tool, LangChain StructuredTool, etc.)
+            Dict mapping tool names to framework-specific tool objects
         """
-        tools_list = []
+        tools_dict: Dict[str, Any] = {}
 
         # Map tool names to tool collection classes and their initialization data
         tool_mapping = {
@@ -199,9 +197,11 @@ class FiveADayEnvironment(Environment):
                 # Convert each base tool to framework-specific tool
                 for base_tool in base_tools:
                     framework_tool = self._convert_tool(base_tool)
-                    tools_list.append(framework_tool)
+                    # Use the base tool's name as the key
+                    tool_key = getattr(base_tool, "name", None) or str(type(base_tool).__name__)
+                    tools_dict[tool_key] = framework_tool
 
-        return tools_list
+        return tools_dict
 
     def _convert_tool(self, base_tool):
         """Convert BaseTool to framework-specific tool adapter.
@@ -233,7 +233,7 @@ class FiveADayEnvironment(Environment):
 def build_smolagents_single_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
 ) -> Any:
@@ -242,7 +242,7 @@ def build_smolagents_single_agent(
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
 
@@ -255,7 +255,7 @@ def build_smolagents_single_agent(
     seed = primary_spec.get("seed")
     model = get_model(model_id, "smolagents", temperature, seed)
     tool_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    tools = [adapter.tool for adapter in tool_adapters]
+    tools = [adapter.tool for adapter in tool_adapters.values()]
     sanitized_name = sanitize_name(primary_spec["agent_name"])
 
     agent = ToolCallingAgent(
@@ -272,7 +272,7 @@ def build_smolagents_single_agent(
 def build_langgraph_single_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
 ) -> Any:
@@ -281,7 +281,7 @@ def build_langgraph_single_agent(
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
 
@@ -298,7 +298,7 @@ def build_langgraph_single_agent(
     seed = primary_spec.get("seed")
     model = get_model(model_id, "langgraph", temperature, seed)
     tool_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    tools = [adapter.tool for adapter in tool_adapters]
+    tools = [adapter.tool for adapter in tool_adapters.values()]
 
     class AgentState(TypedDict):
         messages: Annotated[List[Any], add_messages]
@@ -329,7 +329,7 @@ def build_langgraph_single_agent(
 def build_llamaindex_single_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
 ) -> Any:
@@ -338,7 +338,7 @@ def build_llamaindex_single_agent(
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
 
@@ -351,7 +351,7 @@ def build_llamaindex_single_agent(
     seed = primary_spec.get("seed")
     model = get_model(model_id, "llamaindex", temperature, seed)
     tool_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    tools = [adapter.tool for adapter in tool_adapters]
+    tools = [adapter.tool for adapter in tool_adapters.values()]
 
     agent = ReActAgent(
         tools=tools,
@@ -367,7 +367,7 @@ def build_llamaindex_single_agent(
 def build_smolagents_multi_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
 ) -> Any:
@@ -376,7 +376,7 @@ def build_smolagents_multi_agent(
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: List of specialist agent specifications
 
@@ -391,7 +391,7 @@ def build_smolagents_multi_agent(
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "smolagents", temperature, specialist_seed)
         specialist_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, agent_spec["tools"])
-        specialist_tools = [adapter.tool for adapter in specialist_adapters]
+        specialist_tools = [adapter.tool for adapter in specialist_adapters.values()]
         specialist_tools.append(FinalAnswerTool())
         sanitized_name = sanitize_name(agent_spec["agent_name"])
 
@@ -406,7 +406,7 @@ def build_smolagents_multi_agent(
         specialist_agents.append(specialist)
 
     primary_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    primary_tools = [adapter.tool for adapter in primary_adapters]
+    primary_tools = [adapter.tool for adapter in primary_adapters.values()]
     primary_tools.append(FinalAnswerTool())
     sanitized_primary_name = sanitize_name(primary_spec["agent_name"])
     primary_seed = primary_spec.get("seed")
@@ -427,7 +427,7 @@ def build_smolagents_multi_agent(
 def build_langgraph_multi_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
 ) -> Any:
@@ -436,7 +436,7 @@ def build_langgraph_multi_agent(
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: List of specialist agent specifications
 
@@ -462,7 +462,7 @@ def build_langgraph_multi_agent(
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "langgraph", temperature, specialist_seed)
         specialist_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, agent_spec["tools"])
-        specialist_tools = [adapter.tool for adapter in specialist_adapters]
+        specialist_tools = [adapter.tool for adapter in specialist_adapters.values()]
 
         def make_specialist_node(spec_instruction, spec_tools, spec_model):
             def specialist_node(state: MultiAgentState):
@@ -584,7 +584,7 @@ def build_langgraph_multi_agent(
 def build_llamaindex_multi_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
 ) -> Any:
@@ -593,7 +593,7 @@ def build_llamaindex_multi_agent(
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: List of specialist agent specifications
 
@@ -613,7 +613,7 @@ def build_llamaindex_multi_agent(
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "llamaindex", temperature, specialist_seed)
         specialist_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, agent_spec["tools"])
-        specialist_tools = [adapter.tool for adapter in specialist_adapters]
+        specialist_tools = [adapter.tool for adapter in specialist_adapters.values()]
 
         specialist_agent = ReActAgent(
             tools=specialist_tools,
@@ -652,7 +652,7 @@ def build_llamaindex_multi_agent(
 
     orchestrator_tools = [make_handoff_tool(spec_id, spec_info) for spec_id, spec_info in specialist_agents_dict.items()]
     primary_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    primary_tools = [adapter.tool for adapter in primary_adapters]
+    primary_tools = [adapter.tool for adapter in primary_adapters.values()]
     orchestrator_tools.extend(primary_tools)
 
     primary_seed = primary_spec.get("seed")
@@ -715,8 +715,7 @@ class FiveADayBenchmark(Benchmark):
         environment = FiveADayEnvironment(task_data, framework)
 
         # Register all tools with the benchmark for tracing
-        for tool_adapter in environment.get_tools():
-            tool_name = getattr(tool_adapter, "name", None) or str(type(tool_adapter).__name__)
+        for tool_name, tool_adapter in environment.get_tools().items():
             self.register("tools", tool_name, tool_adapter)
 
         return environment

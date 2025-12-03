@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** `Environment.create_tools()` now returns `Dict[str, Any]` instead of `list`
+  - `get_tools()` returns a dict keyed by tool name
+  - Added `get_tool(name)` method for single-tool lookup
+  - Removed internal `_tools_dict` attribute (tools dict is now the source of truth)
 - Documentation formatting improved. Added darkmode and links to `Github` (PR: #11).
 - `FileResultLogger` now accepts `pathlib.Path` for argument `output_dir` and has an `overwrite` argument to prevent overwriting of existing logs files.
 - `Benchmark` class now has a `fail_on_setup_error` flag that raises errors observed during setup of task (PR: #10)

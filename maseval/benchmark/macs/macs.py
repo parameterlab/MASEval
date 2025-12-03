@@ -372,6 +372,7 @@ class MACSUser(User):
 
     DEFAULT_MAX_TURNS = 5
     STOP_TOKEN = "</stop>"
+    TEMPLATE_PATH = Path(__file__).parent / "prompt_templates" / "user_simulator.txt"
 
     def __init__(
         self,
@@ -389,9 +390,13 @@ class MACSUser(User):
             scenario: Full scenario text (contains goals and user background)
             initial_prompt: The initial query to the agent
             name: User name for identification (default: "Simulated User")
-            template: Optional custom prompt template (uses base User's default)
+            template: Optional custom prompt template (uses MACS-specific default)
             max_turns: Maximum conversation turns (default: 5, per MACS paper)
         """
+        # Load MACS-specific user simulator template if not provided
+        if template is None and self.TEMPLATE_PATH.exists():
+            template = self.TEMPLATE_PATH.read_text()
+
         # Extract user profile from scenario text
         user_profile = self._extract_user_profile(scenario)
 
@@ -528,7 +533,7 @@ class MACSEnvironment(Environment):
     """Unified environment for all MACS domains.
 
     Creates MACSGenericTool instances from task's environment_data.
-    Users can override to convert tools to their framework format.
+    Tools are stored in a dict keyed by name for efficient lookup.
     """
 
     def __init__(
@@ -553,49 +558,38 @@ class MACSEnvironment(Environment):
             "tool_specs": task_data.get("environment_data", {}).get("tools", []),
         }
 
-    def create_tools(self) -> List[MACSGenericTool]:
-        """Create framework-agnostic tools from specifications."""
-        tools = []
-        seen = set()
+    def create_tools(self) -> Dict[str, MACSGenericTool]:  # type: ignore[override]
+        """Create tools from task specifications.
 
+        Returns:
+            Dict mapping tool names to MACSGenericTool instances
+        """
+        tools: Dict[str, MACSGenericTool] = {}
         for tool_group in self.state["tool_specs"]:
             for action in tool_group.get("actions", []):
                 name = action.get("name")
-                if name and name not in seen:
-                    tools.append(MACSGenericTool(action, self._model))
-                    seen.add(name)
-
+                if name and name not in tools:
+                    tools[name] = MACSGenericTool(action, self._model)
         return tools
 
-    def get_tools_by_group(self, group_names: List[str]) -> List[MACSGenericTool]:
-        """Get tools belonging to specified tool groups.
-
-        Args:
-            group_names: List of tool group names (e.g., ["Weather", "BookFlight"])
-
-        Returns:
-            List of tools from those groups
-        """
-        result = []
-        for tool_group in self.state["tool_specs"]:
-            if tool_group.get("tool_name") in group_names:
-                for action in tool_group.get("actions", []):
-                    name = action.get("name")
-                    if name and name in self._tools_dict:
-                        result.append(self._tools_dict[name])
-        return result
-
-    def get_tools_for_agent(self, agent_spec: Dict[str, Any]) -> List[MACSGenericTool]:
+    def get_tools_for_agent(self, agent_spec: Dict[str, Any]) -> Dict[str, MACSGenericTool]:
         """Get tools for a specific agent based on its configuration.
 
         Args:
             agent_spec: Agent specification dict with 'tools' key containing tool group names
 
         Returns:
-            List of MACSGenericTool instances assigned to this agent
+            Dict of MACSGenericTool instances assigned to this agent, keyed by name
         """
         tool_groups = agent_spec.get("tools", [])
-        return self.get_tools_by_group(tool_groups)
+        result: Dict[str, MACSGenericTool] = {}
+        for tool_group in self.state["tool_specs"]:
+            if tool_group.get("tool_name") in tool_groups:
+                for action in tool_group.get("actions", []):
+                    name = action.get("name")
+                    if name and name in self.tools:
+                        result[name] = self.tools[name]
+        return result
 
 
 # =============================================================================
@@ -647,7 +641,7 @@ class MACSBenchmark(Benchmark):
     def setup_user(
         self,
         agent_data: Dict[str, Any],
-        environment: Environment,
+        environment: MACSEnvironment,  # type: ignore[override]
         task: Task,
     ) -> MACSUser:
         """Create MACS user simulator.
@@ -678,7 +672,7 @@ class MACSBenchmark(Benchmark):
     def setup_agents(
         self,
         agent_data: Dict[str, Any],
-        environment: Environment,
+        environment: MACSEnvironment,  # type: ignore[override]
         task: Task,
         user: Optional[User],
     ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
@@ -697,7 +691,7 @@ class MACSBenchmark(Benchmark):
 
     def setup_evaluators(
         self,
-        environment: Environment,
+        environment: MACSEnvironment,  # type: ignore[override]
         task: Task,
         agents: Sequence[AgentAdapter],
         user: Optional[User],
@@ -712,7 +706,7 @@ class MACSBenchmark(Benchmark):
         self,
         agents: Sequence[AgentAdapter],
         task: Task,
-        environment: Environment,
+        environment: MACSEnvironment,  # type: ignore[override]
     ) -> Any:
         """Execute agents and return final answer."""
         answers = [agent.run(task.query) for agent in agents]
