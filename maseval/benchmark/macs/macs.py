@@ -351,6 +351,175 @@ class MACSEvaluator(Evaluator):
 
 
 # =============================================================================
+# User Simulator
+# =============================================================================
+
+
+class MACSUserSimulator(User):
+    """MACS-specific user simulator with conversation limits.
+
+    Extends the base User class with MACS-specific behavior:
+    - Maximum 5 turns of interaction (as per MACS paper)
+    - </stop> token detection for natural conversation ending
+    - User profile and scenario-aware responses
+
+    The simulator maintains a conversation history and uses an LLM to generate
+    responses that are consistent with the user's profile and scenario.
+
+    Note: This is a base class. Framework-specific subclasses should override
+    get_tool() to return a compatible tool (e.g., SmolAgentUserSimulationInputTool).
+    """
+
+    DEFAULT_MAX_TURNS = 5
+    STOP_TOKEN = "</stop>"
+
+    def __init__(
+        self,
+        model: ModelAdapter,
+        scenario: str,
+        initial_prompt: str,
+        name: str = "Simulated User",
+        template: Optional[str] = None,
+        max_turns: int = DEFAULT_MAX_TURNS,
+    ):
+        """Initialize MACS user simulator.
+
+        Args:
+            model: ModelAdapter for LLM-based response generation
+            scenario: Full scenario text (contains goals and user background)
+            initial_prompt: The initial query to the agent
+            name: User name for identification (default: "Simulated User")
+            template: Optional custom prompt template (uses base User's default)
+            max_turns: Maximum conversation turns (default: 5, per MACS paper)
+        """
+        # Extract user profile from scenario text
+        user_profile = self._extract_user_profile(scenario)
+
+        super().__init__(
+            name=name,
+            model=model,
+            user_profile=user_profile,
+            scenario=scenario,
+            initial_prompt=initial_prompt,
+            template=template,
+        )
+        self.max_turns = max_turns
+        self._turn_count = 0
+        self._stopped = False
+
+    def get_tool(self) -> Any:
+        """Return a tool for agent interaction.
+
+        This base implementation raises NotImplementedError.
+        Framework-specific subclasses should override this method.
+
+        For smolagents, use SmolAgentMACSUser which provides a smolagents-compatible tool.
+        For langgraph, use LangGraphMACSUser which provides a langchain-compatible tool.
+
+        Raises:
+            NotImplementedError: Always, as this must be implemented by subclass.
+        """
+        raise NotImplementedError(
+            "MACSUserSimulator.get_tool() must be overridden by framework-specific subclass. "
+            "Use SmolAgentMACSUser for smolagents or LangGraphMACSUser for langgraph."
+        )
+
+    @property
+    def is_done(self) -> bool:
+        """Check if the conversation should end.
+
+        Returns True if:
+        - Maximum turns reached
+        - User responded with </stop> token
+        """
+        return self._stopped or self._turn_count >= self.max_turns
+
+    def simulate_response(self, question: str) -> str:
+        """Simulate a user response, respecting turn limits.
+
+        Args:
+            question: The assistant's question/message
+
+        Returns:
+            The simulated user response, or empty string if done
+        """
+        if self.is_done:
+            return ""
+
+        # Use parent's simulate_response which handles LLM generation
+        response = super().simulate_response(question)
+
+        # Check for stop token
+        if self.STOP_TOKEN in response.lower():
+            self._stopped = True
+            # Clean up the response
+            response = response.replace(self.STOP_TOKEN, "").strip()
+            if not response:
+                response = "Thank you, that's all I needed!"
+
+        self._turn_count += 1
+        return response
+
+    def reset(self) -> None:
+        """Reset the conversation state for a new interaction."""
+        self._turn_count = 0
+        self._stopped = False
+        # Keep only the initial user message
+        if len(self.messages) > 0:
+            initial = self.messages[0]
+            self.messages = MessageHistory([initial])
+
+    @staticmethod
+    def _extract_user_profile(scenario: str) -> Dict[str, Any]:
+        """Extract user profile from scenario text.
+
+        The MACS scenarios contain user background info after "Background:" marker.
+
+        Args:
+            scenario: Full scenario text with goals and background
+
+        Returns:
+            Dict with user profile fields
+        """
+        profile: Dict[str, Any] = {}
+
+        # Find the Background section
+        if "Background:" in scenario:
+            background_section = scenario.split("Background:")[-1].strip()
+
+            # Parse bullet points (* User's name is ...)
+            for line in background_section.split("\n"):
+                line = line.strip().lstrip("*").strip()
+                if line.lower().startswith("user"):
+                    # Try to extract key-value pairs
+                    if " is " in line.lower():
+                        key_part, value_part = line.split(" is ", 1)
+                        key = key_part.lower().replace("user's ", "").replace("user ", "").strip()
+                        profile[key] = value_part.strip().rstrip(".")
+                    elif " has " in line.lower():
+                        key_part, value_part = line.split(" has ", 1)
+                        key = key_part.lower().replace("user's ", "").replace("user ", "").strip()
+                        profile[key] = value_part.strip().rstrip(".")
+
+        # Include full scenario as fallback context
+        profile["full_scenario"] = scenario
+
+        return profile
+
+    def gather_traces(self) -> Dict[str, Any]:
+        """Gather traces with MACS-specific information."""
+        traces = super().gather_traces()
+        traces.update(
+            {
+                "max_turns": self.max_turns,
+                "turns_used": self._turn_count,
+                "stopped_by_user": self._stopped,
+            }
+        )
+        return traces
+
+
+# =============================================================================
 # Environment
 # =============================================================================
 
@@ -416,6 +585,18 @@ class MACSEnvironment(Environment):
                         result.append(self._tools_dict[name])
         return result
 
+    def get_tools_for_agent(self, agent_spec: Dict[str, Any]) -> List[MACSGenericTool]:
+        """Get tools for a specific agent based on its configuration.
+
+        Args:
+            agent_spec: Agent specification dict with 'tools' key containing tool group names
+
+        Returns:
+            List of MACSGenericTool instances assigned to this agent
+        """
+        tool_groups = agent_spec.get("tools", [])
+        return self.get_tools_by_group(tool_groups)
+
 
 # =============================================================================
 # Benchmark
@@ -437,7 +618,6 @@ class MACSBenchmark(Benchmark):
         self,
         agent_data: Dict[str, Any],
         model: ModelAdapter,
-        data_dir: Optional[Path] = None,
         callbacks: Optional[List[Any]] = None,
         n_task_repeats: int = 1,
         **kwargs: Any,
@@ -447,12 +627,10 @@ class MACSBenchmark(Benchmark):
         Args:
             agent_data: Agent configuration from load_agent_config()
             model: ModelAdapter for tool simulation and evaluation
-            data_dir: Optional custom data directory
             callbacks: Benchmark callbacks
             n_task_repeats: Repetitions per task
         """
         self._model = model
-        self._data_dir = Path(data_dir) if data_dir else (Path(__file__).parent / "data")
         super().__init__(agent_data, callbacks, n_task_repeats, **kwargs)
 
     def setup_environment(
@@ -471,9 +649,30 @@ class MACSBenchmark(Benchmark):
         agent_data: Dict[str, Any],
         environment: Environment,
         task: Task,
-    ) -> Optional[User]:
-        """Create user simulator. Override for multi-turn evaluation."""
-        return None
+    ) -> MACSUserSimulator:
+        """Create MACS user simulator.
+
+        Creates a MACSUserSimulator with scenario and query from the task.
+        The user profile is automatically extracted from the scenario text.
+
+        Note: MACSUserSimulator.get_tool() raises NotImplementedError.
+        Framework-specific subclasses in examples should wrap this user
+        or override setup_user() to return a user with get_tool() implemented.
+
+        Args:
+            agent_data: Agent configuration
+            environment: The task environment
+            task: Current task with scenario and user profile
+
+        Returns:
+            MACSUserSimulator instance
+        """
+        scenario = task.metadata.get("scenario", "")
+        return MACSUserSimulator(
+            model=self._model,
+            scenario=scenario,
+            initial_prompt=task.query,
+        )
 
     @abstractmethod
     def setup_agents(

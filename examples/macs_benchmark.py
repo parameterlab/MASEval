@@ -4,9 +4,13 @@ This example demonstrates running the AWS Multi-Agent Collaboration Scenarios (M
 benchmark with either smolagents or langgraph frameworks.
 
 The MACS benchmark evaluates multi-agent collaboration in three enterprise domains:
-- Travel: 10 agents, 52 tools (flight booking, hotels, weather, etc.)
-- Mortgage: 6 agents, 35 tools (loan processing, document handling, etc.)
-- Software: 8 agents, 4 tools (code review, issue tracking, etc.)
+- Travel: 10 agents, 52 tools (flight booking, hotels, weather, etc.) - 2-level hierarchy
+- Mortgage: 6 agents, 35 tools (loan processing, document handling, etc.) - 2-level hierarchy
+- Software: 8 agents, 4 tools (code review, issue tracking, etc.) - 3-level hierarchy
+
+Agent Hierarchy:
+    Travel/Mortgage: supervisor -> specialist agents
+    Software: supervisor -> deploy_agent -> infrastructure_agent, application_agent
 
 Reference:
     Paper: https://arxiv.org/abs/2412.05449
@@ -36,6 +40,7 @@ from maseval.interface.inference.google_genai import GoogleGenAIModelAdapter
 from maseval.benchmark.macs import (
     MACSBenchmark,
     MACSGenericTool,
+    MACSUserSimulator,
     compute_benchmark_metrics,
     ensure_data_exists,
     load_agent_config,
@@ -71,8 +76,8 @@ def create_model(model_id: str = "gemini-2.5-flash") -> GoogleGenAIModelAdapter:
 
 
 def _create_smolagents_benchmark():
-    """Create smolagents-specific benchmark class."""
-    from smolagents import Tool as SmolagentsTool, ToolCallingAgent, OpenAIServerModel
+    """Create smolagents-specific benchmark class with multi-agent hierarchy."""
+    from smolagents import Tool as SmolagentsTool, ToolCallingAgent, OpenAIServerModel, FinalAnswerTool
     from maseval.interface.agents.smolagents import SmolAgentAdapter
 
     class SmolagentsToolWrapper(SmolagentsTool, ConfigurableMixin, TraceableMixin):
@@ -97,8 +102,43 @@ def _create_smolagents_benchmark():
         def gather_config(self) -> Dict[str, Any]:
             return self.generic_tool.gather_config()
 
+    class SmolagentsMACSUser(MACSUserSimulator):
+        """MACS User Simulator with smolagents tool integration."""
+
+        def get_tool(self):
+            """Return a smolagents-compatible user input tool."""
+            # Create a simple smolagents tool that wraps simulate_response
+            user = self
+
+            class UserInputTool(SmolagentsTool):
+                name = "user_input"
+                description = "Ask the user a question to clarify their request or get additional information."
+                inputs = {"question": {"type": "string", "description": "The question to ask the user."}}
+                output_type = "string"
+
+                def forward(self, question: str) -> str:
+                    return user.simulate_response(question)
+
+            return UserInputTool()
+
     class SmolagentsMACSBenchmark(MACSBenchmark):
-        """MACS Benchmark implementation for smolagents."""
+        """MACS Benchmark implementation for smolagents with multi-agent hierarchy."""
+
+        def setup_user(
+            self,
+            agent_data: Dict[str, Any],
+            environment: Environment,
+            task: Task,
+        ) -> SmolagentsMACSUser:
+            """Create smolagents-compatible user simulator."""
+            scenario = task.metadata.get("scenario", "")
+
+            return SmolagentsMACSUser(
+                name="Simulated User",
+                model=self._model,
+                scenario=scenario,
+                initial_prompt=task.query,
+            )
 
         def setup_agents(
             self,
@@ -107,37 +147,86 @@ def _create_smolagents_benchmark():
             task: Task,
             user: Optional[User],
         ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
-            """Create smolagents agents."""
-            # Get tools from environment
-            generic_tools = environment.create_tools()
-            wrapped_tools = [SmolagentsToolWrapper(t) for t in generic_tools]
+            """Create smolagents multi-agent hierarchy.
 
+            Implements the exact agent topology from agents.json:
+            - Travel/Mortgage: 2-level hierarchy (supervisor -> specialists)
+            - Software: 3-level hierarchy (supervisor -> deploy_agent -> infra/app agents)
+            """
             # Create smolagents model
-            # Use OpenAI-compatible API with Gemini via AI Studio
             smol_model = OpenAIServerModel(
                 model_id="gemini-2.5-flash",
                 api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
                 api_key=os.getenv("GOOGLE_API_KEY"),
             )
 
-            # Get primary agent config
-            primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
+            # Build agent lookup
             agents_config = agent_data.get("agents", [])
-            primary_config = next(
-                (a for a in agents_config if a.get("agent_id") == primary_agent_id), agents_config[0] if agents_config else {}
-            )
+            agent_lookup = {a["agent_id"]: a for a in agents_config}
+            primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
 
-            # Create agent
-            agent = ToolCallingAgent(
-                tools=list(wrapped_tools),  # type: ignore[arg-type]
-                model=smol_model,
-                max_steps=10,
-                name=primary_config.get("agent_name", "MACS Agent"),
-                description=primary_config.get("agent_instruction", "Multi-agent collaboration agent"),
-            )
+            # Wrap all generic tools for smolagents
+            generic_tools = environment.create_tools()
+            tool_lookup = {t.name: SmolagentsToolWrapper(t) for t in generic_tools}
+
+            # Helper to get tools for an agent
+            def get_agent_tools(agent_spec: Dict[str, Any]) -> List[Any]:
+                """Get wrapped tools for an agent based on tool group names."""
+                tool_groups = agent_spec.get("tools", [])
+                tools = []
+                for tool_group in tool_groups:
+                    # Find actions in this tool group
+                    for tool_spec in environment.state.get("tool_specs", []):
+                        if tool_spec.get("tool_name") == tool_group:
+                            for action in tool_spec.get("actions", []):
+                                action_name = action.get("name")
+                                if action_name and action_name in tool_lookup:
+                                    tools.append(tool_lookup[action_name])
+                return tools
+
+            # Recursive function to build agent hierarchy
+            def build_agent(agent_id: str, depth: int = 0) -> ToolCallingAgent:
+                """Build an agent with its sub-agents (managed_agents)."""
+                agent_spec = agent_lookup.get(agent_id, {})
+
+                # Get this agent's tools
+                agent_tools = get_agent_tools(agent_spec)
+                agent_tools.append(FinalAnswerTool())
+
+                # Build managed agents from reachable_agents
+                managed_agents = []
+                reachable = agent_spec.get("reachable_agents", [])
+
+                for reachable_spec in reachable:
+                    sub_agent_id = reachable_spec.get("agent_id")
+                    if sub_agent_id and sub_agent_id in agent_lookup:
+                        sub_agent = build_agent(sub_agent_id, depth + 1)
+                        managed_agents.append(sub_agent)
+
+                # Create the agent
+                agent = ToolCallingAgent(
+                    model=smol_model,
+                    tools=agent_tools,
+                    managed_agents=managed_agents if managed_agents else None,
+                    name=agent_spec.get("agent_name", agent_id),
+                    description=agent_spec.get("agent_instruction", ""),
+                    max_steps=15,  # Allow more steps for multi-agent coordination
+                    verbosity_level=0,
+                )
+
+                return agent
+
+            # Build the primary agent with full hierarchy
+            primary_agent = build_agent(primary_agent_id)
+
+            # Add user tool to primary agent if user simulator is available
+            if user and hasattr(user, "get_tool"):
+                user_tool = user.get_tool()
+                if user_tool:
+                    primary_agent.tools.append(user_tool)  # type: ignore[attr-defined]
 
             # Wrap with adapter
-            adapter = SmolAgentAdapter(agent, name=primary_agent_id)
+            adapter = SmolAgentAdapter(primary_agent, name=primary_agent_id)
 
             return [adapter], {primary_agent_id: adapter}
 
@@ -150,10 +239,11 @@ def _create_smolagents_benchmark():
 
 
 def _create_langgraph_benchmark():
-    """Create langgraph-specific benchmark class."""
+    """Create langgraph-specific benchmark class with multi-agent hierarchy."""
     from langchain_core.tools import StructuredTool
+    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
     from langchain_google_genai import ChatGoogleGenerativeAI
-    from langgraph.graph import StateGraph
+    from langgraph.graph import StateGraph, END
     from langgraph.graph.message import add_messages
     from langgraph.prebuilt import ToolNode, tools_condition
     from typing_extensions import TypedDict, Annotated
@@ -180,8 +270,40 @@ def _create_langgraph_benchmark():
         def gather_config(self) -> Dict[str, Any]:
             return self.generic_tool.gather_config()
 
+    class LangGraphMACSUser(MACSUserSimulator):
+        """MACS User Simulator with LangGraph tool integration."""
+
+        def get_tool(self):
+            """Return a LangGraph-compatible user input tool."""
+
+            def user_input(question: str) -> str:
+                """Ask the user a question and get their response."""
+                return self.simulate_response(question)
+
+            return StructuredTool.from_function(
+                func=user_input,
+                name="user_input",
+                description="Ask the user a question. Use this to clarify requirements or get additional information.",
+            )
+
     class LanggraphMACSBenchmark(MACSBenchmark):
-        """MACS Benchmark implementation for langgraph."""
+        """MACS Benchmark implementation for langgraph with multi-agent hierarchy."""
+
+        def setup_user(
+            self,
+            agent_data: Dict[str, Any],
+            environment: Environment,
+            task: Task,
+        ) -> "LangGraphMACSUser":
+            """Create langgraph-compatible user simulator."""
+            scenario = task.metadata.get("scenario", "")
+
+            return LangGraphMACSUser(
+                name="Simulated User",
+                model=self._model,
+                scenario=scenario,
+                initial_prompt=task.query,
+            )
 
         def setup_agents(
             self,
@@ -190,39 +312,155 @@ def _create_langgraph_benchmark():
             task: Task,
             user: Optional[User],
         ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
-            """Create langgraph agents."""
-            # Get tools from environment
-            generic_tools = environment.create_tools()
-            wrapped_tools = [LanggraphToolWrapper(t) for t in generic_tools]
-            langchain_tools = [w.tool for w in wrapped_tools]
+            """Create langgraph multi-agent hierarchy.
 
-            # Create LangChain model with tools
+            Uses subgraphs to implement the agent hierarchy from agents.json.
+            """
+            # Create LangChain model
             llm = ChatGoogleGenerativeAI(
                 model="gemini-2.5-flash",
                 google_api_key=os.getenv("GOOGLE_API_KEY"),
             )
-            llm_with_tools = llm.bind_tools(langchain_tools)
 
-            # Define state
-            class State(TypedDict):
+            # Build agent lookup
+            agents_config = agent_data.get("agents", [])
+            agent_lookup = {a["agent_id"]: a for a in agents_config}
+            primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
+
+            # Wrap all generic tools
+            generic_tools = environment.create_tools()
+            tool_lookup = {t.name: LanggraphToolWrapper(t) for t in generic_tools}
+
+            # State type for langgraph
+            class AgentState(TypedDict):
                 messages: Annotated[list, add_messages]
 
-            # Build graph
-            def chatbot(state: State):
-                return {"messages": [llm_with_tools.invoke(state["messages"])]}
+            # Helper to get langchain tools for an agent
+            def get_agent_langchain_tools(agent_spec: Dict[str, Any]) -> List:
+                """Get langchain tools for an agent."""
+                tool_groups = agent_spec.get("tools", [])
+                tools = []
+                for tool_group in tool_groups:
+                    for tool_spec in environment.state.get("tool_specs", []):
+                        if tool_spec.get("tool_name") == tool_group:
+                            for action in tool_spec.get("actions", []):
+                                action_name = action.get("name")
+                                if action_name and action_name in tool_lookup:
+                                    tools.append(tool_lookup[action_name].tool)
+                return tools
 
-            graph = StateGraph(State)
-            graph.add_node("chatbot", chatbot)
-            graph.add_node("tools", ToolNode(tools=langchain_tools))
+            # Build a simple graph for leaf agents (no sub-agents)
+            def build_leaf_agent_graph(agent_id: str):
+                """Build a compiled graph for a leaf agent."""
+                agent_spec = agent_lookup.get(agent_id, {})
+                agent_tools = get_agent_langchain_tools(agent_spec)
+                agent_name = agent_spec.get("agent_name", agent_id)
+                agent_instruction = agent_spec.get("agent_instruction", "")
 
-            graph.add_conditional_edges("chatbot", tools_condition)
-            graph.add_edge("tools", "chatbot")
+                if agent_tools:
+                    llm_with_tools = llm.bind_tools(agent_tools)
+                else:
+                    llm_with_tools = llm
+
+                def call_agent(state: AgentState):
+                    messages = state["messages"]
+                    # Add system message
+                    has_system = any(isinstance(m, SystemMessage) for m in messages)
+                    if not has_system:
+                        system_msg = SystemMessage(content=f"You are {agent_name}. {agent_instruction}")
+                        messages = [system_msg] + list(messages)
+                    response = llm_with_tools.invoke(messages)
+                    return {"messages": [response]}
+
+                graph = StateGraph(AgentState)
+                graph.add_node("agent", call_agent)
+
+                if agent_tools:
+                    graph.add_node("tools", ToolNode(agent_tools))
+                    graph.add_conditional_edges("agent", tools_condition)
+                    graph.add_edge("tools", "agent")
+                else:
+                    graph.add_edge("agent", END)
+
+                graph.set_entry_point("agent")
+                return graph.compile()
+
+            # For the primary agent, we build a graph that can delegate to sub-agents
+            primary_spec = agent_lookup.get(primary_agent_id, {})
+            primary_tools = get_agent_langchain_tools(primary_spec)
+
+            # Add user tool if available
+            if user and hasattr(user, "get_tool"):
+                user_tool = user.get_tool()
+                if user_tool:
+                    primary_tools.append(user_tool)
+
+            # Create sub-agent tools (delegation)
+            reachable = primary_spec.get("reachable_agents", [])
+            for reachable_spec in reachable:
+                sub_agent_id = reachable_spec.get("agent_id")
+                if sub_agent_id and sub_agent_id in agent_lookup:
+                    sub_spec = agent_lookup[sub_agent_id]
+                    sub_graph = build_leaf_agent_graph(sub_agent_id)
+
+                    # Create a tool that invokes the sub-agent
+                    def make_sub_agent_tool(graph, name, description):
+                        def invoke_sub_agent(query: str) -> str:
+                            """Delegate to sub-agent."""
+                            result = graph.invoke({"messages": [HumanMessage(content=query)]})
+                            # Get last AI message
+                            for msg in reversed(result.get("messages", [])):
+                                if isinstance(msg, AIMessage):
+                                    content = msg.content
+                                    if isinstance(content, str):
+                                        return content
+                                    # Handle list content (e.g., multimodal responses)
+                                    return str(content)
+                            return "No response from sub-agent"
+
+                        return StructuredTool.from_function(
+                            func=invoke_sub_agent,
+                            name=name,
+                            description=description,
+                        )
+
+                    sub_tool = make_sub_agent_tool(
+                        sub_graph,
+                        sub_spec.get("agent_name", sub_agent_id),
+                        reachable_spec.get("scenario", sub_spec.get("agent_instruction", "")),
+                    )
+                    primary_tools.append(sub_tool)
+
+            # Build primary agent graph
+            if primary_tools:
+                llm_with_tools = llm.bind_tools(primary_tools)
+            else:
+                llm_with_tools = llm
+
+            primary_name = primary_spec.get("agent_name", primary_agent_id)
+            primary_instruction = primary_spec.get("agent_instruction", "")
+
+            def call_primary(state: AgentState):
+                messages = state["messages"]
+                has_system = any(isinstance(m, SystemMessage) for m in messages)
+                if not has_system:
+                    system_msg = SystemMessage(content=f"You are {primary_name}. {primary_instruction}")
+                    messages = [system_msg] + list(messages)
+                response = llm_with_tools.invoke(messages)
+                return {"messages": [response]}
+
+            graph = StateGraph(AgentState)
+            graph.add_node("chatbot", call_primary)
+
+            if primary_tools:
+                graph.add_node("tools", ToolNode(tools=primary_tools))
+                graph.add_conditional_edges("chatbot", tools_condition)
+                graph.add_edge("tools", "chatbot")
+            else:
+                graph.add_edge("chatbot", END)
+
             graph.set_entry_point("chatbot")
-
             compiled_graph = graph.compile()
-
-            # Get primary agent config
-            primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
 
             # Wrap with adapter
             adapter = LangGraphAgentAdapter(compiled_graph, name=primary_agent_id)
@@ -289,7 +527,12 @@ def run_benchmark(
     print(f"Loading {domain} domain tasks...")
     tasks = load_tasks(domain, limit=limit)
     agent_config = load_agent_config(domain)
-    print(f"Loaded {len(tasks)} tasks")
+
+    # Print agent hierarchy info
+    agents_count = len(agent_config.get("agents", []))
+    primary_agent_id = agent_config.get("primary_agent_id", "unknown")
+    print(f"Loaded {len(tasks)} tasks with {agents_count}-agent hierarchy")
+    print(f"Primary agent: {primary_agent_id}")
 
     # Setup callback for logging results
     logger = FileResultLogger(
