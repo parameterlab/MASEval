@@ -9,6 +9,7 @@ from .evaluator import Evaluator
 from .task import Task, TaskCollection
 from .environment import Environment
 from .agent import AgentAdapter
+from .model import ModelAdapter
 from .callback_handler import CallbackHandler
 from .callback import BenchmarkCallback
 from .user import User
@@ -731,6 +732,44 @@ class Benchmark(ABC):
                     LLMJudgeEvaluator(model=self.judge_model, criteria=task.evaluation_data["rubric"])
                 ]
             ```
+        """
+        pass
+
+    @abstractmethod
+    def get_model_adapter(self, model_id: str) -> ModelAdapter:
+        """Provide a ModelAdapter for benchmark components that require LLM access.
+
+        Many benchmark components beyond the agents themselves require access to language
+        models. Common examples include:
+
+        - **Tool simulators**: Simulating tool responses when real APIs aren't available
+        - **User simulators**: Generating realistic user responses in multi-turn dialogues
+        - **Judges/Evaluators**: Using LLMs to assess agent performance against criteria
+        - **Reward models**: Computing scores for reinforcement learning
+
+        This method centralizes model provisioning, giving you control over which models
+        are used throughout the benchmark. Implement this to return a configured ModelAdapter
+        for the requested model.
+
+        Args:
+            model_id: The model identifier to use (e.g., "gemini-2.5-flash",
+                "openrouter/google/gemini-2.5-flash", "gpt-4o"). This is passed by the
+                benchmark when setting up components that need model access.
+
+        Returns:
+            A ModelAdapter instance configured for the specified model. For proper tracing,
+            return a fresh adapter for each call rather than reusing instances. You can
+            still share the underlying API client for efficiency.
+
+        How to use:
+            ```python
+            def get_model_adapter(self, model_id: str) -> ModelAdapter:
+                # Return an adapter for the requested model
+                return GoogleGenAIModelAdapter(self.client, model_id=model_id)
+            ```
+
+            The benchmark calls this method when setting up tools, user simulators,
+            and evaluators. Each call creates a fresh adapter with its own trace log.
         """
         pass
 
