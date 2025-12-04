@@ -6,14 +6,12 @@ Component-specific unit tests are in their respective test files.
 
 import json
 import pytest
-from unittest.mock import patch
 
 from maseval import Task
 from maseval.benchmark.macs import (
     MACSEnvironment,
     MACSEvaluator,
     MACSUser,
-    compute_benchmark_metrics,
 )
 
 from .conftest import ConcreteMACSBenchmark
@@ -100,14 +98,16 @@ class TestDataLoadingIntegration:
         task = Task(
             query="Book a flight",
             environment_data={
+                "model_id": "test-model",
                 "tools": [
                     {
                         "tool_name": "flight_search",
                         "actions": [{"name": "search", "description": "Search flights"}],
                     }
-                ]
+                ],
             },
-            evaluation_data={"assertions": ["user: Booking done"]},
+            user_data={"model_id": "test-model"},
+            evaluation_data={"model_id": "test-model", "assertions": ["user: Booking done"]},
             metadata={"scenario": "Travel booking scenario", "task_id": "task-000001"},
         )
 
@@ -116,7 +116,7 @@ class TestDataLoadingIntegration:
 
         assert "search" in env.tools
 
-    def test_loaded_agent_config_works_with_environment(self, macs_model):
+    def test_loaded_agent_config_works_with_environment(self, macs_model_factory):
         """Agent config works with tool assignment."""
         # Simulate loaded agent config
         agent_config = {
@@ -137,7 +137,7 @@ class TestDataLoadingIntegration:
             }
         }
 
-        env = MACSEnvironment(task_data, macs_model)
+        env = MACSEnvironment(task_data, macs_model_factory)
 
         # Get tools for agent from config
         agent_spec = agent_config["agents"][0]
@@ -167,10 +167,10 @@ class TestErrorHandlingIntegration:
         assert result["gsr"] == 0.0
         assert "error" in result
 
-    def test_environment_handles_empty_tool_specs(self, macs_model):
+    def test_environment_handles_empty_tool_specs(self, macs_model_factory):
         """Environment handles tasks with no tools."""
         task_data = {"environment_data": {"tools": []}}
-        env = MACSEnvironment(task_data, macs_model)
+        env = MACSEnvironment(task_data, macs_model_factory)
 
         assert env.tools == {}
 

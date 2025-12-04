@@ -8,7 +8,6 @@ from maseval import AgentAdapter, Task, User, MessageHistory
 from maseval.benchmark.macs import (
     MACSBenchmark,
     MACSEnvironment,
-    MACSEvaluator,
     MACSUser,
     compute_benchmark_metrics,
 )
@@ -27,11 +26,10 @@ class TestMACSBenchmarkSetup:
     """Tests for MACSBenchmark initialization and setup methods."""
 
     def test_init_configures_benchmark(self, macs_model, sample_agent_data):
-        """Benchmark initializes with model, agent_data, and optional params."""
+        """Benchmark initializes with agent_data and optional params."""
         callbacks = [MagicMock()]
         benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model, callbacks=callbacks, n_task_repeats=3)
 
-        assert benchmark._model == macs_model
         assert benchmark.agent_data == sample_agent_data
         assert benchmark.callbacks == callbacks
         assert benchmark.n_task_repeats == 3
@@ -175,6 +173,13 @@ class TestRunAgents:
         """Multiple agents return list of answers."""
 
         class MultiAgentBenchmark(MACSBenchmark):
+            def __init__(self, agent_data, model_factory, **kwargs):
+                self._model_factory = model_factory if callable(model_factory) else lambda _: model_factory
+                super().__init__(agent_data, **kwargs)
+
+            def get_model_adapter(self, model_id: str, **kwargs):
+                return self._model_factory(model_id)
+
             def setup_agents(
                 self,
                 agent_data: Dict[str, Any],

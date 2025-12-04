@@ -5,7 +5,6 @@ multi-turn interaction, and early stopping via stop tokens.
 """
 
 import pytest
-from unittest.mock import MagicMock
 
 
 @pytest.mark.core

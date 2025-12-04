@@ -27,6 +27,11 @@ class ExecutionLoopBenchmark(Benchmark):
         self._return_user = return_user
         self.run_agents_calls: List[Tuple[Any, ...]] = []
 
+    def get_model_adapter(self, model_id: str, **kwargs):
+        from conftest import DummyModelAdapter
+
+        return DummyModelAdapter(model_id=model_id)
+
     def setup_environment(self, agent_data, task):
         from conftest import DummyEnvironment
 

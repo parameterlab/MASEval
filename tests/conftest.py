@@ -208,6 +208,10 @@ class DummyBenchmark(Benchmark):
         self.run_agents_calls = []
         self.evaluate_calls = []
 
+    def get_model_adapter(self, model_id: str, **kwargs):
+        """Create a dummy model adapter for testing."""
+        return DummyModelAdapter(model_id=model_id)
+
     def setup_environment(self, agent_data: Dict[str, Any], task: Task) -> Environment:
         self.setup_environment_calls.append((agent_data, task))
         return DummyEnvironment(task.environment_data)

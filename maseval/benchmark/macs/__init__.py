@@ -19,6 +19,7 @@ from .macs import (
 from .data_loader import (
     load_tasks,
     load_agent_config,
+    configure_model_ids,
     ensure_data_exists,
     process_data,
     download_original_data,
@@ -38,6 +39,7 @@ __all__ = [
     # Data loading
     "load_tasks",
     "load_agent_config",
+    "configure_model_ids",
     "ensure_data_exists",
     "process_data",
     "download_original_data",

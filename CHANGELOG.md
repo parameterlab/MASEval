@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `is_done()`, `_check_stop_token()`, and `increment_turn()` methods to `User` base class
 - Added `get_initial_query()` method to `User` base class for LLM-generated initial messages
 - Added `initial_prompt` parameter in `User` base class to trigger the agentic system.
+- Added abstract `get_model_adapter(model_id, **kwargs)` method to `Benchmark` base class as universal model factory to be used throughout the benchmarks.
 - Comprehensive testing for multi-turn behavior and `Benchmark.execution_loop()` (PR: #13)
 
 - [LlamaIndex](https://github.com/run-llama/llama_index) integration: `LlamaIndexAgentAdapter` and `LlamaIndexUser` for evaluating LlamaIndex workflow-based agents (PR: #7)

@@ -11,7 +11,7 @@ No side effects on import. Data download/processing must be explicitly called.
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
@@ -498,6 +498,67 @@ def load_agent_config(
 
     with config_path.open() as f:
         return json.load(f)
+
+
+def configure_model_ids(
+    tasks: Union[TaskCollection, List[Task]],
+    *,
+    tool_model_id: Optional[str] = None,
+    user_model_id: Optional[str] = None,
+    evaluator_model_id: Optional[str] = None,
+) -> Union[TaskCollection, List[Task]]:
+    """Configure model IDs for benchmark components in task data.
+
+    This helper merges runtime model configuration into task data structures,
+    enabling benchmark components (tool simulators, user simulator, evaluators)
+    to access their model IDs through the standard task data flow.
+
+    Only sets values if not already present in the task data, allowing
+    task-specific overrides in the original data to take precedence.
+
+    Args:
+        tasks: TaskCollection or list of Tasks to configure
+        tool_model_id: Model ID for tool simulators (stored in environment_data)
+        user_model_id: Model ID for user simulator (stored in user_data)
+        evaluator_model_id: Model ID for evaluators (stored in evaluation_data)
+
+    Returns:
+        The same collection (mutated in place for convenience)
+
+    Example:
+        ```python
+        tasks = load_tasks("travel", limit=5)
+        configure_model_ids(
+            tasks,
+            tool_model_id="gemini-2.5-flash",
+            user_model_id="gemini-2.5-flash",
+            evaluator_model_id="gpt-4o",  # Use stronger model for evaluation
+        )
+        benchmark = MyMACSBenchmark(agent_data=agent_config)
+        results = benchmark.run(tasks)
+        ```
+
+    Note:
+        This demonstrates a general pattern for enriching tasks with runtime
+        configuration that isn't part of the static task definitions in tasks.json.
+    """
+    for task in tasks:
+        # Environment data: tool model ID
+        if "model_id" in task.environment_data and (not task.environment_data["model_id"] == tool_model_id):
+            raise ValueError(
+                f"Task {task.metadata.get('task_id', '')} already has tool `model_id` set to '{task.environment_data['model_id']}', cannot override with '{tool_model_id}'"
+            )
+        # User data: user model ID
+        if "model_id" in task.user_data and (not task.user_data["model_id"] == user_model_id):
+            raise ValueError(
+                f"Task {task.metadata.get('task_id', '')} already has user `model_id` set to '{task.user_data['model_id']}', cannot override with '{user_model_id}'"
+            )
+        # Evaluation data: evaluator model ID
+        if "model_id" in task.evaluation_data and (not task.evaluation_data["model_id"] == evaluator_model_id):
+            raise ValueError(
+                f"Task {task.metadata.get('task_id', '')} already has evaluator `model_id` set to '{task.evaluation_data['model_id']}', cannot override with '{evaluator_model_id}'"
+            )
+    return tasks
 
 
 # =============================================================================

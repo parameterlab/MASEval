@@ -9,11 +9,17 @@ Dataset: https://github.com/aws-samples/multiagent-collab-scenario-benchmark
 Usage:
     from maseval.benchmark.macs import (
         MACSBenchmark, MACSEnvironment, MACSEvaluator, MACSGenericTool,
-        load_tasks, load_agent_config,
+        load_tasks, load_agent_config, configure_model_ids,
     )
 
-    # Load data
+    # Load data and configure model IDs for components
     tasks = load_tasks("travel", limit=5)
+    configure_model_ids(
+        tasks,
+        tool_model_id="gemini-2.5-flash",
+        user_model_id="gemini-2.5-flash",
+        evaluator_model_id="gemini-2.5-flash",
+    )
     agent_config = load_agent_config("travel")
 
     # Create your framework-specific benchmark subclass
@@ -22,15 +28,22 @@ Usage:
             # Your framework-specific agent creation
             ...
 
+        def get_model_adapter(self, model_id, **kwargs):
+            # Create and optionally register model adapters
+            adapter = MyModelAdapter(model_id)
+            if "register_name" in kwargs:
+                self.register("models", kwargs["register_name"], adapter)
+            return adapter
+
     # Run
-    benchmark = MyMACSBenchmark(agent_data=agent_config, model=my_model)
+    benchmark = MyMACSBenchmark(agent_data=agent_config)
     results = benchmark.run(tasks)
 """
 
 import json
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple
 
 from maseval import (
     AgentAdapter,
@@ -526,17 +539,17 @@ class MACSEnvironment(Environment):
     def __init__(
         self,
         task_data: Dict[str, Any],
-        model: ModelAdapter,
+        model_factory: Callable[[str], ModelAdapter],
         callbacks: Optional[List[Any]] = None,
     ):
         """Initialize environment.
 
         Args:
             task_data: Task data containing environment_data with tool specs
-            model: ModelAdapter for tool simulation
+            model_factory: Factory function that creates a ModelAdapter for a given model_name
             callbacks: Optional callbacks
         """
-        self._model = model
+        self._model_factory = model_factory
         super().__init__(task_data, callbacks)
 
     def setup_state(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -548,6 +561,8 @@ class MACSEnvironment(Environment):
     def create_tools(self) -> Dict[str, MACSGenericTool]:  # type: ignore[override]
         """Create tools from task specifications.
 
+        Each tool gets its own ModelAdapter instance for separate tracing.
+
         Returns:
             Dict mapping tool names to MACSGenericTool instances
         """
@@ -556,7 +571,9 @@ class MACSEnvironment(Environment):
             for action in tool_group.get("actions", []):
                 name = action.get("name")
                 if name and name not in tools:
-                    tools[name] = MACSGenericTool(action, self._model)
+                    # Each tool gets its own model adapter for separate traces
+                    model = self._model_factory(f"tool_{name}")
+                    tools[name] = MACSGenericTool(action, model)
         return tools
 
     def get_tools_for_agent(self, agent_spec: Dict[str, Any]) -> Dict[str, MACSGenericTool]:
@@ -592,13 +609,31 @@ class MACSBenchmark(Benchmark):
     - Dual evaluator setup (user-side + system-side)
     - GSR metric aggregation
 
-    Users must subclass and implement setup_agents() for their framework.
+    Users must subclass and implement:
+    - setup_agents() for their agent framework
+    - get_model_adapter() to provide model adapters
+
+    Model IDs for components (tools, user, evaluators) are read from task data:
+    - task.environment_data["model_id"] for tool simulators
+    - task.user_data["model_id"] for user simulator
+    - task.evaluation_data["model_id"] for evaluators
+
+    Use configure_model_ids() to set these values after loading tasks:
+
+        from maseval.benchmark.macs import load_tasks, configure_model_ids
+
+        tasks = load_tasks("travel")
+        configure_model_ids(
+            tasks,
+            tool_model_id="gemini-2.5-flash",
+            user_model_id="gemini-2.5-flash",
+            evaluator_model_id="gemini-2.5-flash",
+        )
     """
 
     def __init__(
         self,
         agent_data: Dict[str, Any],
-        model: ModelAdapter,
         callbacks: Optional[List[Any]] = None,
         n_task_repeats: int = 1,
         max_invocations: int = 5,
@@ -607,24 +642,104 @@ class MACSBenchmark(Benchmark):
         """Initialize benchmark.
 
         Args:
-            agent_data: Agent configuration from load_agent_config()
-            model: ModelAdapter for tool simulation and evaluation
+            agent_data: Agent configuration from load_agent_config().
             callbacks: Benchmark callbacks
             n_task_repeats: Repetitions per task
             max_invocations: Maximum agent-user interaction rounds (default: 5 per MACS paper)
         """
-        self._model = model
         super().__init__(agent_data, callbacks, n_task_repeats, max_invocations, **kwargs)
+
+    def _get_tool_model_id(self, task: Task) -> str:
+        """Get tool simulator model ID from task.environment_data.
+
+        Raises:
+            ValueError: If model_id not configured in task.environment_data
+        """
+        model_id = task.environment_data.get("model_id")
+        if model_id is None:
+            raise ValueError(
+                "Tool simulator model_id not configured in task.environment_data.\n"
+                "Use configure_model_ids() after loading tasks:\n\n"
+                "    from maseval.benchmark.macs import load_tasks, configure_model_ids\n\n"
+                "    tasks = load_tasks('travel')\n"
+                "    configure_model_ids(\n"
+                "        tasks,\n"
+                "        tool_model_id='gemini-2.5-flash',\n"
+                "        user_model_id='gemini-2.5-flash',\n"
+                "        evaluator_model_id='gemini-2.5-flash',\n"
+                "    )"
+            )
+        return model_id
+
+    def _get_user_model_id(self, task: Task) -> str:
+        """Get user simulator model ID from task.user_data.
+
+        Raises:
+            ValueError: If model_id not configured in task.user_data
+        """
+        model_id = task.user_data.get("model_id")
+        if model_id is None:
+            raise ValueError(
+                "User simulator model_id not configured in task.user_data.\n"
+                "Use configure_model_ids() after loading tasks:\n\n"
+                "    from maseval.benchmark.macs import load_tasks, configure_model_ids\n\n"
+                "    tasks = load_tasks('travel')\n"
+                "    configure_model_ids(\n"
+                "        tasks,\n"
+                "        tool_model_id='gemini-2.5-flash',\n"
+                "        user_model_id='gemini-2.5-flash',\n"
+                "        evaluator_model_id='gemini-2.5-flash',\n"
+                "    )"
+            )
+        return model_id
+
+    def _get_evaluator_model_id(self, task: Task) -> str:
+        """Get evaluator model ID from task.evaluation_data.
+
+        Raises:
+            ValueError: If model_id not configured in task.evaluation_data
+        """
+        model_id = task.evaluation_data.get("model_id")
+        if model_id is None:
+            raise ValueError(
+                "Evaluator model_id not configured in task.evaluation_data.\n"
+                "Use configure_model_ids() after loading tasks:\n\n"
+                "    from maseval.benchmark.macs import load_tasks, configure_model_ids\n\n"
+                "    tasks = load_tasks('travel')\n"
+                "    configure_model_ids(\n"
+                "        tasks,\n"
+                "        tool_model_id='gemini-2.5-flash',\n"
+                "        user_model_id='gemini-2.5-flash',\n"
+                "        evaluator_model_id='gemini-2.5-flash',\n"
+                "    )"
+            )
+        return model_id
 
     def setup_environment(
         self,
         agent_data: Dict[str, Any],
         task: Task,
     ) -> MACSEnvironment:
-        """Create environment for a task."""
+        """Create environment for a task.
+
+        Uses get_model_adapter() to create separate model adapters for each tool,
+        enabling independent tracing per tool.
+
+        Model ID is read from task.environment_data["model_id"].
+        """
+        tool_model_id = self._get_tool_model_id(task)
+
+        # Create a factory that captures the model_id from task data
+        # tool_name is passed by create_tools() with "tool_" prefix
+        def tool_model_factory(tool_name: str) -> ModelAdapter:
+            return self.get_model_adapter(
+                tool_model_id,
+                register_name=tool_name,
+            )
+
         return MACSEnvironment(
             task_data={"environment_data": task.environment_data},
-            model=self._model,
+            model_factory=tool_model_factory,
         )
 
     def setup_user(
@@ -637,6 +752,7 @@ class MACSBenchmark(Benchmark):
 
         Creates a MACSUser with scenario and query from the task.
         The user profile is automatically extracted from the scenario text.
+        Model ID is read from task.user_data["model_id"].
 
         Note: MACSUser.get_tool() raises NotImplementedError.
         Framework-specific subclasses in examples should wrap this user
@@ -651,8 +767,12 @@ class MACSBenchmark(Benchmark):
             MACSUser instance
         """
         scenario = task.metadata.get("scenario", "")
+        user_model_id = self._get_user_model_id(task)
         return MACSUser(
-            model=self._model,
+            model=self.get_model_adapter(
+                user_model_id,
+                register_name="user_simulator",
+            ),
             scenario=scenario,
             initial_prompt=task.query,
         )
@@ -685,10 +805,29 @@ class MACSBenchmark(Benchmark):
         agents: Sequence[AgentAdapter],
         user: Optional[User],
     ) -> Sequence[Evaluator]:
-        """Create user-side and system-side evaluators."""
+        """Create user-side and system-side evaluators.
+
+        Each evaluator gets its own model adapter for separate tracing.
+        Model ID is read from task.evaluation_data["model_id"].
+        """
+        evaluator_model_id = self._get_evaluator_model_id(task)
         return [
-            MACSEvaluator(self._model, task, gsr_type="user"),
-            MACSEvaluator(self._model, task, gsr_type="system"),
+            MACSEvaluator(
+                self.get_model_adapter(
+                    evaluator_model_id,
+                    register_name="evaluator_user_gsr",
+                ),
+                task,
+                gsr_type="user",
+            ),
+            MACSEvaluator(
+                self.get_model_adapter(
+                    evaluator_model_id,
+                    register_name="evaluator_system_gsr",
+                ),
+                task,
+                gsr_type="system",
+            ),
         ]
 
     def run_agents(

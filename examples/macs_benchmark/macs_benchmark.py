@@ -62,6 +62,7 @@ from maseval.benchmark.macs import (
     MACSGenericTool,
     MACSUser,
     compute_benchmark_metrics,
+    configure_model_ids,
     ensure_data_exists,
     load_agent_config,
     load_tasks,
@@ -72,22 +73,36 @@ from maseval.benchmark.macs import (
 # Model Setup
 # =============================================================================
 
+# Shared client for all model adapters (reuses connection)
+_google_client: Optional[GoogleGenAIClient] = None
 
-def create_model(model_id: str = "gemini-2.5-flash") -> GoogleGenAIModelAdapter:
-    """Create a Google GenAI model adapter.
+
+def get_google_client() -> GoogleGenAIClient:
+    """Get or create the shared Google GenAI client."""
+    global _google_client
+    if _google_client is None:
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable is required")
+        _google_client = GoogleGenAIClient(api_key=api_key)
+    return _google_client
+
+
+def create_model(
+    model_id: str = "gemini-2.5-flash",
+) -> GoogleGenAIModelAdapter:
+    """Create a Google GenAI model adapter with separate tracing.
+
+    All adapters share the same underlying client connection for efficiency,
+    but each has its own trace logs for debugging.
 
     Args:
         model_id: Model identifier (default: gemini-2.5-flash)
 
     Returns:
-        Configured GoogleGenAIModelAdapter
+        Configured GoogleGenAIModelAdapter with independent trace logs
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY environment variable is required")
-
-    client = GoogleGenAIClient(api_key=api_key)
-    return GoogleGenAIModelAdapter(client, model_id=model_id)
+    return GoogleGenAIModelAdapter(get_google_client(), model_id=model_id)
 
 
 # =============================================================================
@@ -140,21 +155,52 @@ class SmolagentsMACSUser(MACSUser):
 class SmolagentsMACSBenchmark(MACSBenchmark):
     """MACS Benchmark implementation for smolagents with multi-agent hierarchy."""
 
+    def get_model_adapter(self, model_id: str, **kwargs):
+        """Create a model adapter for the given model ID.
+
+        Each component (tool, user, evaluator) gets its own adapter for separate tracing.
+        Registration is handled via kwargs passed by the base class.
+
+        Args:
+            model_id: The model identifier (e.g., "gemini-2.5-flash")
+            **kwargs: Optional registration info (register_name)
+
+        Returns:
+            Configured GoogleGenAIModelAdapter
+        """
+        adapter = create_model(model_id=model_id)
+        if "register_name" in kwargs:
+            self.register("models", kwargs["register_name"], adapter)
+        return adapter
+
     def setup_user(
         self,
         agent_data: Dict[str, Any],
         environment: Environment,
         task: Task,
     ) -> SmolagentsMACSUser:
-        """Create smolagents-compatible user simulator."""
-        scenario = task.metadata.get("scenario", "")
+        """Create smolagents-compatible user simulator.
 
-        return SmolagentsMACSUser(
+        Extends base MACSUser with smolagents-specific tool integration.
+        Model ID is read from task.user_data["model_id"].
+        """
+        scenario = task.metadata.get("scenario", "")
+        user_model_id = self._get_user_model_id(task)
+
+        # Create dedicated model for user via get_model_adapter
+        user_model = self.get_model_adapter(user_model_id, register_name="user_simulator")
+
+        user = SmolagentsMACSUser(
             name="Simulated User",
-            model=self._model,
+            model=user_model,
             scenario=scenario,
             initial_prompt=task.query,
         )
+
+        # Register the user's simulator for tracing
+        self.register("simulators", "user_simulator", user.simulator)
+
+        return user
 
     def setup_agents(
         self,
@@ -168,6 +214,8 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
         Implements the exact agent topology from agents.json:
         - Travel/Mortgage: 2-level hierarchy (supervisor -> specialists)
         - Software: 3-level hierarchy (supervisor -> deploy_agent -> infra/app agents)
+
+        Each tool has its own ModelAdapter for separate tracing.
         """
         # Create smolagents model
         smol_model = OpenAIServerModel(
@@ -182,11 +230,15 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
         primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
 
         # Wrap all generic tools for smolagents and register them for tracing
+        # Each tool has its own model from MACSEnvironment.create_tools()
         tool_wrappers: Dict[str, SmolagentsToolWrapper] = {}
         for name, tool in environment.tools.items():
             wrapper = SmolagentsToolWrapper(tool)
             tool_wrappers[name] = wrapper
             self.register("tools", name, wrapper)
+            # Register the tool's model and simulator for tracing
+            self.register("models", f"model_tool_{name}", tool.model)
+            self.register("simulators", f"simulator_tool_{name}", tool.simulator)
 
         # Helper to get tools for an agent
         def get_agent_tools(agent_spec: Dict[str, Any]) -> List[SmolagentsTool]:
@@ -246,19 +298,84 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
 # =============================================================================
 
 
+def _create_pydantic_model_from_inputs(name: str, inputs: Dict[str, Any]):
+    """Create a Pydantic model from MACS tool inputs specification.
+
+    Args:
+        name: Name for the generated model class
+        inputs: Dict mapping param names to {type, description}
+
+    Returns:
+        A Pydantic BaseModel class with the specified fields
+    """
+    from pydantic import Field, create_model
+
+    # Map MACS types to Python types
+    type_mapping = {
+        "string": str,
+        "number": float,
+        "integer": int,
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+    }
+
+    fields = {}
+    for param_name, param_spec in inputs.items():
+        param_type = param_spec.get("type", "string")
+        python_type = type_mapping.get(param_type, str)
+        description = param_spec.get("description", "")
+
+        # All fields are optional with empty string default for flexibility
+        fields[param_name] = (python_type, Field(default="", description=description))
+
+    return create_model(f"{name}Input", **fields)
+
+
+def _create_langgraph_tool(generic_tool: MACSGenericTool) -> StructuredTool:
+    """Create a LangGraph StructuredTool from a MACSGenericTool.
+
+    This creates a proper Pydantic schema from the tool's inputs specification,
+    which LangGraph/LangChain requires for tool calling.
+
+    Args:
+        generic_tool: The MACS generic tool to wrap
+
+    Returns:
+        A LangGraph-compatible StructuredTool
+    """
+    # Create the args schema from tool inputs
+    args_schema = _create_pydantic_model_from_inputs(generic_tool.name, generic_tool.inputs)
+
+    # Create a wrapper function that calls the generic tool
+    def tool_func(**kwargs) -> str:
+        return generic_tool(**kwargs)
+
+    # Set function metadata for better tool descriptions
+    tool_func.__name__ = generic_tool.name
+    tool_func.__doc__ = generic_tool.description
+
+    return StructuredTool(
+        name=generic_tool.name,
+        description=generic_tool.description,
+        func=tool_func,
+        args_schema=args_schema,
+    )
+
+
 class LangGraphToolWrapper(ConfigurableMixin, TraceableMixin):
-    """LangGraph wrapper for MACSGenericTool."""
+    """LangGraph wrapper for MACSGenericTool.
+
+    This wrapper creates a LangGraph-compatible StructuredTool from a MACSGenericTool
+    by dynamically generating a Pydantic schema from the tool's input specification.
+    """
 
     def __init__(self, generic_tool: MACSGenericTool):
         self.generic_tool = generic_tool
-        self.tool = StructuredTool.from_function(
-            func=generic_tool,
-            name=generic_tool.name,
-            description=generic_tool.description,
-        )
+        self.tool = _create_langgraph_tool(generic_tool)
 
-    def __call__(self, *args, **kwargs):
-        return self.tool(*args, **kwargs)
+    def __call__(self, *args, **kwargs) -> str:
+        return self.generic_tool(**kwargs)
 
     def gather_traces(self) -> Dict[str, Any]:
         return self.generic_tool.gather_traces()
@@ -292,21 +409,52 @@ class AgentState(TypedDict):
 class LangGraphMACSBenchmark(MACSBenchmark):
     """MACS Benchmark implementation for langgraph with multi-agent hierarchy."""
 
+    def get_model_adapter(self, model_id: str, **kwargs):
+        """Create a model adapter for the given model ID.
+
+        Each component (tool, user, evaluator) gets its own adapter for separate tracing.
+        Registration is handled via kwargs passed by the base class.
+
+        Args:
+            model_id: The model identifier (e.g., "gemini-2.5-flash")
+            **kwargs: Optional registration info (register_name)
+
+        Returns:
+            Configured GoogleGenAIModelAdapter
+        """
+        adapter = create_model(model_id=model_id)
+        if "register_name" in kwargs:
+            self.register("models", kwargs["register_name"], adapter)
+        return adapter
+
     def setup_user(
         self,
         agent_data: Dict[str, Any],
         environment: Environment,
         task: Task,
     ) -> LangGraphMACSUser:
-        """Create langgraph-compatible user simulator."""
-        scenario = task.metadata.get("scenario", "")
+        """Create langgraph-compatible user simulator.
 
-        return LangGraphMACSUser(
+        Extends base MACSUser with LangGraph-specific tool integration.
+        Model ID is read from task.user_data["model_id"].
+        """
+        scenario = task.metadata.get("scenario", "")
+        user_model_id = self._get_user_model_id(task)
+
+        # Create dedicated model for user via get_model_adapter
+        user_model = self.get_model_adapter(user_model_id, register_name="user_simulator")
+
+        user = LangGraphMACSUser(
             name="Simulated User",
-            model=self._model,
+            model=user_model,
             scenario=scenario,
             initial_prompt=task.query,
         )
+
+        # Register the user's simulator for tracing
+        self.register("simulators", "user_simulator", user.simulator)
+
+        return user
 
     def setup_agents(
         self,
@@ -318,6 +466,7 @@ class LangGraphMACSBenchmark(MACSBenchmark):
         """Create langgraph multi-agent hierarchy.
 
         Uses subgraphs to implement the agent hierarchy from agents.json.
+        Each tool has its own ModelAdapter for separate tracing.
         """
         # Create LangChain model
         llm = ChatGoogleGenerativeAI(
@@ -331,11 +480,15 @@ class LangGraphMACSBenchmark(MACSBenchmark):
         primary_agent_id = agent_data.get("primary_agent_id", "supervisor")
 
         # Wrap all generic tools and register for tracing
+        # Each tool has its own model from MACSEnvironment.create_tools()
         tool_wrappers: Dict[str, LangGraphToolWrapper] = {}
         for name, tool in environment.tools.items():
             wrapper = LangGraphToolWrapper(tool)
             tool_wrappers[name] = wrapper
             self.register("tools", name, wrapper)
+            # Register the tool's model and simulator for tracing
+            self.register("models", f"model_tool_{name}", tool.model)
+            self.register("simulators", f"simulator_tool_{name}", tool.simulator)
 
         # Helper to get tools for an agent
         def get_agent_tools(agent_spec: Dict[str, Any]) -> List[StructuredTool]:
@@ -545,9 +698,6 @@ def run_benchmark(
     print("Ensuring MACS data is available...")
     ensure_data_exists(verbose=1)
 
-    # Create model for tool simulation and evaluation
-    model = create_model("gemini-2.5-flash")
-
     # Load data
     print(f"Loading {domain} domain tasks...")
     tasks = load_tasks(domain, limit=limit)
@@ -558,6 +708,16 @@ def run_benchmark(
         if not tasks:
             raise ValueError(f"Task with ID '{task_id}' not found in {domain} domain")
         print(f"Running single task: {task_id}")
+
+    # Configure model IDs for all benchmark components
+    # This sets model_id in environment_data, user_data, and evaluation_data
+    # for each task. The benchmark reads these when setting up components.
+    configure_model_ids(
+        tasks,
+        tool_model_id="gemini-2.5-flash",
+        user_model_id="gemini-2.5-flash",
+        evaluator_model_id="gemini-2.5-flash",
+    )
 
     agent_config = load_agent_config(domain)
 
@@ -577,9 +737,11 @@ def run_benchmark(
     BenchmarkClass = get_benchmark_class(framework)
     benchmark = BenchmarkClass(
         agent_data=agent_config,
-        model=model,
         callbacks=[logger],
         n_task_repeats=n_task_repeats,
+        fail_on_setup_error=True,
+        fail_on_task_error=True,
+        fail_on_evaluation_error=True,
     )
 
     # Run benchmark
@@ -666,7 +828,7 @@ Examples:
         "--output-dir",
         type=Path,
         default=None,
-        help="Output directory for results (default: examples/results/)",
+        help="Output directory for results (default: examples/macs_benchmark/results/)",
     )
 
     args = parser.parse_args()

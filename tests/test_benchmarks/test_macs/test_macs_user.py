@@ -1,7 +1,7 @@
 """Unit tests for MACSUser."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 from maseval.benchmark.macs import MACSUser
 

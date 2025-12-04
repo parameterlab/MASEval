@@ -72,9 +72,61 @@ class MACSAgentAdapter(AgentAdapter):
 class ConcreteMACSBenchmark(MACSBenchmark):
     """Concrete MACSBenchmark implementation for testing.
 
-    MACSBenchmark is abstract (setup_agents must be implemented by users).
-    This provides a minimal implementation using MACSAgentAdapter.
+    MACSBenchmark is abstract (setup_agents and get_model_adapter must be implemented).
+    This provides a minimal implementation using MACSAgentAdapter and a configurable
+    model factory.
     """
+
+    def __init__(
+        self,
+        agent_data: Dict[str, Any],
+        model_factory: Optional[Any] = None,
+        **kwargs: Any,
+    ):
+        """Initialize with optional model factory.
+
+        Args:
+            agent_data: Agent configuration
+            model_factory: Either a callable that takes a model name and returns a ModelAdapter,
+                          or a single ModelAdapter instance (for convenience in simple tests).
+                          If not provided, creates DummyModelAdapter instances.
+            **kwargs: Additional arguments passed to MACSBenchmark
+        """
+        # Handle both callable factory and single model instance
+        if model_factory is None:
+            self._model_factory = lambda model_name: DummyModelAdapter(
+                model_id=f"test-model-{model_name}",
+                responses=['{"text": "Default response", "details": {}}'],
+            )
+        elif callable(model_factory):
+            self._model_factory = model_factory
+        else:
+            # Single model instance - create a factory that always returns it
+            self._model_factory = lambda model_name: model_factory
+        super().__init__(agent_data, **kwargs)
+
+    def get_model_adapter(self, model_id: str, **kwargs):
+        """Create a model adapter for the given component.
+
+        For testing, the factory is called with register_name (if provided) instead
+        of model_id, allowing test factories to return different responses based on
+        the component type (e.g., "user_simulator", "evaluator_user_gsr").
+        """
+        # Use register_name for factory lookup if provided, else fall back to model_id
+        factory_key = kwargs.get("register_name", model_id)
+        adapter = self._model_factory(factory_key)
+
+        # Register for tracing if registration info provided
+        # Skip registration if no explicit register_name - tests often share model instances
+        register_name = kwargs.get("register_name")
+        if register_name:
+            # Check if this adapter is already registered (same factory can return same instance)
+            try:
+                self.register("models", register_name, adapter)
+            except ValueError:
+                pass  # Already registered - that's fine for tests
+
+        return adapter
 
     def setup_agents(
         self,
@@ -102,6 +154,15 @@ def macs_model():
     Returns responses in ToolLLMSimulator format: {"text": "...", "details": {...}}
     """
     return DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
+
+
+@pytest.fixture
+def macs_model_factory(macs_model):
+    """Model factory that always returns the same macs_model.
+
+    Used for MACSEnvironment which requires a callable factory.
+    """
+    return lambda model_name: macs_model
 
 
 @pytest.fixture
@@ -220,10 +281,15 @@ def sample_tool_specs():
 
 @pytest.fixture
 def sample_task():
-    """Sample MACS task with typical structure."""
+    """Sample MACS task with typical structure.
+
+    Includes model_id in environment_data, user_data, and evaluation_data
+    as required by MACSBenchmark.
+    """
     return Task(
         query="Book a flight to NYC",
         environment_data={
+            "model_id": "test-model",
             "tools": [
                 {
                     "tool_name": "flight_tools",
@@ -231,13 +297,17 @@ def sample_task():
                         {"name": "search_flights", "description": "Search flights"},
                     ],
                 }
-            ]
+            ],
+        },
+        user_data={
+            "model_id": "test-model",
         },
         evaluation_data={
+            "model_id": "test-model",
             "assertions": [
                 "user: Booking confirmed",
                 "agent: Database updated",
-            ]
+            ],
         },
         metadata={"scenario": "Business trip to NYC"},
     )
@@ -248,8 +318,9 @@ def sample_task_no_scenario():
     """Task without scenario in metadata."""
     return Task(
         query="Test query",
-        environment_data={"tools": []},
-        evaluation_data={"assertions": []},
+        environment_data={"model_id": "test-model", "tools": []},
+        user_data={"model_id": "test-model"},
+        evaluation_data={"model_id": "test-model", "assertions": []},
         metadata={},
     )
 
@@ -259,8 +330,9 @@ def sample_task_no_assertions():
     """Task with no assertions."""
     return Task(
         query="Simple query",
-        environment_data={},
-        evaluation_data={"assertions": []},
+        environment_data={"model_id": "test-model"},
+        user_data={"model_id": "test-model"},
+        evaluation_data={"model_id": "test-model", "assertions": []},
         metadata={"scenario": "Simple scenario"},
     )
 
@@ -271,6 +343,7 @@ def travel_task():
     return Task(
         query="I need to book a flight from San Francisco to New York for next Monday.",
         environment_data={
+            "model_id": "test-model",
             "tools": [
                 {
                     "tool_name": "travel_tools",
@@ -298,14 +371,16 @@ def travel_task():
                         },
                     ],
                 }
-            ]
+            ],
         },
+        user_data={"model_id": "test-model"},
         evaluation_data={
+            "model_id": "test-model",
             "assertions": [
                 "user: The user's flight booking request was acknowledged",
                 "user: The user received flight options or a confirmation",
                 "agent: The search_flights tool was called with correct parameters",
-            ]
+            ],
         },
         metadata={
             "scenario": """Goal: The user wants to book a flight from San Francisco to New York.
