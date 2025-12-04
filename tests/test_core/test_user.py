@@ -1,16 +1,21 @@
-"""Test User simulator functionality.
+"""Test User class functionality.
 
-These tests verify that User simulator correctly manages conversation history,
-multi-turn interaction, and early stopping via stop tokens.
+These tests verify the User base class (maseval.core.user.User) behavior:
+- Conversation history management (MessageHistory)
+- Multi-turn interaction (max_turns, turn counting)
+- Early stopping via stop tokens
+- Optional initial prompts and LLM-generated initial queries
+
+Note: This tests the User class, NOT the UserLLMSimulator class.
+UserLLMSimulator is tested in test_llm_simulator.py.
 """
 
 import pytest
-from unittest.mock import MagicMock
 
 
 @pytest.mark.core
-class TestUserSimulator:
-    """Tests for User simulator basics."""
+class TestUser:
+    """Tests for User base class basics."""
 
     def test_user_simulate_response_updates_messages(self, dummy_user):
         """Test that simulate_response adds to message history."""
@@ -225,6 +230,21 @@ class TestUserStopToken:
 
         assert response == "Thank you, that's all I needed!"
         assert user._stopped
+
+    def test_stop_token_response_counts_as_turn(self, dummy_model):
+        """The response containing stop token still counts as a turn."""
+        from conftest import DummyUser
+
+        user = DummyUser(name="test", model=dummy_model, stop_token="</stop>", max_turns=5)
+        user.simulator.return_value = "Thank you, all is clear </stop>"
+
+        initial_turn_count = user._turn_count
+        user.simulate_response("Here is your result")
+
+        # Turn count should increment even though stop token was detected
+        assert user._turn_count == initial_turn_count + 1
+        assert user._stopped
+        assert user.is_done()
 
 
 # =============================================================================

@@ -135,44 +135,48 @@ class DummyEnvironment(Environment):
 
 
 class DummyUser(User):
-    """Minimal user simulator for testing."""
+    """Minimal user simulator for testing.
+
+    Properly inherits from User base class, allowing tests to verify base class
+    behavior. The simulator is replaced with a mock to avoid LLM calls.
+
+    Supports all base class features:
+    - max_turns / stop_token for multi-turn interaction
+    - is_done() / simulate_response() / get_initial_query()
+    - messages (MessageHistory) for conversation tracking
+    """
 
     def __init__(self, name: str, model: ModelAdapter, **kwargs):
-        # Initialize with minimal requirements
-        self.name = name
-        self.model = model
-        self.user_profile = kwargs.get("user_profile", {})
-        self.scenario = kwargs.get("scenario", "test scenario")
-        self.history = MessageHistory([{"role": "user", "content": kwargs.get("initial_prompt", "Hello")}])
-        # Don't initialize simulator to avoid LLM calls in tests
+        """Initialize DummyUser with proper base class inheritance.
+
+        Args:
+            name: User name
+            model: ModelAdapter instance
+            **kwargs: Forwarded to User base class:
+                - user_profile: Dict of user attributes
+                - scenario: Scenario description
+                - initial_prompt: Optional initial message
+                - max_turns: Max LLM-generated responses (default: 1)
+                - stop_token: Early termination token (default: None)
+        """
+        super().__init__(
+            name=name,
+            model=model,
+            user_profile=kwargs.get("user_profile", {}),
+            scenario=kwargs.get("scenario", "test scenario"),
+            initial_prompt=kwargs.get("initial_prompt"),
+            max_turns=kwargs.get("max_turns", 1),
+            stop_token=kwargs.get("stop_token"),
+        )
+        # Replace simulator with a mock to avoid LLM calls
+        # Tests can set simulator.return_value or side_effect as needed
+        from unittest.mock import MagicMock
+
+        self.simulator = MagicMock(return_value="Mock user response")
 
     def get_tool(self) -> Any:
         """Return a dummy tool for testing."""
         return None
-
-    def gather_traces(self) -> dict:
-        """Return minimal traces for testing."""
-        from datetime import datetime
-
-        return {
-            "type": self.__class__.__name__,
-            "gathered_at": datetime.now().isoformat(),
-            "name": self.name,
-            "message_count": len(self.history),
-            "history": self.history.to_list(),
-        }
-
-    def gather_config(self) -> dict:
-        """Return minimal config for testing."""
-        from datetime import datetime
-
-        return {
-            "type": self.__class__.__name__,
-            "gathered_at": datetime.now().isoformat(),
-            "name": self.name,
-            "user_profile": self.user_profile,
-            "scenario": self.scenario,
-        }
 
 
 class DummyEvaluator(Evaluator):

@@ -33,6 +33,36 @@ class TestMACSUserInit:
         assert not user._stopped
         assert "full_scenario" in user.user_profile
 
+    def test_macs_default_max_turns_is_five(self, macs_model, sample_scenario, initial_prompt):
+        """MACS benchmark defaults to max_turns=5 per MACS paper.
+
+        This is a MACS-specific default that differs from the base class default of 1.
+        If the base class default changes, this test ensures MACS maintains its value.
+        """
+        user = MACSUser(
+            model=macs_model,
+            scenario=sample_scenario,
+            initial_prompt=initial_prompt,
+        )
+
+        assert user.max_turns == MACSUser.DEFAULT_MAX_TURNS
+        assert user.max_turns == 5
+
+    def test_macs_default_stop_token(self, macs_model, sample_scenario, initial_prompt):
+        """MACS uses '</stop>' as stop token per MACS paper.
+
+        This is a MACS-specific default. If the base class default changes,
+        this test ensures MACS maintains its value.
+        """
+        user = MACSUser(
+            model=macs_model,
+            scenario=sample_scenario,
+            initial_prompt=initial_prompt,
+        )
+
+        assert user.stop_token == MACSUser.DEFAULT_STOP_TOKEN
+        assert user.stop_token == "</stop>"
+
     def test_init_with_custom_params(self, macs_model, sample_scenario, initial_prompt):
         """Custom name and max_turns are respected."""
         user = MACSUser(

@@ -36,6 +36,16 @@ class TestMACSBenchmarkSetup:
         assert benchmark.callbacks == callbacks
         assert benchmark.n_task_repeats == 3
 
+    def test_macs_default_max_invocations_is_five(self, macs_model, sample_agent_data):
+        """MACS benchmark defaults to max_invocations=5 per MACS paper.
+
+        This is a MACS-specific default that differs from the base class default of 1.
+        The MACS paper specifies up to 5 agent-user interaction rounds.
+        """
+        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+
+        assert benchmark.max_invocations == 5
+
     def test_setup_environment_creates_macs_environment(self, macs_model, sample_agent_data, sample_task):
         """setup_environment returns MACSEnvironment with tools."""
         benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
@@ -101,14 +111,15 @@ class TestMACSBenchmarkSetup:
 class TestRunAgents:
     """Tests for run_agents method."""
 
-    def test_run_agents_executes_agents(self, macs_model, sample_agent_data, sample_task):
-        """Agents are executed with query."""
+    def test_run_agents_executes_agents_with_query(self, macs_model, sample_agent_data, sample_task):
+        """Agents are executed with the query parameter."""
         benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 
         agents_list, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
-        benchmark.run_agents(agents_list, sample_task, env)
+        # Pass explicit query parameter
+        benchmark.run_agents(agents_list, sample_task, env, query=sample_task.query)
 
         # Cast to MACSAgentAdapter to access run_calls
         mock_agent = agents_list[0]
@@ -116,13 +127,33 @@ class TestRunAgents:
         assert len(mock_agent.run_calls) == 1
         assert mock_agent.run_calls[0] == sample_task.query
 
+    def test_run_agents_uses_query_parameter_not_task_query(self, macs_model, sample_agent_data, sample_task):
+        """run_agents uses the query parameter, not task.query directly.
+
+        This is critical for multi-turn interaction where the query changes
+        between invocations (e.g., user's response becomes the next query).
+        """
+        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        env = benchmark.setup_environment(sample_agent_data, sample_task)
+        agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
+
+        # Pass a different query than task.query
+        custom_query = "This is a user response, not the task query"
+        benchmark.run_agents(agents_list, sample_task, env, query=custom_query)
+
+        mock_agent = agents_list[0]
+        assert isinstance(mock_agent, MACSAgentAdapter)
+        # Agent should receive the custom query, not task.query
+        assert mock_agent.run_calls[0] == custom_query
+        assert mock_agent.run_calls[0] != sample_task.query
+
     def test_run_agents_returns_answer(self, macs_model, sample_agent_data, sample_task):
         """Returns final answer(s) as MessageHistory."""
         benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
-        result = benchmark.run_agents(agents_list, sample_task, env)
+        result = benchmark.run_agents(agents_list, sample_task, env, query=sample_task.query)
 
         # run_agents returns MessageHistory from the agent run
         assert isinstance(result, MessageHistory)
@@ -136,7 +167,7 @@ class TestRunAgents:
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
-        result = benchmark.run_agents(agents_list, sample_task, env)
+        result = benchmark.run_agents(agents_list, sample_task, env, query=sample_task.query)
 
         assert isinstance(result, MessageHistory)
 
@@ -159,7 +190,7 @@ class TestRunAgents:
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
-        result = benchmark.run_agents(agents_list, sample_task, env)
+        result = benchmark.run_agents(agents_list, sample_task, env, query=sample_task.query)
 
         assert isinstance(result, list)
         assert len(result) == 2
@@ -446,7 +477,7 @@ class TestMACSBenchmarkIntegration:
         evaluators = benchmark.setup_evaluators(env, sample_task, agents_list, user)
 
         # Run phase
-        final_answer = benchmark.run_agents(agents_list, sample_task, env)
+        final_answer = benchmark.run_agents(agents_list, sample_task, env, query=sample_task.query)
 
         # Evaluate phase
         traces = {
