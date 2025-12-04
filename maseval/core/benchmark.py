@@ -736,7 +736,7 @@ class Benchmark(ABC):
         pass
 
     @abstractmethod
-    def get_model_adapter(self, model_id: str) -> ModelAdapter:
+    def get_model_adapter(self, model_id: str, **kwargs) -> ModelAdapter:
         """Provide a ModelAdapter for benchmark components that require LLM access.
 
         Many benchmark components beyond the agents themselves require access to language
@@ -755,6 +755,9 @@ class Benchmark(ABC):
             model_id: The model identifier to use (e.g., "gemini-2.5-flash",
                 "openrouter/google/gemini-2.5-flash", "gpt-4o"). This is passed by the
                 benchmark when setting up components that need model access.
+            **kwargs: Additional arguments for adapter creation or registration. Common kwargs:
+                - register_category: Category for trace registration (e.g., "models")
+                - register_name: Name for trace registration (e.g., "evaluator_user_gsr")
 
         Returns:
             A ModelAdapter instance configured for the specified model. For proper tracing,
@@ -762,10 +765,18 @@ class Benchmark(ABC):
             still share the underlying API client for efficiency.
 
         How to use:
+            For proper tracing, register the adapter after creation using the kwargs:
+
             ```python
-            def get_model_adapter(self, model_id: str) -> ModelAdapter:
-                # Return an adapter for the requested model
-                return GoogleGenAIModelAdapter(self.client, model_id=model_id)
+            def get_model_adapter(self, model_id: str, **kwargs) -> ModelAdapter:
+                adapter = GoogleGenAIModelAdapter(self.client, model_id=model_id)
+
+                # Register for tracing if registration info provided
+                category = kwargs.get("register_category", "models")
+                name = kwargs.get("register_name", model_id)
+                self.register(category, name, adapter)
+
+                return adapter
             ```
 
             The benchmark calls this method when setting up tools, user simulators,
