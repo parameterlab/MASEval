@@ -37,6 +37,7 @@ from google.genai import Client as GoogleGenAIClient
 
 # smolagents imports
 from smolagents import ToolCallingAgent, OpenAIServerModel, FinalAnswerTool
+
 if TYPE_CHECKING:
     from smolagents import Tool as SmolagentsTool
 

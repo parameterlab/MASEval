@@ -28,6 +28,24 @@ from maseval.benchmark.macs import MACSBenchmark, MACSEnvironment
 
 
 # =============================================================================
+# Session-Scoped Setup
+# =============================================================================
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_macs_templates():
+    """Download MACS prompt templates before running any benchmark tests.
+
+    This fixture runs once per test session and ensures that the prompt template
+    files (user.txt, system.txt, user_simulator.txt) exist locally. These templates
+    are required by MACSEvaluator and MACSUser.
+    """
+    from maseval.benchmark.macs.data_loader import download_prompt_templates
+
+    download_prompt_templates()
+
+
+# =============================================================================
 # MACS-Specific Mock Components
 # =============================================================================
 
