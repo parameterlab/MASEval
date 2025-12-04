@@ -1,5 +1,5 @@
-# Ignore generated data files created by the aws_collab data processor
-**/*.json
+# Ignore generated data files created by the MACS benchmark
+data/*
 
 # Ignore downloaded prompt templates (user.txt, system.txt, issues.txt)
 # But NOT user_simulator.txt which is a custom template committed to the repo
