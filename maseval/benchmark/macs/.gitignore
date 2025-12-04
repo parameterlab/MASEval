@@ -1,3 +1,8 @@
-(# Ignore generated data files created by the aws_collab data processor)
+# Ignore generated data files created by the aws_collab data processor
 **/*.json
-**/*.txt
+
+# Ignore downloaded prompt templates (user.txt, system.txt, issues.txt)
+# But NOT user_simulator.txt which is a custom template committed to the repo
+prompt_templates/user.txt
+prompt_templates/system.txt
+prompt_templates/issues.txt
