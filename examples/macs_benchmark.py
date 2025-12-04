@@ -221,7 +221,7 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
                 name=agent_spec.get("agent_name", agent_id),
                 description=agent_spec.get("agent_instruction", ""),
                 max_steps=25,  # Allow more steps for complex multi-agent tasks
-                verbosity_level=0,
+                verbosity_level=2,
             )
 
             return agent

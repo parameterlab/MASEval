@@ -153,23 +153,31 @@ class TestTraceFiltering:
         """User type gets user messages only."""
         evaluator = MACSEvaluator(macs_model, sample_task, gsr_type="user")
 
-        traces = {"user": {"history": sample_trace.to_list()}, "tools": {"tool1": {}}}
+        # User trace uses 'messages' key (consistent with how User.gather_traces works)
+        traces = {"user": {"messages": sample_trace.to_list()}, "tools": {"tool1": {}}}
         filtered = evaluator.filter_traces(traces)
 
         assert "messages" in filtered
-        assert isinstance(filtered["messages"], MessageHistory)
+        assert isinstance(filtered["messages"], list)
+        assert len(filtered["messages"]) == len(sample_trace)
         # Should not have tools in user evaluation
         assert "tools" not in filtered or filtered.get("tools") is None
 
     def test_filter_traces_system_type(self, macs_model, sample_task, sample_trace, sample_tool_traces):
-        """System type gets full traces."""
+        """System type gets messages and tool_traces."""
         evaluator = MACSEvaluator(macs_model, sample_task, gsr_type="system")
 
-        traces = {"user": {"history": sample_trace.to_list()}, "tools": sample_tool_traces}
+        # Create traces with agent structure as expected by filter_traces
+        traces = {
+            "agents": {"test_agent": {"messages": sample_trace.to_list()}},
+            "tools": sample_tool_traces,
+        }
         filtered = evaluator.filter_traces(traces)
 
-        # System should get everything
-        assert traces == filtered
+        # System should get messages and tool_traces
+        assert "messages" in filtered
+        assert "tool_traces" in filtered
+        assert filtered["tool_traces"] == sample_tool_traces
 
 
 # =============================================================================

@@ -191,15 +191,36 @@ class MACSEvaluator(Evaluator):
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
         """Filter traces based on gsr_type.
 
-        For user evaluation: only user-observable messages
-        For system evaluation: full traces including tool invocations
+        For user evaluation: Use user trace which contains the user-observable
+        conversation by construction (what the user sees: queries, agent questions,
+        user answers, and final answers).
+
+        For system evaluation: Full traces including all agent messages and
+        tool invocations (internal behaviors not visible to users).
+
+        Args:
+            traces: Full execution traces dict containing 'agents', 'tools', 'user', etc.
+
+        Returns:
+            Filtered dict with 'messages' and optionally 'tool_traces'
         """
         if self.gsr_type == "user":
+            # User trace contains the user-observable conversation by construction
             user_trace = traces.get("user", {})
-            return {"messages": MessageHistory(user_trace.get("history", []))}
+            return {"messages": user_trace.get("messages", [])}
         else:
-            # System gets everything
-            return traces
+            # System evaluation needs full agent messages and tool traces
+            primary_agent_id = next(iter(traces.get("agents", {}).keys()), None)
+            if primary_agent_id:
+                agent_trace = traces["agents"][primary_agent_id]
+                all_messages = agent_trace.get("messages", [])
+            else:
+                all_messages = []
+
+            return {
+                "messages": all_messages,
+                "tool_traces": traces.get("tools", {}),
+            }
 
     def __call__(
         self,
@@ -721,30 +742,20 @@ class MACSBenchmark(Benchmark):
     ) -> List[Dict[str, Any]]:
         """Evaluate using both evaluators and aggregate GSR metrics.
 
+        Uses each evaluator's filter_traces() method to extract relevant data,
+        then calls the evaluator with the filtered traces.
+
         Returns AWS paper format:
         - user_gsr, system_gsr, overall_gsr, supervisor_gsr
         - user_partial_gsr, system_partial_gsr, overall_partial_gsr
         - report: Combined assertion judgments
         """
-        # Get agent traces - primary agent's messages
-        primary_agent_id = list(agents.keys())[0]
-        agent_trace = traces.get("agents", {}).get(primary_agent_id, {})
-        all_messages = MessageHistory(agent_trace.get("messages", []))
-
-        # For user-side evaluation: filter to user-observable messages only
-        # (user queries and assistant responses - not tool calls)
-        user_messages = MessageHistory([msg for msg in all_messages if msg.get("role") in ("user", "assistant")])
-
-        tool_traces = traces.get("tools", {})
-
-        # Run evaluators with properly structured traces dict
+        # Run evaluators - each handles its own trace filtering
         results = []
         for evaluator in evaluators:
-            if isinstance(evaluator, MACSEvaluator) and evaluator.gsr_type == "system":
-                eval_traces = {"messages": all_messages, "tool_traces": tool_traces}
-            else:
-                eval_traces = {"messages": user_messages}
-            result = evaluator(eval_traces, final_answer)
+            # Use the evaluator's filter_traces method to get the right data
+            filtered_traces = evaluator.filter_traces(traces)
+            result = evaluator(filtered_traces, final_answer)
             results.append(result)
 
         # Combine results
