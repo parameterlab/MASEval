@@ -9,46 +9,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Benchmarks**
+
 - MACS Benchmark: Multi-Agent Collaboration Scenarios benchmark (PR: #13)
-- Added `execution_loop()` method to `Benchmark` base class enabling iterative agent-user interaction
-- Added `max_invocations` constructor parameter to `Benchmark` (default: 1 for backwards compatibility)
-- Added `max_turns` and `stop_token` parameters to `User` base class for multi-turn support with early stopping
-- Added `is_done()`, `_check_stop_token()`, and `increment_turn()` methods to `User` base class
-- Added `get_initial_query()` method to `User` base class for LLM-generated initial messages
-- Added `initial_prompt` parameter in `User` base class to trigger the agentic system.
-- Added abstract `get_model_adapter(model_id, **kwargs)` method to `Benchmark` base class as universal model factory to be used throughout the benchmarks.
-- Comprehensive testing for multi-turn behavior and `Benchmark.execution_loop()` (PR: #13)
+
+**Benchmark**
+
+- Added `execution_loop()` method to `Benchmark` base class enabling iterative agent-user interaction (PR: #13)
+- Added `max_invocations` constructor parameter to `Benchmark` (default: 1 for backwards compatibility) (PR: #13)
+- Added abstract `get_model_adapter(model_id, **kwargs)` method to `Benchmark` base class as universal model factory to be used throughout the benchmarks. (PR: #13)
+
+**User**
+
+- Added `max_turns` and `stop_token` parameters to `User` base class for multi-turn support with early stopping (PR: #13)
+- Added `is_done()`, `_check_stop_token()`, and `increment_turn()` methods to `User` base class (PR: #13)
+- Added `get_initial_query()` method to `User` base class for LLM-generated initial messages (PR: #13)
+- Added `initial_prompt` parameter in `User` base class to trigger the agentic system. (PR: #13)
+
+**Environment**
+
+- Added `Environment.get_tool(name)` method for single-tool lookup (PR: #13)
+
+**Interface**
 
 - [LlamaIndex](https://github.com/run-llama/llama_index) integration: `LlamaIndexAgentAdapter` and `LlamaIndexUser` for evaluating LlamaIndex workflow-based agents (PR: #7)
-  - Supports async workflow execution with proper event loop handling
-- Added a new example: The `5_a_day_benchmark` (PR: #10)
 - The `logs` property inside `SmolAgentAdapter` and `LanggraphAgentAdapter` are now properly filled. (PR: #3)
+
+**Examples**
+
+- Added a new example: The `5_a_day_benchmark` (PR: #10)
 
 ### Changed
 
-- **BREAKING:** `Environment.create_tools()` now returns `Dict[str, Any]` instead of `list`
-  - `get_tools()` returns a dict keyed by tool name
-  - Added `get_tool(name)` method for single-tool lookup
-  - Removed internal `_tools_dict` attribute (tools dict is now the source of truth)
-- **BREAKING:** `Benchmark.run_agents()` signature changed: added `query: str` parameter
-  - Subclasses must update their implementations to accept and use this parameter
-- Renamed `tests/test_core/test_user_simulator.py` to `tests/test_core/test_user.py` to clarify it tests the `User` class (not `UserLLMSimulator`)
-- Documentation formatting improved. Added darkmode and links to `Github` (PR: #11).
-- `FileResultLogger` now accepts `pathlib.Path` for argument `output_dir` and has an `overwrite` argument to prevent overwriting of existing logs files.
+**Environment**
+
+- `Environment.create_tools()` now returns `Dict[str, Any]` instead of `list` (PR: #13)
+
+**Benchmark**
+
+- `Benchmark.run_agents()` signature changed: added `query: str` parameter (PR: #13)
+- `Benchmark.run()` now uses `execution_loop()` internally to handle agent-user interaction cycles (PR: #13)
 - `Benchmark` class now has a `fail_on_setup_error` flag that raises errors observed during setup of task (PR: #10)
+
+**Callback**
+
+- `FileResultLogger` now accepts `pathlib.Path` for argument `output_dir` and has an `overwrite` argument to prevent overwriting of existing logs files.
+
+**Evaluator**
+
 - The `Evaluator` class now has a `filter_traces` base method to conveniently adapt the same evaluator to different entities in the traces (PR: #10).
+
+**Other**
+
+- Documentation formatting improved. Added darkmode and links to `Github` (PR: #11).
 - Improved Quick Start Guide in `docs/getting-started/quickstart.md`. (PR: #10)
 - `maseval.interface.agents` structure changed. Tools requiring framework imports (beyond just typing) now in `<framework>_optional.py` and imported dynamically from `<framework>.py`. (PR: #12)
 - Various formatting improvements in the documentation (PR: #12)
 - Added documentation for View Source Code pattern in `CONTRIBUTING.md` and `_optional.py` pattern in interface README (PR: #12)
-- `Benchmark.run()` now uses `execution_loop()` internally to handle agent-user interaction cycles
 
 ### Fixed
 
-- Fixed `MACSBenchmark.run_agents()` to use the `query` parameter instead of always using `task.query`
+**Interface**
+
 - `LlamaIndexAgentAdapter` now supports multiple LlamaIndex agent types including `ReActAgent` (workflow-based), `FunctionAgent`, and legacy agents by checking for `.chat()`, `.query()`, and `.run()` methods in priority order (PR: #10)
+
+**Other**
+
 - Consistent naming of agent `adapter` over `wrapper` (PR: #3)
-- Fixed an issue that `LiteLLM` interface and `Mixin`s were not shwon in documentation properly (#PR: 12)
+- Fixed an issue that `LiteLLM` interface and `Mixin`s were not shown in documentation properly (#PR: 12)
 
 ### Removed
 

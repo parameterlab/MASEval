@@ -4,7 +4,7 @@ This document provides detailed information, sources, and licensing for all benc
 
 ---
 
-## 1. Multi-Agent Collaboriation Scenario Benchmark (MACS Benchmark)
+## 1. Multi-Agent Collaboration Scenario Benchmark (MACS Benchmark)
 
 This benchmark is designed to test and evaluate the collaborative problem-solving capabilities of multi-agent systems. The implementation in this library provides the necessary code to set up and run these scenarios.
 
