@@ -913,15 +913,8 @@ class Benchmark(ABC):
         """Execute agents with optional user interaction loop.
 
         This method orchestrates the agent-user interaction pattern. When a user is
-        present, the user initiates the conversation by providing the first query to
-        agents. If no user is present, ``task.query`` is used as the initial query.
-
-        Query Source Priority:
-            1. **User with initial_prompt**: Uses the user's initial message (fixed string
-               provided at User construction).
-            2. **User without initial_prompt**: Calls ``user.get_initial_query()`` to
-               generate the first message via LLM based on user profile and scenario.
-            3. **No user**: Falls back to ``task.query``.
+        present, the user initiates the conversation using `User.get_intial_query`.
+        If no user is present, ``task.query`` is used as the initial query.
 
         Interaction Flow:
             By default, agents execute once (``max_invocations=1``). For multi-turn
@@ -956,14 +949,8 @@ class Benchmark(ABC):
 
         # Determine initial query text
         if user is not None:
-            if len(user.messages) > 0:
-                # User has initial_prompt - use it
-                query_text = user.messages[-1].get("content", task.query)
-            else:
-                # No initial_prompt - generate one via LLM
-                query_text = user.get_initial_query()
+            query_text = user.get_initial_query()
         else:
-            # No user - use task query directly
             query_text = task.query
 
         for _ in range(self.max_invocations):

@@ -1,7 +1,7 @@
 """Tests for Benchmark.execution_loop() method.
 
 These tests verify the agent-user interaction orchestration, including:
-- Query source priority (user initial_prompt vs get_initial_query vs task.query)
+- Query source priority (user initial_query vs get_initial_query vs task.query)
 - Multi-turn interaction with max_invocations
 - Early stopping when user.is_done() returns True
 - Message recording (final_answer attached to user traces)
@@ -118,15 +118,15 @@ class TestExecutionLoopNoUser:
 class TestExecutionLoopWithUser:
     """Tests for execution_loop with user simulator."""
 
-    def test_uses_user_initial_prompt(self, dummy_model):
-        """Uses user's initial_prompt as first query."""
+    def test_uses_user_initial_query(self, dummy_model):
+        """Uses user's initial_query as first query."""
         from conftest import DummyUser
 
         task = Task(query="Task query (should not be used)", environment_data={})
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="User's initial message",
+            initial_query="User's initial message",
             max_turns=5,
         )
         benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=user)
@@ -136,17 +136,17 @@ class TestExecutionLoopWithUser:
 
         benchmark.execution_loop(agents, task, env, user=user)
 
-        # First query should be from user's initial_prompt, not task.query
+        # First query should be from user's initial_query, not task.query
         _, _, _, query = benchmark.run_agents_calls[0]
         assert query == "User's initial message"
 
-    def test_uses_get_initial_query_if_no_prompt(self, dummy_model):
-        """Calls get_initial_query() if no initial_prompt."""
+    def test_uses_get_initial_query_if_no_initial_query(self, dummy_model):
+        """Calls get_initial_query() if no initial_query."""
         from conftest import DummyUser
 
         task = Task(query="Task query", environment_data={})
         user = DummyUser(name="test", model=dummy_model, max_turns=5)
-        # No initial_prompt, so messages is empty
+        # No initial_query, so messages is empty
         user.simulator.return_value = "LLM generated initial query"
 
         benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=user)
@@ -168,7 +168,7 @@ class TestExecutionLoopWithUser:
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="Start",
+            initial_query="Start",
             max_turns=5,
         )
         # User responds with different messages each turn
@@ -202,15 +202,15 @@ class TestExecutionLoopWithUser:
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="Start",
-            max_turns=2,  # User done after 2 turns (limiting factor)
+            initial_query="Start",  # Counts as turn 1
+            max_turns=3,  # User done after 3 user messages
         )
         user.simulator.side_effect = ["Response 1", "Response 2", "Response 3"]
 
         benchmark = ExecutionLoopBenchmark(
             agent_data={},
             return_user=user,
-            max_invocations=5,  # Would allow 5, but user stops at 2
+            max_invocations=5,  # Would allow 5, but user stops at 3 turns
         )
 
         env = benchmark.setup_environment({}, task)
@@ -218,9 +218,8 @@ class TestExecutionLoopWithUser:
 
         benchmark.execution_loop(agents, task, env, user=user)
 
-        # max_turns=2 is the limiting factor, so exactly 2 invocations
-        # Iteration 1: agent runs, simulate_response → turn_count=1, is_done? No
-        # Iteration 2: agent runs, simulate_response → turn_count=2, is_done? Yes → break
+        # max_turns=3 with initial_query counting as turn 1
+        # After 2 simulate_response calls, turn_count=3, is_done=True
         assert len(benchmark.run_agents_calls) == 2
 
     def test_stops_when_user_done_via_stop_token(self, dummy_model):
@@ -231,7 +230,7 @@ class TestExecutionLoopWithUser:
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="Start",
+            initial_query="Start",
             max_turns=10,
             stop_token="</stop>",
         )
@@ -260,8 +259,8 @@ class TestExecutionLoopWithUser:
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="Help me",
-            max_turns=1,
+            initial_query="Help me",
+            max_turns=2,  # Allow initial + one response
         )
         user.simulator.return_value = "Thanks"
 
@@ -287,10 +286,10 @@ class TestExecutionLoopWithUser:
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="Initial",
-            max_turns=3,  # Allow 3 turns
+            initial_query="Initial",  # Counts as turn 1
+            max_turns=4,  # Allow 4 turns total
         )
-        # Need 3 responses: after invocation 1, 2, and 3
+        # User responses for turn 2, 3, 4
         user.simulator.side_effect = ["User reply 1", "User reply 2", "User reply 3"]
 
         benchmark = ExecutionLoopBenchmark(
@@ -307,7 +306,7 @@ class TestExecutionLoopWithUser:
         # Should have 3 invocations limited by max_invocations
         assert len(benchmark.run_agents_calls) == 3
 
-        # First query is initial prompt
+        # First query is initial query
         _, _, _, query1 = benchmark.run_agents_calls[0]
         assert query1 == "Initial"
 
@@ -374,7 +373,7 @@ class TestBenchmarkRunWithUser:
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="User query",
+            initial_query="User query",
             max_turns=1,
         )
         user.simulator.return_value = "Done"
@@ -396,8 +395,8 @@ class TestBenchmarkRunWithUser:
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="Hello",
-            max_turns=2,
+            initial_query="Hello",  # Turn 1
+            max_turns=3,  # Allow 3 user messages total
         )
         user.simulator.side_effect = ["Reply 1", "Reply 2"]
 
@@ -417,7 +416,7 @@ class TestBenchmarkRunWithUser:
         # User traces should have the conversation
         user_traces = traces["user"]
         assert "messages" in user_traces
-        # Should have exactly: initial + 2 exchanges (initial, agent1, user1, agent2, user2)
+        # Should have: initial + 2 exchanges (initial, agent1, user1, agent2, user2)
         assert user_traces["message_count"] == 5
 
         # Verify exact message sequence

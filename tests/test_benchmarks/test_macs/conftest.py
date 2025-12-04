@@ -574,7 +574,7 @@ def minimal_scenario():
 
 
 @pytest.fixture
-def initial_prompt():
+def initial_query():
     """Sample initial user query."""
     return "I need to book a flight to New York for Monday."
 

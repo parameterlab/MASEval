@@ -64,7 +64,7 @@ class TestUserSimulator:
             model=dummy_model,
             user_profile={"role": "customer"},
             scenario="test scenario",
-            initial_prompt="Hello",
+            initial_query="Hello",
         )
 
         assert user.name == "test_user"
@@ -137,12 +137,19 @@ class TestUserMultiTurn:
         response = user.simulate_response("More questions?")
         assert response == ""
 
-    def test_turn_count_starts_at_zero(self, dummy_model):
-        """Turn count starts at 0."""
+    def test_turn_count_starts_at_zero_without_initial_query(self, dummy_model):
+        """Turn count starts at 0 when no initial_query provided."""
         from conftest import DummyUser
 
         user = DummyUser(name="test", model=dummy_model)
         assert user._turn_count == 0
+
+    def test_turn_count_starts_at_one_with_initial_query(self, dummy_model):
+        """Turn count starts at 1 when initial_query is provided."""
+        from conftest import DummyUser
+
+        user = DummyUser(name="test", model=dummy_model, initial_query="Hello")
+        assert user._turn_count == 1
 
 
 # =============================================================================
@@ -232,29 +239,29 @@ class TestUserStopToken:
 
 
 @pytest.mark.core
-class TestUserInitialPrompt:
-    """Tests for optional initial_prompt behavior."""
+class TestUserInitialQuery:
+    """Tests for optional initial_query behavior."""
 
-    def test_with_initial_prompt_adds_message(self, dummy_model):
-        """Providing initial_prompt adds it to messages."""
+    def test_with_initial_query_adds_message(self, dummy_model):
+        """Providing initial_query adds it to messages."""
         from conftest import DummyUser
 
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="I need help booking a flight",
+            initial_query="I need help booking a flight",
         )
 
         assert len(user.messages) == 1
         assert user.messages[0]["role"] == "user"
         assert user.messages[0]["content"] == "I need help booking a flight"
 
-    def test_without_initial_prompt_empty_messages(self, dummy_model):
-        """No initial_prompt means empty message history."""
+    def test_without_initial_query_empty_messages(self, dummy_model):
+        """No initial_query means empty message history."""
         from conftest import DummyUser
 
         user = DummyUser(name="test", model=dummy_model)
-        # No initial_prompt provided
+        # No initial_query provided
 
         assert len(user.messages) == 0
 
@@ -283,21 +290,21 @@ class TestUserInitialPrompt:
         assert user.messages[0]["role"] == "user"
         assert user.messages[0]["content"] == "Help me please"
 
-    def test_get_initial_query_raises_if_messages_exist(self, dummy_model):
-        """get_initial_query() raises if messages already exist."""
+    def test_get_initial_query_returns_existing_query(self, dummy_model):
+        """get_initial_query() returns existing initial query if present."""
         from conftest import DummyUser
 
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="Already have a message",
+            initial_query="Already have a message",
         )
 
-        with pytest.raises(RuntimeError, match="already has messages"):
-            user.get_initial_query()
+        query = user.get_initial_query()
+        assert query == "Already have a message"
 
-    def test_get_initial_query_not_counted_as_turn(self, dummy_model):
-        """Initial query doesn't increment turn count."""
+    def test_get_initial_query_counts_as_turn(self, dummy_model):
+        """Initial query increments turn count."""
         from conftest import DummyUser
 
         user = DummyUser(name="test", model=dummy_model, max_turns=3)
@@ -305,7 +312,7 @@ class TestUserInitialPrompt:
 
         user.get_initial_query()
 
-        assert user._turn_count == 0  # Not incremented
+        assert user._turn_count == 1  # Counts as first turn
 
 
 # =============================================================================
@@ -318,13 +325,13 @@ class TestUserMessageHistory:
     """Tests for complete message tracing."""
 
     def test_initial_message_in_history(self, dummy_model):
-        """Initial prompt is in message history."""
+        """Initial query is in message history."""
         from conftest import DummyUser
 
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="Hello agent",
+            initial_query="Hello agent",
         )
 
         assert len(user.messages) == 1
@@ -363,7 +370,7 @@ class TestUserMessageHistory:
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="I need a flight",
+            initial_query="I need a flight",
             max_turns=3,
         )
         user.simulator.side_effect = ["Monday works", "Yes, book it"]
@@ -389,7 +396,7 @@ class TestUserMessageHistory:
         user = DummyUser(
             name="test",
             model=dummy_model,
-            initial_prompt="Hello",
+            initial_query="Hello",
             max_turns=2,
         )
         user.simulator.return_value = "Got it"

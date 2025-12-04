@@ -51,7 +51,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         model: ModelAdapter,
         user_profile: Dict[str, Any],
         scenario: str,
-        initial_prompt: Optional[str] = None,
+        initial_query: Optional[str] = None,
         template: Optional[str] = None,
         max_try: int = 3,
         max_turns: int = 1,
@@ -66,20 +66,18 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
                 preferences, and other relevant information.
             scenario (str): A description of the situation or task the user is trying to
                 accomplish.
-            initial_prompt (Optional[str], optional): The initial message that starts the
-                conversation. If provided, it's added to the message history as the first
-                user message (not counted as a turn). If None, the conversation starts
-                empty and you can call get_initial_query() to generate one via LLM.
-                Defaults to None.
+            initial_query (Optional[str], optional): A pre-set query to start the
+                conversation. If provided, it becomes the first user message. If None,
+                call get_initial_query() to generate one from the model based on the
+                user profile and scenario. Defaults to None.
             template (Optional[str], optional): A custom prompt template for the user
                 simulator. Defaults to None.
             max_try (int, optional): The maximum number of attempts for the simulator to
                 generate a valid response. Defaults to 3.
-            max_turns (int, optional): Maximum number of LLM-generated user responses
-                before is_done() returns True. The initial_prompt (if provided) is NOT
-                counted as a turn since it's not LLM-generated. Use max_turns=1 for
-                single-turn benchmarks, or higher values for multi-turn interaction.
-                Defaults to 1.
+            max_turns (int, optional): Maximum number of user messages in the
+                conversation. Each user message counts as one turn, including the
+                initial_query. Use max_turns=1 for single-turn benchmarks, or higher
+                values for multi-turn interaction. Defaults to 1.
             stop_token (Optional[str], optional): Token that signals user satisfaction,
                 enabling early termination. When the user's LLM-generated response contains
                 this token, is_done() returns True regardless of remaining turns. Use this
@@ -98,17 +96,19 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
             template=template,
             max_try=max_try,
         )
-        # Initialize message history - empty or with initial prompt
-        if initial_prompt is not None:
-            self.messages = MessageHistory([{"role": "user", "content": initial_prompt}])
+        # Initialize message history - empty or with initial query
+        if initial_query is not None:
+            self.messages = MessageHistory([{"role": "user", "content": initial_query}])
+            self._initial_turn_count = 1  # Initial query counts as first turn
         else:
             self.messages = MessageHistory()
+            self._initial_turn_count = 0
         self.logs: list[Dict[str, Any]] = []
 
         # Multi-turn configuration
         self.max_turns = max_turns
         self.stop_token = stop_token
-        self._turn_count = 0
+        self._turn_count = self._initial_turn_count
         self._stopped = False
 
     def simulate_response(self, question: str) -> str:
@@ -164,30 +164,33 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         return clean_response
 
     def get_initial_query(self) -> str:
-        """Generate an initial query using the LLM simulator.
+        """Get the initial query for the conversation.
 
-        Use this method when you want the user LLM to generate the first message
-        instead of providing a fixed initial_prompt. This is useful for scenarios
-        where the user should initiate the conversation based on their profile
-        and scenario.
+        If an initial_query was provided at construction, returns it.
+        Otherwise, generates one using the LLM simulator based on the user's
+        profile and scenario.
 
         This method:
-        - Calls the LLM simulator with an empty conversation history
-        - Adds the generated query to the message history as a "user" message
-        - Does NOT increment _turn_count (initial query is not counted as a turn)
-        - Checks for stop_token (in case user is immediately satisfied)
+        - Returns the existing initial query if one was provided
+        - Or calls the LLM simulator to generate one
+        - Ensures the query is in the message history
+        - Counts the initial query as the first turn
 
         Returns:
-            str: The generated initial query.
+            str: The initial query (either pre-set or LLM-generated).
 
         Raises:
-            RuntimeError: If conversation already has messages (use simulate_response instead).
+            RuntimeError: If called after conversation has progressed beyond
+                the initial message.
         """
+        # If we already have an initial query in messages, return it
         if len(self.messages) > 0:
-            raise RuntimeError(
-                "Cannot generate initial query: conversation already has messages. Use simulate_response() for subsequent turns."
-            )
+            first_message = self.messages[0]
+            if first_message.get("role") == "user":
+                return first_message.get("content", "")
+            raise RuntimeError("Cannot get initial query: conversation has progressed. Use simulate_response() for subsequent turns.")
 
+        # Generate initial query via LLM
         start_time = time.time()
         log_entry: Dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
@@ -212,8 +215,9 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         # Check for stop token (user might be immediately satisfied with scenario)
         _, clean_response = self._check_stop_token(response)
 
-        # Add as initial user message (not counted as a turn)
+        # Add as initial user message and count as first turn
         self.messages.add_message("user", clean_response)
+        self.increment_turn()
         return clean_response
 
     def gather_traces(self) -> dict[str, Any]:

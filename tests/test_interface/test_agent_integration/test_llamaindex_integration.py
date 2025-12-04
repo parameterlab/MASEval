@@ -60,7 +60,7 @@ def test_llamaindex_user_creation():
         model=mock_model,
         user_profile={"role": "tester"},
         scenario="test scenario",
-        initial_prompt="test prompt",
+        initial_query="test prompt",
     )
 
     assert user is not None
@@ -79,7 +79,7 @@ def test_llamaindex_user_get_tool():
         model=mock_model,
         user_profile={"role": "tester"},
         scenario="test scenario",
-        initial_prompt="test prompt",
+        initial_query="test prompt",
     )
 
     tool = user.get_tool()

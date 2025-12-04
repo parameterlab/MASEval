@@ -155,8 +155,8 @@ class DummyUser(User):
             **kwargs: Forwarded to User base class:
                 - user_profile: Dict of user attributes
                 - scenario: Scenario description
-                - initial_prompt: Optional initial message
-                - max_turns: Max LLM-generated responses (default: 1)
+                - initial_query: Optional initial message
+                - max_turns: Max interaction turns (default: 1)
                 - stop_token: Early termination token (default: None)
         """
         super().__init__(
@@ -164,7 +164,7 @@ class DummyUser(User):
             model=model,
             user_profile=kwargs.get("user_profile", {}),
             scenario=kwargs.get("scenario", "test scenario"),
-            initial_prompt=kwargs.get("initial_prompt"),
+            initial_query=kwargs.get("initial_query"),
             max_turns=kwargs.get("max_turns", 1),
             stop_token=kwargs.get("stop_token"),
         )
@@ -281,13 +281,14 @@ def dummy_environment():
 
 @pytest.fixture
 def dummy_user(dummy_model):
-    """Create a dummy user."""
+    """Create a dummy user with an initial query."""
     return DummyUser(
         name="test_user",
         model=dummy_model,
         user_profile={"role": "tester"},
         scenario="test scenario",
-        initial_prompt="Hello",
+        initial_query="Hello",
+        max_turns=2,  # Allow at least one simulate_response after initial query
     )
 
 

@@ -17,23 +17,23 @@ from conftest import DummyModelAdapter
 class TestMACSUserInit:
     """Tests for MACSUser initialization."""
 
-    def test_init_with_defaults(self, macs_model, sample_scenario, initial_prompt):
+    def test_init_with_defaults(self, macs_model, sample_scenario, initial_query):
         """Initialization with required args uses proper defaults."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         assert user.model == macs_model
         assert user.scenario == sample_scenario
         assert user.name == "Simulated User"
         assert user.max_turns == 5
-        assert user._turn_count == 0
+        assert user._turn_count == 1  # Initial query counts as first turn
         assert not user._stopped
         assert "full_scenario" in user.user_profile
 
-    def test_macs_default_max_turns_is_five(self, macs_model, sample_scenario, initial_prompt):
+    def test_macs_default_max_turns_is_five(self, macs_model, sample_scenario, initial_query):
         """MACS benchmark defaults to max_turns=5 per MACS paper.
 
         This is a MACS-specific default that differs from the base class default of 1.
@@ -42,13 +42,13 @@ class TestMACSUserInit:
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         assert user.max_turns == MACSUser.DEFAULT_MAX_TURNS
         assert user.max_turns == 5
 
-    def test_macs_default_stop_token(self, macs_model, sample_scenario, initial_prompt):
+    def test_macs_default_stop_token(self, macs_model, sample_scenario, initial_query):
         """MACS uses '</stop>' as stop token per MACS paper.
 
         This is a MACS-specific default. If the base class default changes,
@@ -57,18 +57,18 @@ class TestMACSUserInit:
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         assert user.stop_token == MACSUser.DEFAULT_STOP_TOKEN
         assert user.stop_token == "</stop>"
 
-    def test_init_with_custom_params(self, macs_model, sample_scenario, initial_prompt):
+    def test_init_with_custom_params(self, macs_model, sample_scenario, initial_query):
         """Custom name and max_turns are respected."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
             name="Test User",
             max_turns=10,
         )
@@ -76,14 +76,14 @@ class TestMACSUserInit:
         assert user.name == "Test User"
         assert user.max_turns == 10
 
-    def test_init_loads_template(self, macs_model, sample_scenario, initial_prompt):
+    def test_init_loads_template(self, macs_model, sample_scenario, initial_query):
         """Loads user_simulator.txt template."""
         assert MACSUser.TEMPLATE_PATH.exists(), f"Template not found at {MACSUser.TEMPLATE_PATH}"
 
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
         assert user is not None
 
@@ -152,7 +152,7 @@ class TestUserProfileExtraction:
 class TestConversationState:
     """Tests for conversation state management."""
 
-    def test_is_done_false_initially_without_assistant_message(self, macs_model, sample_scenario, initial_prompt):
+    def test_is_done_false_initially_without_assistant_message(self, macs_model, sample_scenario, initial_query):
         """is_done() returns False when no assistant message to evaluate.
 
         When there's no assistant message yet (only the initial user message),
@@ -162,19 +162,19 @@ class TestConversationState:
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         # No assistant message yet, so is_done() returns False
         # (nothing to evaluate, need to get agent response first)
         assert not user.is_done()
 
-    def test_is_done_after_max_turns(self, macs_model, sample_scenario, initial_prompt):
+    def test_is_done_after_max_turns(self, macs_model, sample_scenario, initial_query):
         """is_done() returns True after max turns."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
             max_turns=2,
         )
 
@@ -183,12 +183,12 @@ class TestConversationState:
 
         assert user.is_done()
 
-    def test_is_done_after_stop_token(self, macs_model, sample_scenario, initial_prompt):
+    def test_is_done_after_stop_token(self, macs_model, sample_scenario, initial_query):
         """is_done() returns True after </stop> detected."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         # Manually set stopped flag
@@ -196,14 +196,14 @@ class TestConversationState:
 
         assert user.is_done()
 
-    def test_is_done_returns_false_when_not_satisfied(self, macs_model, sample_scenario, initial_prompt):
+    def test_is_done_returns_false_when_not_satisfied(self, macs_model, sample_scenario, initial_query):
         """is_done() returns False when user is not satisfied with response."""
         from unittest.mock import MagicMock
 
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
             max_turns=5,
         )
 
@@ -214,7 +214,8 @@ class TestConversationState:
         response = user.simulate_response("Here is your flight info.")
 
         # The user's response should be added to messages
-        assert user._turn_count == 1
+        # initial_query is turn 1, this simulate_response is turn 2
+        assert user._turn_count == 2
         assert "I need more information" in response
 
         # is_done() is a cheap state check - no </stop> token was found
@@ -230,25 +231,25 @@ class TestConversationState:
 class TestReset:
     """Tests for reset method."""
 
-    def test_reset_clears_turn_count(self, macs_model, sample_scenario, initial_prompt):
-        """reset() clears turn count."""
+    def test_reset_clears_turn_count(self, macs_model, sample_scenario, initial_query):
+        """reset() resets turn count to initial value."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
         user._turn_count = 3
 
         user.reset()
 
-        assert user._turn_count == 0
+        assert user._turn_count == 1  # Back to initial (counts initial query)
 
-    def test_reset_clears_stopped(self, macs_model, sample_scenario, initial_prompt):
+    def test_reset_clears_stopped(self, macs_model, sample_scenario, initial_query):
         """reset() clears stopped flag."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
         user._stopped = True
 
@@ -266,13 +267,13 @@ class TestReset:
 class TestResponseSimulation:
     """Tests for simulate_response method."""
 
-    def test_simulate_response_increments_turn(self, sample_scenario, initial_prompt):
+    def test_simulate_response_increments_turn(self, sample_scenario, initial_query):
         """Turn count increments on simulate_response call."""
         model = DummyModelAdapter(responses=['{"text": "Yes, confirmed.", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         initial_count = user._turn_count
@@ -283,13 +284,13 @@ class TestResponseSimulation:
 
         assert user._turn_count == initial_count + 1
 
-    def test_simulate_response_detects_stop(self, sample_scenario, initial_prompt):
+    def test_simulate_response_detects_stop(self, sample_scenario, initial_query):
         """Detects </stop> token."""
         model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         # Replace the simulator with a mock that returns a response with stop token
@@ -299,13 +300,13 @@ class TestResponseSimulation:
         assert user._stopped
         assert user.is_done()
 
-    def test_simulate_response_cleans_stop_token(self, sample_scenario, initial_prompt):
+    def test_simulate_response_cleans_stop_token(self, sample_scenario, initial_query):
         """Removes </stop> from response."""
         model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         # Replace the simulator with a mock that returns a response with stop token
@@ -315,13 +316,13 @@ class TestResponseSimulation:
         assert "</stop>" not in response
         assert "Perfect, thanks!" in response
 
-    def test_simulate_response_returns_empty_when_done(self, sample_scenario, initial_prompt):
+    def test_simulate_response_returns_empty_when_done(self, sample_scenario, initial_query):
         """Returns empty string when is_done is True."""
         model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
         user._stopped = True  # Already done
 
@@ -329,13 +330,13 @@ class TestResponseSimulation:
 
         assert response == ""
 
-    def test_simulate_response_returns_empty_at_max_turns(self, sample_scenario, initial_prompt):
+    def test_simulate_response_returns_empty_at_max_turns(self, sample_scenario, initial_query):
         """Returns empty string when max turns reached."""
         model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
             max_turns=3,
         )
         user._turn_count = 3  # At max
@@ -344,13 +345,13 @@ class TestResponseSimulation:
 
         assert response == ""
 
-    def test_simulate_response_fallback_message(self, sample_scenario, initial_prompt):
+    def test_simulate_response_fallback_message(self, sample_scenario, initial_query):
         """Provides fallback when response is only stop token."""
         model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         # Replace the simulator with a mock that returns only the stop token
@@ -371,12 +372,12 @@ class TestResponseSimulation:
 class TestToolInterface:
     """Tests for get_tool method."""
 
-    def test_get_tool_raises_not_implemented(self, macs_model, sample_scenario, initial_prompt):
+    def test_get_tool_raises_not_implemented(self, macs_model, sample_scenario, initial_query):
         """Base MACSUser.get_tool() raises NotImplementedError."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         with pytest.raises(NotImplementedError) as exc_info:
@@ -395,12 +396,12 @@ class TestToolInterface:
 class TestTracing:
     """Tests for gather_traces method."""
 
-    def test_gather_traces_includes_macs_fields(self, macs_model, sample_scenario, initial_prompt):
+    def test_gather_traces_includes_macs_fields(self, macs_model, sample_scenario, initial_query):
         """Traces include MACS-specific fields."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
             max_turns=7,
         )
         user._turn_count = 3
@@ -412,12 +413,12 @@ class TestTracing:
         assert traces["turns_used"] == 3
         assert traces["stopped_by_user"] is True
 
-    def test_gather_traces_inherits_base_fields(self, macs_model, sample_scenario, initial_prompt):
+    def test_gather_traces_inherits_base_fields(self, macs_model, sample_scenario, initial_query):
         """Traces include base User fields."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
         )
 
         traces = user.gather_traces()
@@ -436,7 +437,7 @@ class TestTracing:
 class TestMACSUserIntegration:
     """Integration tests for MACSUser."""
 
-    def test_conversation_lifecycle(self, sample_scenario, initial_prompt):
+    def test_conversation_lifecycle(self, sample_scenario, initial_query):
         """Test complete conversation lifecycle with is_done() method."""
         responses = [
             "Yes, Monday works.",
@@ -448,7 +449,7 @@ class TestMACSUserIntegration:
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
             max_turns=5,
         )
 
@@ -471,16 +472,18 @@ class TestMACSUserIntegration:
                 assert response != ""
 
         # After stop token, should be done
+        # initial_query counts as turn 1, so with 4 simulate_responses we'd have 5 turns
+        # But stop token was hit on 4th response, so turn_count is 5
         assert user.is_done()
-        assert user._turn_count == 4
+        assert user._turn_count == 5
 
-    def test_max_turns_enforcement(self, sample_scenario, initial_prompt):
+    def test_max_turns_enforcement(self, sample_scenario, initial_query):
         """Test that max turns is enforced."""
         model = DummyModelAdapter(responses=["Response"] * 10)
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
             max_turns=3,
         )
 
@@ -499,13 +502,13 @@ class TestMACSUserIntegration:
         response = user.simulate_response("One more?")
         assert response == ""
 
-    def test_reset_allows_new_conversation(self, sample_scenario, initial_prompt):
+    def test_reset_allows_new_conversation(self, sample_scenario, initial_query):
         """Test that reset allows starting new conversation."""
         model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
         user = MACSUser(
             model=model,
             scenario=sample_scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
             max_turns=2,
         )
 
@@ -517,8 +520,7 @@ class TestMACSUserIntegration:
         # Reset
         user.reset()
 
-        # After reset, hard limits are cleared but there's no assistant message
-        # to evaluate, so is_done() returns True (nothing to evaluate yet)
-        # This is correct - the execution_loop will call run_agents first
-        assert user._turn_count == 0
+        # After reset, turn count goes back to 1 (initial query counts)
+        # and stopped flag is cleared
+        assert user._turn_count == 1
         assert not user._stopped

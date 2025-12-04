@@ -413,7 +413,7 @@ class MACSUser(User):
         self,
         model: ModelAdapter,
         scenario: str,
-        initial_prompt: str,
+        initial_query: str,
         name: str = "Simulated User",
         template: Optional[str] = None,
         max_turns: int = DEFAULT_MAX_TURNS,
@@ -424,7 +424,7 @@ class MACSUser(User):
         Args:
             model: ModelAdapter for LLM-based response generation
             scenario: Full scenario text (contains goals and user background)
-            initial_prompt: The initial query to the agent
+            initial_query: The initial query to the agent
             name: User name for identification (default: "Simulated User")
             template: Optional custom prompt template (uses MACS-specific default)
             max_turns: Maximum conversation turns (default: 5, per MACS paper)
@@ -442,7 +442,7 @@ class MACSUser(User):
             model=model,
             user_profile=user_profile,
             scenario=scenario,
-            initial_prompt=initial_prompt,
+            initial_query=initial_query,
             template=template,
             max_turns=max_turns,
             stop_token=stop_token,
@@ -467,12 +467,15 @@ class MACSUser(User):
 
     def reset(self) -> None:
         """Reset the conversation state for a new interaction."""
-        self._turn_count = 0
         self._stopped = False
         # Keep only the initial user message
         if len(self.messages) > 0:
             initial = self.messages[0]
             self.messages = MessageHistory([initial])
+            self._turn_count = 1  # Initial message counts as first turn
+        else:
+            self.messages = MessageHistory()
+            self._turn_count = 0
 
     @staticmethod
     def _extract_user_profile(scenario: str) -> Dict[str, Any]:
@@ -774,7 +777,7 @@ class MACSBenchmark(Benchmark):
                 register_name="user_simulator",
             ),
             scenario=scenario,
-            initial_prompt=task.query,
+            initial_query=task.query,
         )
 
     @abstractmethod
