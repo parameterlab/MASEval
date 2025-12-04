@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Iterable, Optional, Sequence, Tuple, Union, 
 from datetime import datetime
 import threading
 from enum import Enum
+import warnings
 
 from .evaluator import Evaluator
 from .task import Task, TaskCollection
@@ -67,8 +68,8 @@ class Benchmark(ABC):
                     agent_adapter = AgentAdapter(agent, "agent")
                     return [agent_adapter], {"agent": agent_adapter}
 
-                def run_agents(self, agents, task, environment):
-                    return agents[0].run(task.query)
+                def run_agents(self, agents, task, environment, query):
+                    return agents[0].run(query)
 
                 # ... implement other abstract methods
 
@@ -100,6 +101,7 @@ class Benchmark(ABC):
         agent_data: Dict[str, Any] | Iterable[Dict[str, Any]],
         callbacks: Optional[List[BenchmarkCallback]] = None,
         n_task_repeats: int = 1,
+        max_invocations: int = 1,
         fail_on_setup_error: bool = False,
         fail_on_task_error: bool = False,
         fail_on_evaluation_error: bool = False,
@@ -115,6 +117,10 @@ class Benchmark(ABC):
                 or collecting custom metrics during the benchmark run.
             n_task_repeats: Number of times to repeat each task. Useful for measuring variance in
                 stochastic agent behaviors. Must be at least 1.
+            max_invocations: Maximum number of agent invocations per task in the execution loop.
+                For simple benchmarks, the default (1) means agents run once per task. For interactive
+                benchmarks with user feedback loops, set higher (e.g., 5 for MACS) to allow multiple
+                agent-user interaction rounds.
             fail_on_setup_error: If True, raise exceptions when setup fails (environment, agents, evaluators).
                 If False (default), catch exceptions during setup and record them in the report with status
                 SETUP_FAILED. This allows the benchmark to continue running remaining tasks even if setup fails.
@@ -206,6 +212,9 @@ class Benchmark(ABC):
         self.n_task_repeats = n_task_repeats
         if self.n_task_repeats < 1:
             raise ValueError("n_task_repeats must be at least 1")
+
+        # Execution loop configuration
+        self.max_invocations = max_invocations
 
         # Failure handling configuration
         self.fail_on_task_error = fail_on_task_error
@@ -793,7 +802,7 @@ class Benchmark(ABC):
         pass
 
     @abstractmethod
-    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment) -> Any:
+    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment, query: str) -> Any:
         """Execute the agent system to solve a single task instance.
 
         This method is called once per task repetition by the framework's `run()` loop.
@@ -802,6 +811,9 @@ class Benchmark(ABC):
             agents: Sequence of agents to execute (typically just the orchestrator or main agent).
             task: The Task object with the query and any metadata needed for execution.
             environment: The environment instance providing tools and state.
+            query: The query string to pass to agents. For single-turn benchmarks this is
+                typically task.query. For multi-turn with users, this may be an initial
+                prompt or simulated user response.
 
         Returns:
             The final answer or result from the agent system's execution. This could be:
@@ -824,22 +836,105 @@ class Benchmark(ABC):
             task iteration, repetitions, and the complete benchmark lifecycle.
 
             ```python
-            def run_agents(self, agents, task, environment):
+            def run_agents(self, agents, task, environment, query):
                 # Simple single-agent execution - returns final answer string
                 orchestrator = agents[0]
-                final_answer = orchestrator.run(task.query)
+                final_answer = orchestrator.run(query)
                 return final_answer
 
             # Or for multiple agents returning a list of answers:
-            def run_agents(self, agents, task, environment):
+            def run_agents(self, agents, task, environment, query):
                 answers = []
                 for agent in agents:
-                    answer = agent.run(task.query)
+                    answer = agent.run(query)
                     answers.append(answer)
                 return answers
             ```
         """
         pass
+
+    def execution_loop(
+        self,
+        agents: Sequence[AgentAdapter],
+        task: Task,
+        environment: Environment,
+        user: Optional[User],
+    ) -> Any:
+        """Execute agents with optional user interaction loop.
+
+        This method orchestrates the agent-user interaction pattern. When a user is
+        present, the user initiates the conversation by providing the first query to
+        agents. If no user is present, ``task.query`` is used as the initial query.
+
+        Query Source Priority:
+            1. **User with initial_prompt**: Uses the user's initial message (fixed string
+               provided at User construction).
+            2. **User without initial_prompt**: Calls ``user.get_initial_query()`` to
+               generate the first message via LLM based on user profile and scenario.
+            3. **No user**: Falls back to ``task.query``.
+
+        Interaction Flow:
+            By default, agents execute once (``max_invocations=1``). For multi-turn
+            interaction, set ``self.max_invocations > 1`` in your benchmark's ``__init__``.
+            The loop continues until ``max_invocations`` is reached or ``user.is_done()``
+            returns True (e.g., max turns reached or stop token detected).
+
+        Note:
+            Override this method in your benchmark subclass to implement custom
+            interaction patterns (e.g., agent-initiated conversations, different
+            termination conditions, or specialized query routing).
+
+        Args:
+            agents: Agents to execute (typically the orchestrator).
+            task: The task being solved.
+            environment: The environment providing tools and state.
+            user: Optional user simulator. If provided, the user initiates and drives
+                the conversation. If None, a single agent execution with ``task.query``.
+
+        Returns:
+            Final answer from the last agent execution.
+
+        Example:
+            For interactive benchmarks, enable multi-turn interaction::
+
+                def __init__(self, ...):
+                    super().__init__(...)
+                    self.max_invocations = 5  # Up to 5 agent-user exchanges
+        """
+
+        final_answer = None
+
+        # Determine initial query text
+        if user is not None:
+            if len(user.messages) > 0:
+                # User has initial_prompt - use it
+                query_text = user.messages[-1].get("content", task.query)
+            else:
+                # No initial_prompt - generate one via LLM
+                query_text = user.get_initial_query()
+        else:
+            # No user - use task query directly
+            query_text = task.query
+
+        for _ in range(self.max_invocations):
+            # Execute agents with query
+            final_answer = self.run_agents(agents, task, environment, query_text)
+
+            # No user means single execution
+            if user is None:
+                break
+
+            # Simulate user response (handles message recording, stop token detection, turn counting)
+            user_response = user.simulate_response(str(final_answer) if final_answer else "")
+
+            # Check if user is done (cheap state check - no LLM call)
+            if user.is_done():
+                break
+
+            # Use user's response as next query
+            query_text = user_response
+
+        return final_answer
 
     def run(self, tasks: Union[Task, TaskCollection, Iterable[Union[Task, dict]]]) -> List[Dict[str, Any]]:
         """Initialize and execute the complete benchmark loop across all tasks.
@@ -893,8 +988,8 @@ class Benchmark(ABC):
                         agents_to_run, agents_dict = setup_agents(agent_data, environment, task, user)
                         evaluators = setup_evaluators(environment, task, agents_to_run, user)
 
-                        # Run stage
-                        agents_output = run_agents(agents_to_run, task, environment)
+                        # Run stage (execution_loop handles multi-turn if user exists)
+                        agents_output = execution_loop(agents_to_run, task, environment, user)
 
                         # Evaluate stage
                         traces = collect_message_histories(agents_dict)
@@ -977,6 +1072,12 @@ class Benchmark(ABC):
                     # 1. Setup
                     environment = self.setup_environment(agent_data, task)
                     user = self.setup_user(agent_data, environment, task)
+                    if user is None and self.max_invocations > 1:
+                        # Warn if multi-turn is enabled but no user to drive interaction
+                        warnings.warn(
+                            f"max_invocations={self.max_invocations} > 1 but no user simulator provided. "
+                            f"Falling back to single-turn execution for task {task.id}."
+                        )
                     agents_to_run, agents_dict = self.setup_agents(agent_data, environment, task, user)
                     evaluators = self.setup_evaluators(environment, task, agents_to_run, user)
 
@@ -1027,9 +1128,9 @@ class Benchmark(ABC):
                     # Continue to next task repetition
                     continue
 
-                # 2. Execute agent system
+                # 2. Execute agent system with optional user interaction loop
                 try:
-                    final_answers = self.run_agents(agents_to_run, task, environment)
+                    final_answers = self.execution_loop(agents_to_run, task, environment, user)
                 except Exception as e:
                     execution_status = TaskExecutionStatus.TASK_EXECUTION_FAILED
                     error_info = {
@@ -1045,11 +1146,6 @@ class Benchmark(ABC):
 
                     # Continue with trace collection even if task failed
                     final_answers = None
-
-                # Record final answer in user's conversation history for complete trace
-                # This ensures user traces include the complete user-observable conversation
-                if user is not None and isinstance(final_answers, str):  # TODO change for multimodal model
-                    user.messages.add_message("assistant", final_answers)
 
                 # # Callbacks before evaluation
                 # for cb in self.callbacks:

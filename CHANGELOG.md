@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - MACS Benchmark: Multi-Agent Collaboration Scenarios benchmark (PR: #13)
+- Added `execution_loop()` method to `Benchmark` base class enabling iterative agent-user interaction
+- Added `max_invocations` constructor parameter to `Benchmark` (default: 1 for backwards compatibility)
+- Added `max_turns` and `stop_token` parameters to `User` base class for multi-turn support with early stopping
+- Added `is_done()`, `_check_stop_token()`, and `increment_turn()` methods to `User` base class
 - [LlamaIndex](https://github.com/run-llama/llama_index) integration: `LlamaIndexAgentAdapter` and `LlamaIndexUser` for evaluating LlamaIndex workflow-based agents (PR: #7)
   - Supports async workflow execution with proper event loop handling
 - Added a new example: The `5_a_day_benchmark` (PR: #10)
@@ -29,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `maseval.interface.agents` structure changed. Tools requiring framework imports (beyond just typing) now in `<framework>_optional.py` and imported dynamically from `<framework>.py`. (PR: #12)
 - Various formatting improvements in the documentation (PR: #12)
 - Added documentation for View Source Code pattern in `CONTRIBUTING.md` and `_optional.py` pattern in interface README (PR: #12)
+- `Benchmark.run()` now uses `execution_loop()` internally to handle agent-user interaction cycles
 
 ### Fixed
 

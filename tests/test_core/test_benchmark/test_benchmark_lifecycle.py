@@ -61,8 +61,8 @@ class TestBenchmarkLifecycle:
         task_ids = [r["task_id"] for r in reports]
         assert len(set(task_ids)) == 3
 
-        # Verify queries match - call format is (agents, task, environment)
-        queries = [call[1].query for call in benchmark.run_agents_calls]
+        # Verify queries match - call format is (agents, task, environment, query)
+        queries = [call[3] for call in benchmark.run_agents_calls]
         assert queries == ["Task 1", "Task 2", "Task 3"]
 
     def test_benchmark_task_repetitions(self):

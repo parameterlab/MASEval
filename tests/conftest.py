@@ -226,10 +226,10 @@ class DummyBenchmark(Benchmark):
         self.setup_evaluators_calls.append((environment, task, agents, user))
         return [DummyEvaluator(task, environment, user)]
 
-    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment) -> Any:
-        self.run_agents_calls.append((agents, task, environment))
+    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment, query: str) -> Any:
+        self.run_agents_calls.append((agents, task, environment, query))
         # Run the first agent and return final answer
-        return agents[0].run(task.query)
+        return agents[0].run(query)
 
     def evaluate(
         self, evaluators: Sequence[Evaluator], agents: Dict[str, AgentAdapter], final_answer: Any, traces: Dict[str, Any]

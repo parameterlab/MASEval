@@ -383,6 +383,7 @@ class MACSUser(User):
     - Maximum 5 turns of interaction (as per MACS paper)
     - </stop> token detection for natural conversation ending
     - User profile and scenario-aware responses
+    - LLM-based satisfaction evaluation
 
     The simulator maintains a conversation history and uses an LLM to generate
     responses that are consistent with the user's profile and scenario.
@@ -392,7 +393,7 @@ class MACSUser(User):
     """
 
     DEFAULT_MAX_TURNS = 5
-    STOP_TOKEN = "</stop>"
+    DEFAULT_STOP_TOKEN = "</stop>"
     TEMPLATE_PATH = Path(__file__).parent / "prompt_templates" / "user_simulator.txt"
 
     def __init__(
@@ -403,6 +404,7 @@ class MACSUser(User):
         name: str = "Simulated User",
         template: Optional[str] = None,
         max_turns: int = DEFAULT_MAX_TURNS,
+        stop_token: str = DEFAULT_STOP_TOKEN,
     ):
         """Initialize MACS user simulator.
 
@@ -413,6 +415,7 @@ class MACSUser(User):
             name: User name for identification (default: "Simulated User")
             template: Optional custom prompt template (uses MACS-specific default)
             max_turns: Maximum conversation turns (default: 5, per MACS paper)
+            stop_token: Token indicating user satisfaction (default: "</stop>")
         """
         # Load MACS-specific user simulator template if not provided
         if template is None and self.TEMPLATE_PATH.exists():
@@ -428,10 +431,9 @@ class MACSUser(User):
             scenario=scenario,
             initial_prompt=initial_prompt,
             template=template,
+            max_turns=max_turns,
+            stop_token=stop_token,
         )
-        self.max_turns = max_turns
-        self._turn_count = 0
-        self._stopped = False
 
     def get_tool(self) -> Any:
         """Return a tool for agent interaction.
@@ -449,42 +451,6 @@ class MACSUser(User):
             "MACSUser.get_tool() must be overridden by framework-specific subclass. "
             "Use SmolAgentMACSUser for smolagents or LangGraphMACSUser for langgraph."
         )
-
-    @property
-    def is_done(self) -> bool:
-        """Check if the conversation should end.
-
-        Returns True if:
-        - Maximum turns reached
-        - User responded with </stop> token
-        """
-        return self._stopped or self._turn_count >= self.max_turns
-
-    def simulate_response(self, question: str) -> str:
-        """Simulate a user response, respecting turn limits.
-
-        Args:
-            question: The assistant's question/message
-
-        Returns:
-            The simulated user response, or empty string if done
-        """
-        if self.is_done:
-            return ""
-
-        # Use parent's simulate_response which handles LLM generation
-        response = super().simulate_response(question)
-
-        # Check for stop token
-        if self.STOP_TOKEN in response.lower():
-            self._stopped = True
-            # Clean up the response
-            response = response.replace(self.STOP_TOKEN, "").strip()
-            if not response:
-                response = "Thank you, that's all I needed!"
-
-        self._turn_count += 1
-        return response
 
     def reset(self) -> None:
         """Reset the conversation state for a new interaction."""
@@ -635,6 +601,7 @@ class MACSBenchmark(Benchmark):
         model: ModelAdapter,
         callbacks: Optional[List[Any]] = None,
         n_task_repeats: int = 1,
+        max_invocations: int = 5,
         **kwargs: Any,
     ):
         """Initialize benchmark.
@@ -644,9 +611,10 @@ class MACSBenchmark(Benchmark):
             model: ModelAdapter for tool simulation and evaluation
             callbacks: Benchmark callbacks
             n_task_repeats: Repetitions per task
+            max_invocations: Maximum agent-user interaction rounds (default: 5 per MACS paper)
         """
         self._model = model
-        super().__init__(agent_data, callbacks, n_task_repeats, **kwargs)
+        super().__init__(agent_data, callbacks, n_task_repeats, max_invocations, **kwargs)
 
     def setup_environment(
         self,
@@ -728,9 +696,10 @@ class MACSBenchmark(Benchmark):
         agents: Sequence[AgentAdapter],
         task: Task,
         environment: MACSEnvironment,  # type: ignore[override]
+        query: str = "",
     ) -> Any:
         """Execute agents and return final answer."""
-        answers = [agent.run(task.query) for agent in agents]
+        answers = [agent.run(query) for agent in agents]
         return answers[0] if len(answers) == 1 else answers
 
     def evaluate(
