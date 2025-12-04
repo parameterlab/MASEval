@@ -452,16 +452,18 @@ def load_tasks(
 
     tasks = []
     for t in tasks_list:
-        task_kwargs: Dict[str, Any] = {
-            "query": t["query"],
-            "environment_data": t.get("environment_data", {}),
-            "evaluation_data": t.get("evaluation_data", {}),
-            "metadata": t.get("metadata", {}),
-        }
+        metadata = t.get("metadata", {})
         # Store task ID in metadata (format: task-NNNNNN)
         if t.get("id"):
-            task_kwargs["metadata"]["task_id"] = t["id"]
-        tasks.append(Task(**task_kwargs))
+            metadata["task_id"] = t["id"]
+        tasks.append(
+            Task(
+                query=t["query"],
+                environment_data=t.get("environment_data", {}),
+                evaluation_data=t.get("evaluation_data", {}),
+                metadata=metadata,
+            )
+        )
 
     return TaskCollection(tasks)
 

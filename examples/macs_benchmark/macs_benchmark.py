@@ -30,13 +30,15 @@ Usage:
 import argparse
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING
 
 # Third-party imports (both frameworks will be installed)
 from google.genai import Client as GoogleGenAIClient
 
 # smolagents imports
-from smolagents import Tool as SmolagentsTool, ToolCallingAgent, OpenAIServerModel, FinalAnswerTool
+from smolagents import ToolCallingAgent, OpenAIServerModel, FinalAnswerTool
+if TYPE_CHECKING:
+    from smolagents import Tool as SmolagentsTool
 
 # langgraph imports
 from langchain_core.tools import StructuredTool
@@ -241,7 +243,7 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
             self.register("simulators", f"simulator_tool_{name}", tool.simulator)
 
         # Helper to get tools for an agent
-        def get_agent_tools(agent_spec: Dict[str, Any]) -> List[SmolagentsTool]:
+        def get_agent_tools(agent_spec: Dict[str, Any]) -> List["SmolagentsTool"]:
             """Get wrapped tools for an agent based on its tool groups."""
             agent_tools = environment.get_tools_for_agent(agent_spec)
             return [tool_wrappers[name] for name in agent_tools if name in tool_wrappers]
@@ -252,7 +254,7 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
             agent_spec = agent_lookup.get(agent_id, {})
 
             # Get this agent's tools
-            agent_tools: List[SmolagentsTool] = get_agent_tools(agent_spec)
+            agent_tools: List["SmolagentsTool"] = get_agent_tools(agent_spec)
             agent_tools.append(FinalAnswerTool())
 
             # Build managed agents from reachable_agents

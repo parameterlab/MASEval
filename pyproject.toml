@@ -203,3 +203,8 @@ output = "coverage.xml"
 
 [tool.coverage.html]
 directory = "htmlcov"
+
+[tool.ty.src]
+# Exclude notebooks and docs/examples from type checking
+# These contain local imports that are only valid when run from their directory
+exclude = ["docs/examples/", "examples/"]

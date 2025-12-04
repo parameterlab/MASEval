@@ -3,10 +3,11 @@
 import json
 import pytest
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Generator
 from unittest.mock import patch, MagicMock
 from tempfile import TemporaryDirectory
 from urllib.error import URLError, HTTPError
+from email.message import Message
 
 from maseval.benchmark.macs.data_loader import (
     DEFAULT_DATA_DIR,
@@ -92,7 +93,7 @@ def sample_scenarios_data() -> Dict[str, Any]:
 
 
 @pytest.fixture
-def temp_data_dir() -> Path:
+def temp_data_dir() -> Generator[Path, None, None]:
     """Create a temporary directory for test data."""
     with TemporaryDirectory() as tmpdir:
         yield Path(tmpdir)
@@ -596,7 +597,7 @@ class TestConnectionErrorHandling:
                 url="http://example.com/test.json",
                 code=404,
                 msg="Not Found",
-                hdrs=None,
+                hdrs=Message(),
                 fp=None,
             )
             with pytest.raises(RuntimeError, match="Failed to download"):

@@ -8,6 +8,7 @@ from maseval import AgentAdapter, Task, User, MessageHistory
 from maseval.benchmark.macs import (
     MACSBenchmark,
     MACSEnvironment,
+    MACSEvaluator,
     MACSUser,
     compute_benchmark_metrics,
 )
@@ -81,6 +82,8 @@ class TestMACSBenchmarkSetup:
         evaluators = benchmark.setup_evaluators(env, sample_task, agents, None)
 
         assert len(evaluators) == 2
+        assert isinstance(evaluators[0], MACSEvaluator)
+        assert isinstance(evaluators[1], MACSEvaluator)
         assert evaluators[0].gsr_type == "user"
         assert evaluators[1].gsr_type == "system"
 
