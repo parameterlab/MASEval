@@ -3,8 +3,14 @@
 These tests verify that LLMSimulator retry logic and tracing work correctly.
 """
 
+from typing import cast
+
 import pytest
-from maseval.core.simulator import ToolLLMSimulator, SimulatorCallStatus
+from maseval.core.simulator import (
+    ToolLLMSimulator,
+    SimulatorCallStatus,
+    ToolSimulatorError,
+)
 
 
 @pytest.mark.core
@@ -44,7 +50,7 @@ class TestLLMSimulator:
         assert len(simulator.logs) == 2
 
     def test_llm_simulator_parsing_error_retry(self, dummy_model):
-        """Test that parsing errors trigger retries."""
+        """Test that parsing errors trigger retries and raise SimulatorError on exhaustion."""
         from conftest import DummyModelAdapter
 
         # All responses are invalid JSON
@@ -58,11 +64,16 @@ class TestLLMSimulator:
             max_try=3,
         )
 
-        result = simulator(actual_inputs={"param": "test"})
+        # Should raise ToolSimulatorError after max_try attempts
+        with pytest.raises(ToolSimulatorError) as exc_info:
+            simulator(actual_inputs={"param": "test"})
 
-        # Should fail after max_try attempts
-        assert result is not None  # Returns error result
-        assert len(simulator.logs) == 3  # All 3 attempts logged
+        # Verify exception details
+        err = cast(ToolSimulatorError, exc_info.value)
+        assert err.attempts == 3
+        assert err.last_error is not None
+        assert len(err.logs) == 3  # All 3 attempts in exception logs
+        assert len(simulator.logs) == 3  # All 3 attempts logged in simulator
 
     def test_llm_simulator_max_attempts_respected(self, dummy_model):
         """Test that max_try limit is respected."""
@@ -78,10 +89,14 @@ class TestLLMSimulator:
             max_try=2,  # Only allow 2 attempts
         )
 
-        _ = simulator(actual_inputs={"param": "test"})
+        # Should raise after 2 attempts
+        with pytest.raises(ToolSimulatorError) as exc_info:
+            simulator(actual_inputs={"param": "test"})
 
         # Should stop after 2 attempts, not continue to 10
+        err = cast(ToolSimulatorError, exc_info.value)
         assert len(simulator.logs) == 2
+        assert err.attempts == 2
 
     def test_llm_simulator_history_structure(self, dummy_model):
         """Test that history entries have correct structure."""
@@ -152,3 +167,58 @@ class TestLLMSimulator:
         assert "failed_calls" in traces
         assert "logs" in traces
         assert traces["successful_calls"] == 1
+
+
+@pytest.mark.core
+class TestUserLLMSimulatorValidation:
+    """Tests for UserLLMSimulator early stopping validation."""
+
+    def test_stop_token_without_condition_raises(self, dummy_model):
+        """ValueError raised when stop_token set but early_stopping_condition is None."""
+        from maseval.core.simulator import UserLLMSimulator
+
+        with pytest.raises(ValueError, match="must both be set or both be None"):
+            UserLLMSimulator(
+                model=dummy_model,
+                user_profile={"name": "test"},
+                scenario="test scenario",
+                stop_token="</stop>",
+            )
+
+    def test_condition_without_stop_token_raises(self, dummy_model):
+        """ValueError raised when early_stopping_condition set but stop_token is None."""
+        from maseval.core.simulator import UserLLMSimulator
+
+        with pytest.raises(ValueError, match="must both be set or both be None"):
+            UserLLMSimulator(
+                model=dummy_model,
+                user_profile={"name": "test"},
+                scenario="test scenario",
+                early_stopping_condition="goals are met",
+            )
+
+    def test_both_none_is_valid(self, dummy_model):
+        """No error when both stop_token and early_stopping_condition are None."""
+        from maseval.core.simulator import UserLLMSimulator
+
+        simulator = UserLLMSimulator(
+            model=dummy_model,
+            user_profile={"name": "test"},
+            scenario="test scenario",
+        )
+        assert simulator.stop_token is None
+        assert simulator.early_stopping_condition is None
+
+    def test_both_set_is_valid(self, dummy_model):
+        """No error when both stop_token and early_stopping_condition are set."""
+        from maseval.core.simulator import UserLLMSimulator
+
+        simulator = UserLLMSimulator(
+            model=dummy_model,
+            user_profile={"name": "test"},
+            scenario="test scenario",
+            stop_token="</stop>",
+            early_stopping_condition="all goals accomplished",
+        )
+        assert simulator.stop_token == "</stop>"
+        assert simulator.early_stopping_condition == "all goals accomplished"

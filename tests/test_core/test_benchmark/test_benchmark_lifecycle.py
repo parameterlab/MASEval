@@ -61,8 +61,8 @@ class TestBenchmarkLifecycle:
         task_ids = [r["task_id"] for r in reports]
         assert len(set(task_ids)) == 3
 
-        # Verify queries match - call format is (agents, task, environment)
-        queries = [call[1].query for call in benchmark.run_agents_calls]
+        # Verify queries match - call format is (agents, task, environment, query)
+        queries = [call[3] for call in benchmark.run_agents_calls]
         assert queries == ["Task 1", "Task 2", "Task 3"]
 
     def test_benchmark_task_repetitions(self):
@@ -331,7 +331,9 @@ class TestFailureSafeExecution:
 
         assert len(reports) == 1
         report = reports[0]
-        assert report["status"] == TaskExecutionStatus.TASK_EXECUTION_FAILED.value
+        # RuntimeError from agent framework is classified as UNKNOWN_EXECUTION_ERROR
+        # (we can't determine if it's agent's fault or infrastructure failure)
+        assert report["status"] == TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR.value
         assert "error" in report
         assert report["error"]["error_type"] == "RuntimeError"
         assert "Agent execution failed!" in report["error"]["error_message"]
@@ -515,12 +517,13 @@ class TestFailureSafeExecution:
         assert len(failed_external) == 1
         assert [t.id for t in failed] == [t.id for t in failed_external]
 
-        # Get only task execution failures
-        exec_failed = benchmark.get_failed_tasks(TaskExecutionStatus.TASK_EXECUTION_FAILED)
+        # RuntimeError from agent framework is classified as UNKNOWN_EXECUTION_ERROR
+        # (we can't determine if it's agent's fault or infrastructure failure)
+        exec_failed = benchmark.get_failed_tasks(TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR)
         assert len(exec_failed) == 1
 
         # External reports version
-        exec_failed_external = benchmark.get_failed_tasks(TaskExecutionStatus.TASK_EXECUTION_FAILED, reports=reports)
+        exec_failed_external = benchmark.get_failed_tasks(TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR, reports=reports)
         assert len(exec_failed_external) == 1
 
         # No evaluation failures in this test
@@ -532,7 +535,7 @@ class TestFailureSafeExecution:
         reports_copy.append(
             {
                 "task_id": "fake-task",
-                "status": TaskExecutionStatus.TASK_EXECUTION_FAILED.value,
+                "status": TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR.value,
                 "error": "Fake error",
             }
         )

@@ -30,10 +30,10 @@ uv run pytest tests/
 
 ```bash
 # Format code
-ruff format .
+uv run ruff format .
 
 # Lint and auto-fix issues
-ruff check . --fix
+uv run ruff check . --fix
 ```
 
 ## Testing Instructions
@@ -45,14 +45,14 @@ ruff check . --fix
 
 ```bash
 # Run all tests
-pytest -v
+uv run pytest -v
 
 # Core tests only (minimal dependencies)
-pytest -m core -v
+uv run pytest -m core -v
 
 # Specific integration tests
-pytest -m smolagents -v
-pytest -m interface -v
+uv run pytest -m smolagents -v
+uv run pytest -m interface -v
 ```
 
 ## Dependency Management
@@ -209,7 +209,7 @@ Example workflow:
 uv sync --all-extras --all-groups
 
 # Before committing
-ruff format . && ruff check . --fix && pytest -v
+uv run ruff format . && uv run ruff check . --fix && uv run pytest -v
 
 # Run example
 uv run python examples/amazon_collab.py
@@ -221,7 +221,7 @@ uv sync --all-extras --all-groups
 uv add --optional <extra-name> <package-name>
 
 # Check specific test file
-pytest tests/test_core/test_agent.py -v
+uv run pytest tests/test_core/test_agent.py -v
 ```
 
 ## Type Hinting
@@ -239,4 +239,87 @@ For lists and dictionaries, use `Dict[...,...]`, `List[...]`, `Sequence[...]` et
 
 ## Changelog
 
-When the task is completed, add your changes to the Changelog.
+When you complete a task, document your changes in the Changelog. Multiple tasks contribute to a single PR, and PRs are compiled into release changelogs.
+
+### User-Facing Documentation
+
+Write changelog entries from the **user's perspective** - describe what the change means for someone using the library, not what you did internally. Focus on features, fixes, and improvements they'll notice or benefit from.
+
+### Task-Level Documentation
+
+Add an entry for your completed task under the `## Unreleased` section.
+
+### Important Rules
+
+- If you modified something already listed under "Added" in `Unreleased`, **update that existing entry** instead of adding a new one under "Changed"
+- Keep entries focused on user impact, not implementation details
+- Multiple task entries will be grouped together under the same PR
+- PR changelogs are then compiled into release notes between versions
+
+### Format
+
+Brief description of the user-facing change (PR: #PR_NUMBER_PLACEHOLDER)
+
+### Example (User-Facing)
+
+**Good:**
+
+- Added support for custom retry strategies in API client with argument `retry` for `Client.__init__`. (PR: #13)
+- Fixed timeout errors when processing large datasets in `func` (PR: #4)
+
+**Bad (not user-focused):**
+
+- Refactored retry logic into separate module
+- Updated error handling in data_processor.py
+
+## Docstrings
+
+Write docstrings for **users**, not about your implementation process.
+
+### Rules
+
+- Describe what the code does and how to use it
+- Explain parameters, return values, and behavior
+- Never write narratives: "I did...", "First we...", "Then I..."
+- Never include quality claims: "rigorously tested", "well-optimized"
+- Omit implementation details users don't need
+
+### Bad (narrative, claims, implementation details)
+
+```
+def calculate_average(numbers: list) -> float:
+    """
+    I implemented this to calculate averages. First I sum the numbers,
+    then divide by count. Rigorously tested and optimized.
+    """
+```
+
+### Good (clear, user-focused)
+
+```
+def calculate_average(numbers: list) -> float:
+    """
+    Calculate the arithmetic mean of numbers.
+
+    Args:
+        numbers: List of numeric values
+
+    Returns:
+        Average as float
+
+    Raises:
+        ValueError: If list is empty
+    """
+```
+
+## Early-Release Status
+
+**This project is early-release. Clean, maintainable code is the priority - not backwards compatibility.**
+
+- Break APIs if it improves design
+- Refactor poor implementations
+- Remove technical debt as soon as you identify it
+- Don't preserve bad patterns for compatibility reasons
+- Focus on getting it right, not keeping it the same
+
+We have zero obligation to maintain backwards compatibility. If you find code messy, propose a fix.

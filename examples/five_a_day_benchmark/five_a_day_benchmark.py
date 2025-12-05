@@ -26,7 +26,7 @@ from pathlib import Path
 
 from utils import derive_seed, sanitize_name  # type: ignore[unresolved-import]
 
-from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter
+from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter, ModelAdapter
 from maseval.core.callbacks.result_logger import FileResultLogger
 
 # Import tool implementations
@@ -159,15 +159,13 @@ class FiveADayEnvironment(Environment):
 
         return env_data
 
-    def create_tools(self) -> list:
+    def create_tools(self) -> Dict[str, Any]:
         """Create tool instances from environment_data and convert to framework-specific types.
 
-        The base Environment class stores tools in self._tools_dict for tracing.
-
         Returns:
-            List of framework-specific tool objects (smolagents Tool, LangChain StructuredTool, etc.)
+            Dict mapping tool names to framework-specific tool objects
         """
-        tools_list = []
+        tools_dict: Dict[str, Any] = {}
 
         # Map tool names to tool collection classes and their initialization data
         tool_mapping = {
@@ -199,9 +197,11 @@ class FiveADayEnvironment(Environment):
                 # Convert each base tool to framework-specific tool
                 for base_tool in base_tools:
                     framework_tool = self._convert_tool(base_tool)
-                    tools_list.append(framework_tool)
+                    # Use the base tool's name as the key
+                    tool_key = getattr(base_tool, "name", None) or str(type(base_tool).__name__)
+                    tools_dict[tool_key] = framework_tool
 
-        return tools_list
+        return tools_dict
 
     def _convert_tool(self, base_tool):
         """Convert BaseTool to framework-specific tool adapter.
@@ -233,21 +233,21 @@ class FiveADayEnvironment(Environment):
 def build_smolagents_single_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build a single smolagents agent.
 
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
 
     Returns:
-        SmolAgentAdapter wrapping the created agent
+        Tuple of (primary_adapter, all_adapters_dict) for consistent interface
     """
     from smolagents import ToolCallingAgent
     from maseval.interface.agents.smolagents import SmolAgentAdapter
@@ -255,7 +255,7 @@ def build_smolagents_single_agent(
     seed = primary_spec.get("seed")
     model = get_model(model_id, "smolagents", temperature, seed)
     tool_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    tools = [adapter.tool for adapter in tool_adapters]
+    tools = [adapter.tool for adapter in tool_adapters.values()]
     sanitized_name = sanitize_name(primary_spec["agent_name"])
 
     agent = ToolCallingAgent(
@@ -263,30 +263,31 @@ def build_smolagents_single_agent(
         tools=tools,
         name=sanitized_name,
         instructions=primary_spec["agent_instruction"],
-        verbosity_level=2,
+        verbosity_level=0,
     )
 
-    return SmolAgentAdapter(agent, primary_spec["agent_id"])
+    adapter = SmolAgentAdapter(agent, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def build_langgraph_single_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build a single langgraph agent.
 
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
 
     Returns:
-        LangGraphAgentAdapter wrapping the created graph
+        Tuple of (primary_adapter, all_adapters_dict) for consistent interface
     """
     from langchain_core.messages import SystemMessage
     from langgraph.graph import StateGraph, END
@@ -298,7 +299,7 @@ def build_langgraph_single_agent(
     seed = primary_spec.get("seed")
     model = get_model(model_id, "langgraph", temperature, seed)
     tool_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    tools = [adapter.tool for adapter in tool_adapters]
+    tools = [adapter.tool for adapter in tool_adapters.values()]
 
     class AgentState(TypedDict):
         messages: Annotated[List[Any], add_messages]
@@ -323,27 +324,28 @@ def build_langgraph_single_agent(
     workflow.add_edge("tools", "agent")
 
     graph = workflow.compile()
-    return LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+    adapter = LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def build_llamaindex_single_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build a single llamaindex agent.
 
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: Empty list for single-agent (ignored)
 
     Returns:
-        LlamaIndexAgentAdapter wrapping the created agent
+        Tuple of (primary_adapter, all_adapters_dict) for consistent interface
     """
     from llama_index.core.agent.workflow.react_agent import ReActAgent
     from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
@@ -351,7 +353,7 @@ def build_llamaindex_single_agent(
     seed = primary_spec.get("seed")
     model = get_model(model_id, "llamaindex", temperature, seed)
     tool_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    tools = [adapter.tool for adapter in tool_adapters]
+    tools = [adapter.tool for adapter in tool_adapters.values()]
 
     agent = ReActAgent(
         tools=tools,
@@ -361,37 +363,41 @@ def build_llamaindex_single_agent(
         system_prompt=primary_spec.get("agent_instruction"),
     )
 
-    return LlamaIndexAgentAdapter(agent, primary_spec["agent_id"])
+    adapter = LlamaIndexAgentAdapter(agent, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def build_smolagents_multi_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build smolagents multi-agent setup with orchestrator and specialists.
 
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: List of specialist agent specifications
 
     Returns:
-        SmolAgentAdapter wrapping the orchestrator agent
+        Tuple of (primary_adapter, all_adapters_dict) where all_adapters_dict
+        includes the orchestrator and all specialists for trace registration.
     """
     from smolagents import ToolCallingAgent, FinalAnswerTool
     from maseval.interface.agents.smolagents import SmolAgentAdapter
 
     specialist_agents = []
+    specialist_adapters_dict: Dict[str, Any] = {}
+
     for agent_spec in specialist_specs:
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "smolagents", temperature, specialist_seed)
         specialist_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, agent_spec["tools"])
-        specialist_tools = [adapter.tool for adapter in specialist_adapters]
+        specialist_tools = [adapter.tool for adapter in specialist_adapters.values()]
         specialist_tools.append(FinalAnswerTool())
         sanitized_name = sanitize_name(agent_spec["agent_name"])
 
@@ -401,12 +407,14 @@ def build_smolagents_multi_agent(
             name=sanitized_name,
             description=agent_spec["agent_instruction"],
             instructions=agent_spec["agent_instruction"],
-            verbosity_level=2,
+            verbosity_level=0,
         )
         specialist_agents.append(specialist)
+        # Create adapter for each specialist for trace registration
+        specialist_adapters_dict[agent_spec["agent_id"]] = SmolAgentAdapter(specialist, agent_spec["agent_id"])
 
     primary_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    primary_tools = [adapter.tool for adapter in primary_adapters]
+    primary_tools = [adapter.tool for adapter in primary_adapters.values()]
     primary_tools.append(FinalAnswerTool())
     sanitized_primary_name = sanitize_name(primary_spec["agent_name"])
     primary_seed = primary_spec.get("seed")
@@ -418,30 +426,35 @@ def build_smolagents_multi_agent(
         managed_agents=specialist_agents if specialist_agents else None,
         name=sanitized_primary_name,
         instructions=primary_spec["agent_instruction"],
-        verbosity_level=2,
+        verbosity_level=0,
     )
 
-    return SmolAgentAdapter(agent, primary_spec["agent_id"])
+    primary_adapter = SmolAgentAdapter(agent, primary_spec["agent_id"])
+
+    # Return primary adapter and dict of all adapters (including primary) for trace registration
+    all_adapters = {primary_spec["agent_id"]: primary_adapter, **specialist_adapters_dict}
+    return primary_adapter, all_adapters
 
 
 def build_langgraph_multi_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build langgraph multi-agent setup with orchestrator and specialists.
 
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: List of specialist agent specifications
 
     Returns:
-        LangGraphAgentAdapter wrapping the multi-agent graph
+        Tuple of (primary_adapter, all_adapters_dict). Note: LangGraph multi-agent
+        compiles specialists into graph nodes, so only the graph is traceable.
     """
     from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
     from langchain_core.tools import tool as create_tool
@@ -462,7 +475,7 @@ def build_langgraph_multi_agent(
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "langgraph", temperature, specialist_seed)
         specialist_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, agent_spec["tools"])
-        specialist_tools = [adapter.tool for adapter in specialist_adapters]
+        specialist_tools = [adapter.tool for adapter in specialist_adapters.values()]
 
         def make_specialist_node(spec_instruction, spec_tools, spec_model):
             def specialist_node(state: MultiAgentState):
@@ -578,27 +591,29 @@ def build_langgraph_multi_agent(
         workflow.add_edge(agent_id, "orchestrator")
 
     graph = workflow.compile()
-    return LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+    adapter = LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def build_llamaindex_multi_agent(
     model_id: str,
     temperature: float,
-    all_tool_adapters: List[Any],
+    all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build llamaindex multi-agent setup with orchestrator and specialists.
 
     Args:
         model_id: Model identifier
         temperature: Model temperature
-        all_tool_adapters: All available tool adapters
+        all_tool_adapters: All available tool adapters (dict keyed by name)
         primary_spec: Primary agent specification
         specialist_specs: List of specialist agent specifications
 
     Returns:
-        LlamaIndexAgentAdapter wrapping the orchestrator agent
+        Tuple of (primary_adapter, all_adapters_dict). Note: LlamaIndex multi-agent
+        uses handoff tools, so only the orchestrator is directly traceable.
     """
     from llama_index.core.agent.workflow.react_agent import ReActAgent
     from llama_index.core.tools import FunctionTool
@@ -613,7 +628,7 @@ def build_llamaindex_multi_agent(
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "llamaindex", temperature, specialist_seed)
         specialist_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, agent_spec["tools"])
-        specialist_tools = [adapter.tool for adapter in specialist_adapters]
+        specialist_tools = [adapter.tool for adapter in specialist_adapters.values()]
 
         specialist_agent = ReActAgent(
             tools=specialist_tools,
@@ -652,7 +667,7 @@ def build_llamaindex_multi_agent(
 
     orchestrator_tools = [make_handoff_tool(spec_id, spec_info) for spec_id, spec_info in specialist_agents_dict.items()]
     primary_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
-    primary_tools = [adapter.tool for adapter in primary_adapters]
+    primary_tools = [adapter.tool for adapter in primary_adapters.values()]
     orchestrator_tools.extend(primary_tools)
 
     primary_seed = primary_spec.get("seed")
@@ -666,7 +681,8 @@ def build_llamaindex_multi_agent(
         system_prompt=primary_spec.get("agent_instruction"),
     )
 
-    return LlamaIndexAgentAdapter(orchestrator, primary_spec["agent_id"])
+    adapter = LlamaIndexAgentAdapter(orchestrator, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def get_agent_builder(framework: str, agent_type: str):
@@ -715,8 +731,7 @@ class FiveADayBenchmark(Benchmark):
         environment = FiveADayEnvironment(task_data, framework)
 
         # Register all tools with the benchmark for tracing
-        for tool_adapter in environment.get_tools():
-            tool_name = getattr(tool_adapter, "name", None) or str(type(tool_adapter).__name__)
+        for tool_name, tool_adapter in environment.get_tools().items():
             self.register("tools", tool_name, tool_adapter)
 
         return environment
@@ -724,7 +739,13 @@ class FiveADayBenchmark(Benchmark):
     def setup_agents(
         self, agent_data: Dict[str, Any], environment: Environment, task: Task, user=None
     ) -> tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
-        """Create framework-specific agent with tools from environment."""
+        """Create framework-specific agent with tools from environment.
+
+        Returns:
+            Tuple of (agents_to_run, agents_dict):
+            - agents_to_run: List of adapters for agents that should be executed
+            - agents_dict: Dict of all adapters for trace registration (includes specialists)
+        """
         framework = agent_data["framework"]
         agent_type = agent_data["agent_type"]
         model_id = agent_data["model_config"]["model_id"]
@@ -737,15 +758,12 @@ class FiveADayBenchmark(Benchmark):
         primary_spec = next(a for a in agents_specs if a["agent_id"] == primary_agent_id)
         specialist_specs = [a for a in agents_specs if a["agent_id"] != primary_agent_id]
 
-        # Build agent using unified interface
+        # Build agent using unified interface - now returns (primary_adapter, all_adapters_dict)
         builder = get_agent_builder(framework, agent_type)
-        agent_adapter = builder(model_id, temperature, all_tool_adapters, primary_spec, specialist_specs)
+        primary_adapter, all_adapters_dict = builder(model_id, temperature, all_tool_adapters, primary_spec, specialist_specs)
 
-        # Use .visualize() when smolagents # TODO remove
-        if framework == "smolagents":
-            agent_adapter.agent.visualize()
-
-        return [agent_adapter], {primary_agent_id: agent_adapter}
+        # Return primary adapter to run, and all adapters for trace registration
+        return [primary_adapter], all_adapters_dict
 
     def setup_evaluators(self, environment, task, agents, user) -> Sequence[Evaluator]:
         """Create evaluators based on task's evaluation_data.evaluators list."""
@@ -763,10 +781,18 @@ class FiveADayBenchmark(Benchmark):
 
         return evaluator_instances
 
-    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment) -> Sequence[Any]:
+    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment, query: str) -> Sequence[Any]:
         """Execute agents and return their final answers."""
-        answers = [agent.run(task.query) for agent in agents]
+        answers = [agent.run(query) for agent in agents]
         return answers
+
+    def get_model_adapter(self, model_id: str, **kwargs) -> ModelAdapter:
+        """Return a model adapter for benchmark components that need LLM access.
+
+        This benchmark doesn't use simulated tools, user simulators, or LLM judges,
+        so this method is not called during execution.
+        """
+        raise NotImplementedError("This benchmark doesn't use model adapters for tools/users/evaluators.")
 
     def evaluate(
         self,

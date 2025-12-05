@@ -70,7 +70,7 @@
   {
     "query": "I want to split my Apple stock equally among my children. Can you look up the current stock price and tell me how much each child would get if I give them equal shares?",
     "environment_data": {
-      "tools": ["websearch", "family_info", "calculator", "banking"],
+      "tools": ["stock_price", "family_info", "calculator", "banking"],
       "family_info": {
         "children": [
           { "name": "Emma", "age": 16 },
@@ -102,15 +102,10 @@
       ]
     },
     "metadata": {
-      "description": "Tests multi-step reasoning with web search, data retrieval, and mathematical computation. Agent must look up stock price, retrieve family information, and calculate per-child inheritance value.",
-      "tools_required": ["websearch", "family_info", "calculator", "banking"],
+      "description": "Tests multi-step reasoning with stock price lookup, data retrieval, and mathematical computation. Agent must look up stock price, retrieve family information, and calculate per-child inheritance value.",
+      "tools_required": ["stock_price", "family_info", "calculator", "banking"],
       "complexity": "medium",
-      "skills_tested": [
-        "web_search",
-        "data_retrieval",
-        "arithmetic",
-        "multi_step_reasoning"
-      ],
+      "skills_tested": ["data_retrieval", "arithmetic", "multi_step_reasoning"],
       "task_id": "finance_calculation"
     }
   },

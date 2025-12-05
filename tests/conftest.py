@@ -130,49 +130,55 @@ class DummyEnvironment(Environment):
     def setup_state(self, task_data: dict) -> Any:
         return task_data.copy()
 
-    def create_tools(self) -> list:
-        return []
+    def create_tools(self) -> dict:
+        return {}
 
 
 class DummyUser(User):
-    """Minimal user simulator for testing."""
+    """Minimal user simulator for testing.
+
+    Properly inherits from User base class, allowing tests to verify base class
+    behavior. The simulator is replaced with a mock to avoid LLM calls.
+
+    Supports all base class features:
+    - max_turns / stop_token for multi-turn interaction
+    - is_done() / simulate_response() / get_initial_query()
+    - messages (MessageHistory) for conversation tracking
+    """
 
     def __init__(self, name: str, model: ModelAdapter, **kwargs):
-        # Initialize with minimal requirements
-        self.name = name
-        self.model = model
-        self.user_profile = kwargs.get("user_profile", {})
-        self.scenario = kwargs.get("scenario", "test scenario")
-        self.history = MessageHistory([{"role": "user", "content": kwargs.get("initial_prompt", "Hello")}])
-        # Don't initialize simulator to avoid LLM calls in tests
+        """Initialize DummyUser with proper base class inheritance.
+
+        Args:
+            name: User name
+            model: ModelAdapter instance
+            **kwargs: Forwarded to User base class:
+                - user_profile: Dict of user attributes
+                - scenario: Scenario description
+                - initial_query: Optional initial message
+                - max_turns: Max interaction turns (default: 1)
+                - stop_token: Early termination token (default: None)
+                - early_stopping_condition: Description of when to stop (default: None)
+        """
+        super().__init__(
+            name=name,
+            model=model,
+            user_profile=kwargs.get("user_profile", {}),
+            scenario=kwargs.get("scenario", "test scenario"),
+            initial_query=kwargs.get("initial_query"),
+            max_turns=kwargs.get("max_turns", 1),
+            stop_token=kwargs.get("stop_token"),
+            early_stopping_condition=kwargs.get("early_stopping_condition"),
+        )
+        # Replace simulator with a mock to avoid LLM calls
+        # Tests can set simulator.return_value or side_effect as needed
+        from unittest.mock import MagicMock
+
+        self.simulator = MagicMock(return_value="Mock user response")
 
     def get_tool(self) -> Any:
         """Return a dummy tool for testing."""
         return None
-
-    def gather_traces(self) -> dict:
-        """Return minimal traces for testing."""
-        from datetime import datetime
-
-        return {
-            "type": self.__class__.__name__,
-            "gathered_at": datetime.now().isoformat(),
-            "name": self.name,
-            "message_count": len(self.history),
-            "history": self.history.to_list(),
-        }
-
-    def gather_config(self) -> dict:
-        """Return minimal config for testing."""
-        from datetime import datetime
-
-        return {
-            "type": self.__class__.__name__,
-            "gathered_at": datetime.now().isoformat(),
-            "name": self.name,
-            "user_profile": self.user_profile,
-            "scenario": self.scenario,
-        }
 
 
 class DummyEvaluator(Evaluator):
@@ -204,6 +210,10 @@ class DummyBenchmark(Benchmark):
         self.run_agents_calls = []
         self.evaluate_calls = []
 
+    def get_model_adapter(self, model_id: str, **kwargs):
+        """Create a dummy model adapter for testing."""
+        return DummyModelAdapter(model_id=model_id)
+
     def setup_environment(self, agent_data: Dict[str, Any], task: Task) -> Environment:
         self.setup_environment_calls.append((agent_data, task))
         return DummyEnvironment(task.environment_data)
@@ -226,10 +236,10 @@ class DummyBenchmark(Benchmark):
         self.setup_evaluators_calls.append((environment, task, agents, user))
         return [DummyEvaluator(task, environment, user)]
 
-    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment) -> Any:
-        self.run_agents_calls.append((agents, task, environment))
+    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment, query: str) -> Any:
+        self.run_agents_calls.append((agents, task, environment, query))
         # Run the first agent and return final answer
-        return agents[0].run(task.query)
+        return agents[0].run(query)
 
     def evaluate(
         self, evaluators: Sequence[Evaluator], agents: Dict[str, AgentAdapter], final_answer: Any, traces: Dict[str, Any]
@@ -273,13 +283,14 @@ def dummy_environment():
 
 @pytest.fixture
 def dummy_user(dummy_model):
-    """Create a dummy user."""
+    """Create a dummy user with an initial query."""
     return DummyUser(
         name="test_user",
         model=dummy_model,
         user_profile={"role": "tester"},
         scenario="test scenario",
-        initial_prompt="Hello",
+        initial_query="Hello",
+        max_turns=2,  # Allow at least one simulate_response after initial query
     )
 
 

@@ -29,9 +29,30 @@ jobs:
         run: |
           uv run pytest -m core -v
 
+  test-benchmark:
+    name: Benchmark Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv sync --group dev
+      - name: Run benchmark tests
+        run: |
+          uv run pytest -m benchmark -v
+
   test-all:
     name: All Tests (With Optional Deps)
-    needs: test-core
+    needs: [test-core, test-benchmark]
     runs-on: ubuntu-latest
     strategy:
       matrix:

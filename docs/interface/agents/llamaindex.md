@@ -2,8 +2,8 @@
 
 Adapter implementing commonly used functions for `LlamaIndex`'s workflow-based agent system.
 
-- [Documentation](https://docs.llamaindex.ai/)
-- [Code Repository](https://developers.llamaindex.ai/python/framework/)
+- [Documentation](https://developers.llamaindex.ai/python/framework/)
+- [Code Repository](https://github.com/run-llama/llama_index/)
 
 ## Installation
 

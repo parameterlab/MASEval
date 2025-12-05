@@ -34,6 +34,7 @@ theme:
   features:
     - navigation.sections
     - content.code.copy
+    - navigation.indexes
 
 extra_css:
   - css/mkdocstrings.css
@@ -80,23 +81,27 @@ plugins:
               show_private: false
 
 nav:
+  - Home: index.md
   - Getting Started:
-      - Home: index.md
       - Quickstart: getting-started/quickstart.md
       - FAQ: getting-started/faq.md
   - Guides:
+      - guides/index.md
       - Message Tracing: guides/message-tracing.md
+      - Exception Handling: guides/exception-handling.md
   - Examples:
-      - Example 1: examples/tutorial.ipynb
-      - Example 2: examples/five_a_day_benchmark.ipynb
-      # - AWS Collaboration Benchmark: examples/amazon_collab.ipynb
+      - examples/index.md
+      - Tiny Tutorial: examples/tutorial.ipynb
+      - 5-A-Day Benchmark: examples/five_a_day_benchmark.ipynb
   - Reference:
+      - reference/index.md
       - Core:
           - Agent: reference/agent.md
           - Benchmark: reference/benchmark.md
           - Callback: reference/callback.md
           - Environment: reference/environment.md
           - Evaluator: reference/evaluator.md
+          - Exceptions: reference/exceptions.md
           - History: reference/history.md
           - Model: reference/model.md
           - Simulator: reference/simulator.md
@@ -113,6 +118,5 @@ nav:
               - HuggingFace: interface/inference/huggingface.md
               - LiteLLM: interface/inference/litellm.md
               - OpenAI: interface/inference/openai.md
-      # - Benchmarks:
-      # - GAIA: benchmarks/gaia.md
-      # - AgentBench: benchmarks/agentbench.md
+      - Benchmarks:
+          - MACS: benchmark/macs.md
