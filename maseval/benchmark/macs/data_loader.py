@@ -546,20 +546,29 @@ def configure_model_ids(
     """
     for task in tasks:
         # Environment data: tool model ID
-        if "model_id" in task.environment_data and (not task.environment_data["model_id"] == tool_model_id):
-            raise ValueError(
-                f"Task {task.metadata.get('task_id', '')} already has tool `model_id` set to '{task.environment_data['model_id']}', cannot override with '{tool_model_id}'"
-            )
+        if tool_model_id is not None:
+            if "model_id" in task.environment_data and task.environment_data["model_id"] != tool_model_id:
+                raise ValueError(
+                    f"Task {task.metadata.get('task_id', '')} already has tool `model_id` set to '{task.environment_data['model_id']}', cannot override with '{tool_model_id}'"
+                )
+            task.environment_data["model_id"] = tool_model_id
+
         # User data: user model ID
-        if "model_id" in task.user_data and (not task.user_data["model_id"] == user_model_id):
-            raise ValueError(
-                f"Task {task.metadata.get('task_id', '')} already has user `model_id` set to '{task.user_data['model_id']}', cannot override with '{user_model_id}'"
-            )
+        if user_model_id is not None:
+            if "model_id" in task.user_data and task.user_data["model_id"] != user_model_id:
+                raise ValueError(
+                    f"Task {task.metadata.get('task_id', '')} already has user `model_id` set to '{task.user_data['model_id']}', cannot override with '{user_model_id}'"
+                )
+            task.user_data["model_id"] = user_model_id
+
         # Evaluation data: evaluator model ID
-        if "model_id" in task.evaluation_data and (not task.evaluation_data["model_id"] == evaluator_model_id):
-            raise ValueError(
-                f"Task {task.metadata.get('task_id', '')} already has evaluator `model_id` set to '{task.evaluation_data['model_id']}', cannot override with '{evaluator_model_id}'"
-            )
+        if evaluator_model_id is not None:
+            if "model_id" in task.evaluation_data and task.evaluation_data["model_id"] != evaluator_model_id:
+                raise ValueError(
+                    f"Task {task.metadata.get('task_id', '')} already has evaluator `model_id` set to '{task.evaluation_data['model_id']}', cannot override with '{evaluator_model_id}'"
+                )
+            task.evaluation_data["model_id"] = evaluator_model_id
+
     return tasks
 
 

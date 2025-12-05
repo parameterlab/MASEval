@@ -30,16 +30,14 @@ Usage:
 import argparse
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 # Third-party imports (both frameworks will be installed)
 from google.genai import Client as GoogleGenAIClient
 
 # smolagents imports
 from smolagents import ToolCallingAgent, OpenAIServerModel, FinalAnswerTool
-
-if TYPE_CHECKING:
-    from smolagents import Tool as SmolagentsTool
+from smolagents import Tool as SmolagentsTool
 
 # langgraph imports
 from langchain_core.tools import StructuredTool
@@ -197,7 +195,7 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
             name="Simulated User",
             model=user_model,
             scenario=scenario,
-            initial_prompt=task.query,
+            initial_query=task.query,
         )
 
         # Register the user's simulator for tracing
@@ -234,13 +232,13 @@ class SmolagentsMACSBenchmark(MACSBenchmark):
 
         # Wrap all generic tools for smolagents and register them for tracing
         # Each tool has its own model from MACSEnvironment.create_tools()
+        # Models are already registered by the environment via get_model_adapter()
         tool_wrappers: Dict[str, SmolagentsToolWrapper] = {}
         for name, tool in environment.tools.items():
             wrapper = SmolagentsToolWrapper(tool)
             tool_wrappers[name] = wrapper
             self.register("tools", name, wrapper)
-            # Register the tool's model and simulator for tracing
-            self.register("models", f"model_tool_{name}", tool.model)
+            # Register the tool's simulator for tracing
             self.register("simulators", f"simulator_tool_{name}", tool.simulator)
 
         # Helper to get tools for an agent
