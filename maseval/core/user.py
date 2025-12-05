@@ -115,7 +115,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         self.model = model
         self.user_profile = user_profile
         self.scenario = scenario
-        
+
         self.simulator = UserLLMSimulator(
             model=self.model,
             user_profile=self.user_profile,

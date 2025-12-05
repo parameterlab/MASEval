@@ -88,6 +88,7 @@ class TestMACSUserInit:
         assert user.early_stopping_condition == MACSUser.DEFAULT_EARLY_STOPPING_CONDITION
         # Simulator should have the same config
         assert user.simulator.stop_token == "</stop>"
+        assert user.simulator.early_stopping_condition is not None
         assert "goals have been satisfactorily addressed" in user.simulator.early_stopping_condition
 
 
