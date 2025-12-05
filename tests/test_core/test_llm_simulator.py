@@ -3,8 +3,14 @@
 These tests verify that LLMSimulator retry logic and tracing work correctly.
 """
 
+from typing import cast
+
 import pytest
-from maseval.core.simulator import ToolLLMSimulator, SimulatorCallStatus, SimulatorError
+from maseval.core.simulator import (
+    ToolLLMSimulator,
+    SimulatorCallStatus,
+    ToolSimulatorError,
+)
 
 
 @pytest.mark.core
@@ -58,14 +64,15 @@ class TestLLMSimulator:
             max_try=3,
         )
 
-        # Should raise SimulatorError after max_try attempts
-        with pytest.raises(SimulatorError) as exc_info:
+        # Should raise ToolSimulatorError after max_try attempts
+        with pytest.raises(ToolSimulatorError) as exc_info:
             simulator(actual_inputs={"param": "test"})
 
         # Verify exception details
-        assert exc_info.value.attempts == 3
-        assert exc_info.value.last_error is not None
-        assert len(exc_info.value.logs) == 3  # All 3 attempts in exception logs
+        err = cast(ToolSimulatorError, exc_info.value)
+        assert err.attempts == 3
+        assert err.last_error is not None
+        assert len(err.logs) == 3  # All 3 attempts in exception logs
         assert len(simulator.logs) == 3  # All 3 attempts logged in simulator
 
     def test_llm_simulator_max_attempts_respected(self, dummy_model):
@@ -83,12 +90,13 @@ class TestLLMSimulator:
         )
 
         # Should raise after 2 attempts
-        with pytest.raises(SimulatorError) as exc_info:
+        with pytest.raises(ToolSimulatorError) as exc_info:
             simulator(actual_inputs={"param": "test"})
 
         # Should stop after 2 attempts, not continue to 10
+        err = cast(ToolSimulatorError, exc_info.value)
         assert len(simulator.logs) == 2
-        assert exc_info.value.attempts == 2
+        assert err.attempts == 2
 
     def test_llm_simulator_history_structure(self, dummy_model):
         """Test that history entries have correct structure."""

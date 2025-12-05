@@ -88,6 +88,7 @@ nav:
   - Guides:
       - guides/index.md
       - Message Tracing: guides/message-tracing.md
+      - Exception Handling: guides/exception-handling.md
   - Examples:
       - examples/index.md
       - Tiny Tutorial: examples/tutorial.ipynb
@@ -100,6 +101,7 @@ nav:
           - Callback: reference/callback.md
           - Environment: reference/environment.md
           - Evaluator: reference/evaluator.md
+          - Exceptions: reference/exceptions.md
           - History: reference/history.md
           - Model: reference/model.md
           - Simulator: reference/simulator.md

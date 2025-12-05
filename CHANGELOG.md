@@ -14,7 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `AgentError`, `EnvironmentError`, `UserError` exception hierarchy in `maseval.core.exceptions` for classifying execution failures by responsibility (PR: #13)
 - Added `TaskExecutionStatus.AGENT_ERROR`, `ENVIRONMENT_ERROR`, `USER_ERROR`, `UNKNOWN_EXECUTION_ERROR` for fine-grained error classification enabling fair scoring (PR: #13)
 - Added validation helpers: `validate_argument_type()`, `validate_required_arguments()`, `validate_no_extra_arguments()`, `validate_arguments_from_schema()` for tool implementers (PR: #13)
-- Added `ToolSimulatorError` and `UserSimulatorError` exception subclasses that inherit from both `SimulatorError` and the appropriate MASEval error type (PR: #13)
+- Added `ToolSimulatorError` and `UserSimulatorError` exception subclasses for simulator-specific context while inheriting proper classification (PR: #13)
+
+**Documentation**
+
+- Added Exception Handling guide explaining error classification, fair scoring, and rerunning failed tasks (PR: #13)
 
 **Benchmarks**
 
