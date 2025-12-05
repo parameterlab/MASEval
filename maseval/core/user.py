@@ -5,8 +5,18 @@ from .config import ConfigurableMixin
 from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 from datetime import datetime
+from enum import Enum
 import time
 from .history import MessageHistory
+
+
+class TerminationReason(Enum):
+    """Reason why user interaction terminated."""
+
+    NOT_TERMINATED = "not_terminated"
+    MAX_TURNS = "max_turns"
+    USER_TERMINATED = "user_terminated"  # stop token detected
+    MAX_TURNS_AND_USER_TERMINATED = "max_turns_and_user_terminated"  # both conditions met
 
 
 class User(ABC, TraceableMixin, ConfigurableMixin):
@@ -239,18 +249,39 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
             "message_count": len(self.messages),
             "messages": self.messages.to_list(),
             "logs": self.logs,
+            "termination_reason": self.termination_reason.value,
         }
 
     @staticmethod
     def _summarize_response(response: str) -> str:
         return response[:2000]
 
+    @property
+    def termination_reason(self) -> TerminationReason:
+        """Get the reason why the user interaction terminated.
+
+        Returns:
+            TerminationReason indicating why is_done() returns True,
+            or NOT_TERMINATED if the interaction is still ongoing.
+        """
+        max_turns_reached = self._turn_count >= self.max_turns
+        user_terminated = self._stopped
+
+        if max_turns_reached and user_terminated:
+            return TerminationReason.MAX_TURNS_AND_USER_TERMINATED
+        elif max_turns_reached:
+            return TerminationReason.MAX_TURNS
+        elif user_terminated:
+            return TerminationReason.USER_TERMINATED
+        else:
+            return TerminationReason.NOT_TERMINATED
+
     def is_done(self) -> bool:
         """Check if the user interaction should end.
 
         The base implementation checks:
         1. If max_turns has been reached
-        2. If the user previously indicated satisfaction (via stop_token)
+        2. If the user previously indicated termination (via stop_token)
 
         Subclasses can override to add custom termination logic (e.g., LLM-based
         satisfaction checks) by calling super().is_done() first.
@@ -258,15 +289,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         Returns:
             True if the user is done interacting, False to continue.
         """
-        # Hard limit on turns
-        if self._turn_count >= self.max_turns:
-            return True
-
-        # User previously indicated they're done
-        if self._stopped:
-            return True
-
-        return False
+        return self.termination_reason != TerminationReason.NOT_TERMINATED
 
     def _check_stop_token(self, response: str) -> tuple[bool, str]:
         """Check if response contains stop token and clean it up.

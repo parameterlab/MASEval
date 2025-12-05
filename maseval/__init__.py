@@ -17,7 +17,7 @@ from .core.callback import BenchmarkCallback, EnvironmentCallback, AgentCallback
 from .core.callbacks import MessageTracingAgentCallback
 from .core.simulator import ToolLLMSimulator, UserLLMSimulator
 from .core.model import ModelAdapter
-from .core.user import User
+from .core.user import User, TerminationReason
 from .core.evaluator import Evaluator
 from .core.history import MessageHistory, ToolInvocationHistory
 from .core.tracing import TraceableMixin
@@ -37,6 +37,7 @@ __all__ = [
     "ToolLLMSimulator",
     "UserLLMSimulator",
     "User",
+    "TerminationReason",
     "MessageHistory",
     "Evaluator",
     "ToolInvocationHistory",
