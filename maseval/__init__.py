@@ -8,7 +8,7 @@ Interfaces sit in the `maseval.interface` submodule.
 Benchmarks sit in the `maseval.benchmark` submodule.
 """
 
-from .core.task import Task, TaskCollection
+from .core.task import Task, TaskCollection, TaskProtocol, TimeoutAction
 from .core.environment import Environment
 from .core.agent import AgentAdapter
 from .core.benchmark import Benchmark, TaskExecutionStatus
@@ -27,11 +27,15 @@ from .core.user import User, TerminationReason
 from .core.evaluator import Evaluator
 from .core.history import MessageHistory, ToolInvocationHistory
 from .core.tracing import TraceableMixin
+from .core.registry import ComponentRegistry
+from .core.context import TaskContext
+from .core.queue import TaskQueue, SequentialQueue, PriorityQueue, AdaptiveQueue
 from .core.exceptions import (
     MASEvalError,
     AgentError,
     EnvironmentError,
     UserError,
+    TaskTimeoutError,
     validate_argument_type,
     validate_required_arguments,
     validate_no_extra_arguments,
@@ -42,6 +46,8 @@ __all__ = [
     # Tasks
     "Task",
     "TaskCollection",
+    "TaskProtocol",
+    "TimeoutAction",
     # Core abstractions
     "Environment",
     "AgentAdapter",
@@ -69,11 +75,20 @@ __all__ = [
     "ToolInvocationHistory",
     "ModelAdapter",
     "TraceableMixin",
+    # Registry and execution context
+    "ComponentRegistry",
+    "TaskContext",
+    # Task queues
+    "TaskQueue",
+    "SequentialQueue",
+    "PriorityQueue",
+    "AdaptiveQueue",
     # Exceptions and validation
     "MASEvalError",
     "AgentError",
     "EnvironmentError",
     "UserError",
+    "TaskTimeoutError",
     "validate_argument_type",
     "validate_required_arguments",
     "validate_no_extra_arguments",

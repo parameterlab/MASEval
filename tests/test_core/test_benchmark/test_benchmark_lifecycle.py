@@ -171,7 +171,7 @@ class TestBenchmarkLifecycle:
                 # At start of new repeat, registry should be empty (except for callbacks)
                 if repeat_idx > 0:
                     # After first repeat, registry should have been cleared
-                    registry_sizes.append(len(benchmark._trace_registry))
+                    registry_sizes.append(len(benchmark._registry._trace_registry))
 
         benchmark = DummyBenchmark(
             agent_data={"model": "test"},
@@ -191,14 +191,14 @@ class TestBenchmarkLifecycle:
         benchmark = DummyBenchmark(agent_data={"model": "test"}, n_task_repeats=1)
 
         # Before run, registry should be empty
-        assert len(benchmark._trace_registry) == 0
-        assert len(benchmark._config_registry) == 0
+        assert len(benchmark._registry._trace_registry) == 0
+        assert len(benchmark._registry._config_registry) == 0
 
         benchmark.run(tasks)
 
         # After run completes, registry should be cleared
-        assert len(benchmark._trace_registry) == 0
-        assert len(benchmark._config_registry) == 0
+        assert len(benchmark._registry._trace_registry) == 0
+        assert len(benchmark._registry._config_registry) == 0
 
     def test_benchmark_reports_structure(self):
         """Test that benchmark reports have the correct structure."""

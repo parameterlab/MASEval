@@ -216,6 +216,70 @@ class UserError(MASEvalError):
     pass
 
 
+class TaskTimeoutError(MASEvalError):
+    """Task execution exceeded configured timeout.
+
+    This is classified as TASK_TIMEOUT in benchmark results, separate from
+    other error types. Timeout is neither agent's fault nor infrastructure's
+    fault—it's a resource constraint.
+
+    When to raise:
+        - Task execution time exceeds TaskProtocol.timeout_seconds
+        - Cooperative timeout check detects deadline has passed
+        - Hard timeout backstop triggers
+
+    Attributes:
+        elapsed: Time elapsed before timeout was detected.
+        timeout: The configured timeout value in seconds.
+        partial_traces: Any traces collected before timeout occurred.
+
+    Examples:
+        ```python
+        # Cooperative timeout at checkpoint
+        raise TaskTimeoutError(
+            "Task exceeded 60s deadline",
+            component="execution_loop",
+            elapsed=62.5,
+            timeout=60.0
+        )
+
+        # Hard timeout with partial traces
+        raise TaskTimeoutError(
+            "Task exceeded 120s hard deadline",
+            component="timeout_backstop",
+            elapsed=125.0,
+            timeout=120.0,
+            partial_traces={"agents": {"main": {"messages": [...]}}}
+        )
+        ```
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        component: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+        elapsed: float = 0.0,
+        timeout: float = 0.0,
+        partial_traces: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize TaskTimeoutError.
+
+        Args:
+            message: Human-readable error description.
+            component: Name of the component that raised the error.
+            details: Additional structured information about the error.
+            elapsed: Time elapsed before timeout was detected.
+            timeout: The configured timeout value in seconds.
+            partial_traces: Any traces collected before timeout occurred.
+        """
+        super().__init__(message, component=component, details=details)
+        self.elapsed = elapsed
+        self.timeout = timeout
+        self.partial_traces = partial_traces or {}
+
+
 # =============================================================================
 # Convenience functions for tool implementers
 # =============================================================================
