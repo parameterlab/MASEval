@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.2.9] - 2025-12-05
+
+### Added
+
 **Exceptions and Error Classification**
 
 - Added `AgentError`, `EnvironmentError`, `UserError` exception hierarchy in `maseval.core.exceptions` for classifying execution failures by responsibility (PR: #13)
