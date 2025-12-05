@@ -12,7 +12,7 @@ from RestrictedPython import compile_restricted
 
 from maseval import Evaluator, Environment, Task, User
 from .utils import normalize_final_answer, call_llm_judge
-from examples.five_a_day_benchmark.tools import get_safe_python_exec_environment
+from tools import get_safe_python_exec_environment
 
 
 class UnitTestEvaluator(Evaluator):
@@ -51,12 +51,15 @@ class UnitTestEvaluator(Evaluator):
             expected_output = test_case["expected_output"]
 
             try:
-                result = self._execute_code(code, self.function_name, test_input)
+                result, printed_output = self._execute_code(code, self.function_name, test_input)
                 passed = result == expected_output
                 test_results.append(passed)
 
                 if not passed:
-                    errors.append(f"Test {i}: expected {expected_output}, got {result}")
+                    error_msg = f"Test {i}: expected {expected_output}, got {result}"
+                    if printed_output:
+                        error_msg += f" [stdout: {printed_output.strip()}]"
+                    errors.append(error_msg)
 
             except Exception as e:
                 test_results.append(False)
@@ -73,8 +76,12 @@ class UnitTestEvaluator(Evaluator):
             "errors": errors if errors else None,
         }
 
-    def _execute_code(self, code: str, function_name: str, test_input: Any) -> Any:
-        """Execute code safely using RestrictedPython and return result."""
+    def _execute_code(self, code: str, function_name: str, test_input: Any) -> tuple[Any, str]:
+        """Execute code safely using RestrictedPython and return result with captured output.
+
+        Returns:
+            Tuple of (result, printed_output) where printed_output contains any print() calls.
+        """
         # Compile with RestrictedPython
         compile_result = compile_restricted(code, "<evaluator>", "exec")
 
@@ -90,15 +97,20 @@ class UnitTestEvaluator(Evaluator):
 
         code_obj = compile_result.code if hasattr(compile_result, "code") else compile_result
 
-        # Get shared safe execution environment
-        safe_env = get_safe_python_exec_environment(include_print_collector=False)
+        # Get safe execution environment (includes PrintCollector)
+        safe_env = get_safe_python_exec_environment()
 
         exec(code_obj, safe_env)
 
         if function_name not in safe_env:
             raise ValueError(f"Function '{function_name}' not found in code")
 
-        return safe_env[function_name](test_input)
+        result = safe_env[function_name](test_input)
+
+        # Collect any print output
+        printed_output = safe_env.get("_print", lambda: "")()
+
+        return result, printed_output
 
     def _extract_code_from_answer(self, answer: str) -> Optional[str]:
         """Extract Python code from final answer string."""

@@ -236,7 +236,7 @@ def build_smolagents_single_agent(
     all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build a single smolagents agent.
 
     Args:
@@ -247,7 +247,7 @@ def build_smolagents_single_agent(
         specialist_specs: Empty list for single-agent (ignored)
 
     Returns:
-        SmolAgentAdapter wrapping the created agent
+        Tuple of (primary_adapter, all_adapters_dict) for consistent interface
     """
     from smolagents import ToolCallingAgent
     from maseval.interface.agents.smolagents import SmolAgentAdapter
@@ -266,7 +266,8 @@ def build_smolagents_single_agent(
         verbosity_level=0,
     )
 
-    return SmolAgentAdapter(agent, primary_spec["agent_id"])
+    adapter = SmolAgentAdapter(agent, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def build_langgraph_single_agent(
@@ -275,7 +276,7 @@ def build_langgraph_single_agent(
     all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build a single langgraph agent.
 
     Args:
@@ -286,7 +287,7 @@ def build_langgraph_single_agent(
         specialist_specs: Empty list for single-agent (ignored)
 
     Returns:
-        LangGraphAgentAdapter wrapping the created graph
+        Tuple of (primary_adapter, all_adapters_dict) for consistent interface
     """
     from langchain_core.messages import SystemMessage
     from langgraph.graph import StateGraph, END
@@ -323,7 +324,8 @@ def build_langgraph_single_agent(
     workflow.add_edge("tools", "agent")
 
     graph = workflow.compile()
-    return LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+    adapter = LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def build_llamaindex_single_agent(
@@ -332,7 +334,7 @@ def build_llamaindex_single_agent(
     all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build a single llamaindex agent.
 
     Args:
@@ -343,7 +345,7 @@ def build_llamaindex_single_agent(
         specialist_specs: Empty list for single-agent (ignored)
 
     Returns:
-        LlamaIndexAgentAdapter wrapping the created agent
+        Tuple of (primary_adapter, all_adapters_dict) for consistent interface
     """
     from llama_index.core.agent.workflow.react_agent import ReActAgent
     from maseval.interface.agents.llamaindex import LlamaIndexAgentAdapter
@@ -361,7 +363,8 @@ def build_llamaindex_single_agent(
         system_prompt=primary_spec.get("agent_instruction"),
     )
 
-    return LlamaIndexAgentAdapter(agent, primary_spec["agent_id"])
+    adapter = LlamaIndexAgentAdapter(agent, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def build_smolagents_multi_agent(
@@ -370,7 +373,7 @@ def build_smolagents_multi_agent(
     all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build smolagents multi-agent setup with orchestrator and specialists.
 
     Args:
@@ -381,12 +384,15 @@ def build_smolagents_multi_agent(
         specialist_specs: List of specialist agent specifications
 
     Returns:
-        SmolAgentAdapter wrapping the orchestrator agent
+        Tuple of (primary_adapter, all_adapters_dict) where all_adapters_dict
+        includes the orchestrator and all specialists for trace registration.
     """
     from smolagents import ToolCallingAgent, FinalAnswerTool
     from maseval.interface.agents.smolagents import SmolAgentAdapter
 
     specialist_agents = []
+    specialist_adapters_dict: Dict[str, Any] = {}
+
     for agent_spec in specialist_specs:
         specialist_seed = agent_spec.get("seed")
         specialist_model = get_model(model_id, "smolagents", temperature, specialist_seed)
@@ -404,6 +410,8 @@ def build_smolagents_multi_agent(
             verbosity_level=0,
         )
         specialist_agents.append(specialist)
+        # Create adapter for each specialist for trace registration
+        specialist_adapters_dict[agent_spec["agent_id"]] = SmolAgentAdapter(specialist, agent_spec["agent_id"])
 
     primary_adapters = filter_tool_adapters_by_prefix(all_tool_adapters, primary_spec["tools"])
     primary_tools = [adapter.tool for adapter in primary_adapters.values()]
@@ -421,7 +429,11 @@ def build_smolagents_multi_agent(
         verbosity_level=0,
     )
 
-    return SmolAgentAdapter(agent, primary_spec["agent_id"])
+    primary_adapter = SmolAgentAdapter(agent, primary_spec["agent_id"])
+
+    # Return primary adapter and dict of all adapters (including primary) for trace registration
+    all_adapters = {primary_spec["agent_id"]: primary_adapter, **specialist_adapters_dict}
+    return primary_adapter, all_adapters
 
 
 def build_langgraph_multi_agent(
@@ -430,7 +442,7 @@ def build_langgraph_multi_agent(
     all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build langgraph multi-agent setup with orchestrator and specialists.
 
     Args:
@@ -441,7 +453,8 @@ def build_langgraph_multi_agent(
         specialist_specs: List of specialist agent specifications
 
     Returns:
-        LangGraphAgentAdapter wrapping the multi-agent graph
+        Tuple of (primary_adapter, all_adapters_dict). Note: LangGraph multi-agent
+        compiles specialists into graph nodes, so only the graph is traceable.
     """
     from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
     from langchain_core.tools import tool as create_tool
@@ -578,7 +591,8 @@ def build_langgraph_multi_agent(
         workflow.add_edge(agent_id, "orchestrator")
 
     graph = workflow.compile()
-    return LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+    adapter = LangGraphAgentAdapter(graph, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def build_llamaindex_multi_agent(
@@ -587,7 +601,7 @@ def build_llamaindex_multi_agent(
     all_tool_adapters: Dict[str, Any],
     primary_spec: Dict[str, Any],
     specialist_specs: List[Dict[str, Any]],
-) -> Any:
+) -> tuple[Any, Dict[str, Any]]:
     """Build llamaindex multi-agent setup with orchestrator and specialists.
 
     Args:
@@ -598,7 +612,8 @@ def build_llamaindex_multi_agent(
         specialist_specs: List of specialist agent specifications
 
     Returns:
-        LlamaIndexAgentAdapter wrapping the orchestrator agent
+        Tuple of (primary_adapter, all_adapters_dict). Note: LlamaIndex multi-agent
+        uses handoff tools, so only the orchestrator is directly traceable.
     """
     from llama_index.core.agent.workflow.react_agent import ReActAgent
     from llama_index.core.tools import FunctionTool
@@ -666,7 +681,8 @@ def build_llamaindex_multi_agent(
         system_prompt=primary_spec.get("agent_instruction"),
     )
 
-    return LlamaIndexAgentAdapter(orchestrator, primary_spec["agent_id"])
+    adapter = LlamaIndexAgentAdapter(orchestrator, primary_spec["agent_id"])
+    return adapter, {primary_spec["agent_id"]: adapter}
 
 
 def get_agent_builder(framework: str, agent_type: str):
@@ -723,7 +739,13 @@ class FiveADayBenchmark(Benchmark):
     def setup_agents(
         self, agent_data: Dict[str, Any], environment: Environment, task: Task, user=None
     ) -> tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
-        """Create framework-specific agent with tools from environment."""
+        """Create framework-specific agent with tools from environment.
+
+        Returns:
+            Tuple of (agents_to_run, agents_dict):
+            - agents_to_run: List of adapters for agents that should be executed
+            - agents_dict: Dict of all adapters for trace registration (includes specialists)
+        """
         framework = agent_data["framework"]
         agent_type = agent_data["agent_type"]
         model_id = agent_data["model_config"]["model_id"]
@@ -736,11 +758,12 @@ class FiveADayBenchmark(Benchmark):
         primary_spec = next(a for a in agents_specs if a["agent_id"] == primary_agent_id)
         specialist_specs = [a for a in agents_specs if a["agent_id"] != primary_agent_id]
 
-        # Build agent using unified interface
+        # Build agent using unified interface - now returns (primary_adapter, all_adapters_dict)
         builder = get_agent_builder(framework, agent_type)
-        agent_adapter = builder(model_id, temperature, all_tool_adapters, primary_spec, specialist_specs)
+        primary_adapter, all_adapters_dict = builder(model_id, temperature, all_tool_adapters, primary_spec, specialist_specs)
 
-        return [agent_adapter], {primary_agent_id: agent_adapter}
+        # Return primary adapter to run, and all adapters for trace registration
+        return [primary_adapter], all_adapters_dict
 
     def setup_evaluators(self, environment, task, agents, user) -> Sequence[Evaluator]:
         """Create evaluators based on task's evaluation_data.evaluators list."""

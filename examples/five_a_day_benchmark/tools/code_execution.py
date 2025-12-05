@@ -73,28 +73,23 @@ def get_safe_guards() -> dict:
     }
 
 
-def get_safe_python_exec_environment(include_print_collector: bool = False) -> dict:
+def get_safe_python_exec_environment() -> dict:
     """Get a complete safe execution environment for RestrictedPython.
 
-    Args:
-        include_print_collector: If True, includes PrintCollector for capturing print output.
-                                If False, print goes to stdout (useful for evaluators).
+    Always includes PrintCollector for capturing print output. After exec(),
+    retrieve captured output via: env.get('_print', lambda: '')().
 
     Returns:
         A dictionary suitable for use as globals in exec() with RestrictedPython.
     """
-    env = {
+    from RestrictedPython.PrintCollector import PrintCollector
+
+    return {
         **safe_globals,
         "__builtins__": get_safe_builtins(),
         **get_safe_guards(),
+        "_print_": PrintCollector,
     }
-
-    if include_print_collector:
-        from RestrictedPython.PrintCollector import PrintCollector
-
-        env["_print_"] = PrintCollector
-
-    return env
 
 
 class CodeExecutionState:
@@ -106,7 +101,7 @@ class CodeExecutionState:
     def __init__(self, test_cases: list[dict[str, Any]] | None = None):
         self.test_cases = test_cases or []
         # Get shared safe execution environment with print collector for capturing output
-        self.safe_env = get_safe_python_exec_environment(include_print_collector=True)
+        self.safe_env = get_safe_python_exec_environment()
 
 
 class PythonExecutorExecuteTool(BaseTool):
