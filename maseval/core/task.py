@@ -5,6 +5,38 @@ from collections.abc import Sequence
 from typing import Iterable, List, Union, Iterator, Optional
 import json
 from pathlib import Path
+from enum import Enum
+
+
+class TimeoutAction(Enum):
+    """Action to take when a task timeout occurs."""
+
+    SKIP = "skip"  # Mark as timed out, continue to next task
+    RETRY = "retry"  # Retry once with same timeout
+    EXTEND = "extend"  # Double timeout and retry
+
+
+@dataclass
+class TaskProtocol:
+    """Configuration for how MASEval executes a task.
+
+    This is a data container for execution parameters, separate from
+    task content (query, environment_data, etc.). It controls the
+    interface between the task and MASEval's execution engine.
+
+    Attributes:
+        timeout_seconds: Maximum execution time for this task. None means no timeout.
+        timeout_action: Action to take when timeout occurs.
+        max_retries: Maximum retry attempts for transient failures (not timeouts).
+        priority: Execution priority (higher = sooner). Used by adaptive task queues.
+        tags: Arbitrary tags for filtering or grouping tasks.
+    """
+
+    timeout_seconds: Optional[float] = None
+    timeout_action: TimeoutAction = TimeoutAction.SKIP
+    max_retries: int = 0
+    priority: int = 0
+    tags: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -17,6 +49,7 @@ class Task:
         environment_data: A dictionary of data needed to set up the environment for the task.
         evaluation_data: A dictionary of data needed to evaluate the agent's performance on the task.
         metadata: A dictionary for any additional metadata about the task.
+        protocol: Execution protocol controlling timeout, retries, priority, etc.
     """
 
     query: str
@@ -25,6 +58,7 @@ class Task:
     user_data: Dict[str, Any] = field(default_factory=dict)
     evaluation_data: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    protocol: TaskProtocol = field(default_factory=TaskProtocol)
 
 
 class TaskCollection(Sequence):

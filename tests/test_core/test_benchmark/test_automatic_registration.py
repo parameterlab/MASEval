@@ -26,7 +26,7 @@ def test_automatic_agent_registration():
     benchmark = DummyBenchmark(agent_data=agent_data)
 
     # Before run, registry should be empty
-    assert len(benchmark._trace_registry) == 0
+    assert len(benchmark._registry._trace_registry) == 0
 
     # Run one step to trigger setup
     for task, agent_data in zip(tasks, [agent_data]):
@@ -46,8 +46,8 @@ def test_automatic_agent_registration():
         break  # Only test first task
 
     # Check that components were registered
-    assert "environment:env" in benchmark._trace_registry
-    assert "agents:test_agent" in benchmark._trace_registry
+    assert "environment:env" in benchmark._registry._trace_registry
+    assert "agents:test_agent" in benchmark._registry._trace_registry
 
 
 @pytest.mark.core
@@ -117,8 +117,8 @@ def test_manual_registration_for_models():
     benchmark.register("models", "my_model", model)
 
     # Verify it was registered
-    assert "models:my_model" in benchmark._trace_registry
-    assert benchmark._trace_registry["models:my_model"] is model
+    assert "models:my_model" in benchmark._registry._trace_registry
+    assert benchmark._registry._trace_registry["models:my_model"] is model
 
 
 @pytest.mark.core
@@ -137,8 +137,8 @@ def test_component_id_tracking():
     benchmark.register("models", "test_model", model)
 
     # Verify ID tracking
-    assert id(model) in benchmark._component_id_map
-    assert benchmark._component_id_map[id(model)] == "models:test_model"
+    assert id(model) in benchmark._registry._component_id_map
+    assert benchmark._registry._component_id_map[id(model)] == "models:test_model"
 
 
 @pytest.mark.core
@@ -162,8 +162,8 @@ def test_registry_cleared_after_repetition():
     benchmark.run(tasks)
 
     # After run completes, registry should be empty (cleared after last repetition)
-    assert len(benchmark._trace_registry) == 0
-    assert len(benchmark._component_id_map) == 0
+    assert len(benchmark._registry._trace_registry) == 0
+    assert len(benchmark._registry._component_id_map) == 0
 
     # But reports should contain entries for all task repetitions
     assert len(benchmark.reports) == 4  # 2 tasks * 2 repeats
