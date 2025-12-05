@@ -26,7 +26,7 @@ from pathlib import Path
 
 from utils import derive_seed, sanitize_name  # type: ignore[unresolved-import]
 
-from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter
+from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter, ModelAdapter
 from maseval.core.callbacks.result_logger import FileResultLogger
 
 # Import tool implementations
@@ -263,7 +263,7 @@ def build_smolagents_single_agent(
         tools=tools,
         name=sanitized_name,
         instructions=primary_spec["agent_instruction"],
-        verbosity_level=2,
+        verbosity_level=0,
     )
 
     return SmolAgentAdapter(agent, primary_spec["agent_id"])
@@ -401,7 +401,7 @@ def build_smolagents_multi_agent(
             name=sanitized_name,
             description=agent_spec["agent_instruction"],
             instructions=agent_spec["agent_instruction"],
-            verbosity_level=2,
+            verbosity_level=0,
         )
         specialist_agents.append(specialist)
 
@@ -418,7 +418,7 @@ def build_smolagents_multi_agent(
         managed_agents=specialist_agents if specialist_agents else None,
         name=sanitized_primary_name,
         instructions=primary_spec["agent_instruction"],
-        verbosity_level=2,
+        verbosity_level=0,
     )
 
     return SmolAgentAdapter(agent, primary_spec["agent_id"])
@@ -740,10 +740,6 @@ class FiveADayBenchmark(Benchmark):
         builder = get_agent_builder(framework, agent_type)
         agent_adapter = builder(model_id, temperature, all_tool_adapters, primary_spec, specialist_specs)
 
-        # Use .visualize() when smolagents # TODO remove
-        if framework == "smolagents":
-            agent_adapter.agent.visualize()
-
         return [agent_adapter], {primary_agent_id: agent_adapter}
 
     def setup_evaluators(self, environment, task, agents, user) -> Sequence[Evaluator]:
@@ -762,10 +758,18 @@ class FiveADayBenchmark(Benchmark):
 
         return evaluator_instances
 
-    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment) -> Sequence[Any]:
+    def run_agents(self, agents: Sequence[AgentAdapter], task: Task, environment: Environment, query: str) -> Sequence[Any]:
         """Execute agents and return their final answers."""
-        answers = [agent.run(task.query) for agent in agents]
+        answers = [agent.run(query) for agent in agents]
         return answers
+
+    def get_model_adapter(self, model_id: str, **kwargs) -> ModelAdapter:
+        """Return a model adapter for benchmark components that need LLM access.
+
+        This benchmark doesn't use simulated tools, user simulators, or LLM judges,
+        so this method is not called during execution.
+        """
+        raise NotImplementedError("This benchmark doesn't use model adapters for tools/users/evaluators.")
 
     def evaluate(
         self,
