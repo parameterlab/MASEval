@@ -53,6 +53,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         messages (MessageHistory): The conversation history between the user and the MAS.
         max_turns (int): Maximum number of user response turns.
         stop_token (Optional[str]): Token that triggers early stopping when detected.
+        early_stopping_condition (Optional[str]): Description of when to emit the stop token.
     """
 
     def __init__(
@@ -66,6 +67,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         max_try: int = 3,
         max_turns: int = 1,
         stop_token: Optional[str] = None,
+        early_stopping_condition: Optional[str] = None,
     ):
         """Initializes the User.
 
@@ -94,17 +96,34 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
                 for benchmarks where termination is based on user satisfaction rather than
                 a fixed turn count. The token is stripped from the response. Defaults to
                 None (early stopping disabled).
+            early_stopping_condition (Optional[str], optional): A description of when the
+                user should stop the conversation (e.g., "all goals have been accomplished").
+                Used with stop_token to instruct the LLM when to emit the stop token.
+                Must be provided if stop_token is set. Defaults to None.
+
+        Raises:
+            ValueError: If only one of stop_token or early_stopping_condition is provided.
         """
+        # Validate early stopping configuration
+        if (stop_token is None) != (early_stopping_condition is None):
+            raise ValueError(
+                "stop_token and early_stopping_condition must both be set or both be None. "
+                f"Got stop_token={stop_token!r}, early_stopping_condition={early_stopping_condition!r}"
+            )
+
         self.name = name
         self.model = model
         self.user_profile = user_profile
         self.scenario = scenario
+        
         self.simulator = UserLLMSimulator(
             model=self.model,
             user_profile=self.user_profile,
             scenario=self.scenario,
             template=template,
             max_try=max_try,
+            stop_token=stop_token,
+            early_stopping_condition=early_stopping_condition,
         )
         # Initialize message history - empty or with initial query
         if initial_query is not None:
@@ -118,6 +137,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         # Multi-turn configuration
         self.max_turns = max_turns
         self.stop_token = stop_token
+        self.early_stopping_condition = early_stopping_condition
         self._turn_count = self._initial_turn_count
         self._stopped = False
 

@@ -21,10 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **User**
 
-- Added `max_turns` and `stop_token` parameters to `User` base class for multi-turn support with early stopping (PR: #13)
+- Added `max_turns` and `stop_token` parameters to `User` base class for multi-turn support with early stopping. Same applied to `UserLLMSimulator`. (PR: #13)
 - Added `is_done()`, `_check_stop_token()`, and `increment_turn()` methods to `User` base class (PR: #13)
 - Added `get_initial_query()` method to `User` base class for LLM-generated initial messages (PR: #13)
-- Added `initial_prompt` parameter in `User` base class to trigger the agentic system. (PR: #13)
+- Added `initial_query` parameter in `User` base class to trigger the agentic system. (PR: #13)
 
 **Environment**
 

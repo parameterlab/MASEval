@@ -76,16 +76,19 @@ class TestMACSUserInit:
         assert user.name == "Test User"
         assert user.max_turns == 10
 
-    def test_init_loads_template(self, macs_model, sample_scenario, initial_query):
-        """Loads user_simulator.txt template."""
-        assert MACSUser.TEMPLATE_PATH.exists(), f"Template not found at {MACSUser.TEMPLATE_PATH}"
-
+    def test_init_uses_base_template_with_early_stopping(self, macs_model, sample_scenario, initial_query):
+        """Uses base UserLLMSimulator template with early stopping configured."""
         user = MACSUser(
             model=macs_model,
             scenario=sample_scenario,
             initial_query=initial_query,
         )
-        assert user is not None
+        # Verify early stopping is configured
+        assert user.stop_token == MACSUser.DEFAULT_STOP_TOKEN
+        assert user.early_stopping_condition == MACSUser.DEFAULT_EARLY_STOPPING_CONDITION
+        # Simulator should have the same config
+        assert user.simulator.stop_token == "</stop>"
+        assert "goals have been satisfactorily addressed" in user.simulator.early_stopping_condition
 
 
 # =============================================================================

@@ -173,19 +173,50 @@ class TestUserStopToken:
 
         user = DummyUser(name="test", model=dummy_model)
         assert user.stop_token is None
+        assert user.early_stopping_condition is None
+
+    def test_stop_token_without_condition_raises(self, dummy_model):
+        """ValueError raised when stop_token set but early_stopping_condition is None."""
+        from conftest import DummyUser
+
+        with pytest.raises(ValueError, match="must both be set or both be None"):
+            DummyUser(name="test", model=dummy_model, stop_token="</stop>")
+
+    def test_condition_without_stop_token_raises(self, dummy_model):
+        """ValueError raised when early_stopping_condition set but stop_token is None."""
+        from conftest import DummyUser
+
+        with pytest.raises(ValueError, match="must both be set or both be None"):
+            DummyUser(
+                name="test",
+                model=dummy_model,
+                early_stopping_condition="goals are met",
+            )
 
     def test_custom_stop_token(self, dummy_model):
         """Custom stop_token is stored."""
         from conftest import DummyUser
 
-        user = DummyUser(name="test", model=dummy_model, stop_token="</done>")
+        user = DummyUser(
+            name="test",
+            model=dummy_model,
+            stop_token="</done>",
+            early_stopping_condition="goals are met",
+        )
         assert user.stop_token == "</done>"
+        assert user.early_stopping_condition == "goals are met"
 
     def test_stop_token_detection_sets_stopped(self, dummy_model):
         """Detecting stop token sets _stopped = True."""
         from conftest import DummyUser
 
-        user = DummyUser(name="test", model=dummy_model, stop_token="</stop>", max_turns=5)
+        user = DummyUser(
+            name="test",
+            model=dummy_model,
+            stop_token="</stop>",
+            early_stopping_condition="goals are met",
+            max_turns=5,
+        )
         user.simulator.return_value = "Thanks! </stop>"
 
         user.simulate_response("Here's your answer")
@@ -196,7 +227,13 @@ class TestUserStopToken:
         """Stop token is stripped from returned response."""
         from conftest import DummyUser
 
-        user = DummyUser(name="test", model=dummy_model, stop_token="</stop>", max_turns=5)
+        user = DummyUser(
+            name="test",
+            model=dummy_model,
+            stop_token="</stop>",
+            early_stopping_condition="goals are met",
+            max_turns=5,
+        )
         user.simulator.return_value = "Perfect, thanks! </stop>"
 
         response = user.simulate_response("Booking confirmed!")
@@ -208,7 +245,13 @@ class TestUserStopToken:
         """is_done() returns True after stop token detected."""
         from conftest import DummyUser
 
-        user = DummyUser(name="test", model=dummy_model, stop_token="</stop>", max_turns=5)
+        user = DummyUser(
+            name="test",
+            model=dummy_model,
+            stop_token="</stop>",
+            early_stopping_condition="goals are met",
+            max_turns=5,
+        )
         user.simulator.return_value = "Done </stop>"
 
         user.simulate_response("Result")
@@ -219,7 +262,13 @@ class TestUserStopToken:
         """Stop token detection is case-insensitive."""
         from conftest import DummyUser
 
-        user = DummyUser(name="test", model=dummy_model, stop_token="</STOP>", max_turns=5)
+        user = DummyUser(
+            name="test",
+            model=dummy_model,
+            stop_token="</STOP>",
+            early_stopping_condition="goals are met",
+            max_turns=5,
+        )
         user.simulator.return_value = "Thanks! </stop>"  # lowercase
 
         user.simulate_response("Answer")
@@ -230,7 +279,13 @@ class TestUserStopToken:
         """Provides fallback when response is only stop token."""
         from conftest import DummyUser
 
-        user = DummyUser(name="test", model=dummy_model, stop_token="</stop>", max_turns=5)
+        user = DummyUser(
+            name="test",
+            model=dummy_model,
+            stop_token="</stop>",
+            early_stopping_condition="goals are met",
+            max_turns=5,
+        )
         user.simulator.return_value = "</stop>"
 
         response = user.simulate_response("Done!")
@@ -242,7 +297,13 @@ class TestUserStopToken:
         """The response containing stop token still counts as a turn."""
         from conftest import DummyUser
 
-        user = DummyUser(name="test", model=dummy_model, stop_token="</stop>", max_turns=5)
+        user = DummyUser(
+            name="test",
+            model=dummy_model,
+            stop_token="</stop>",
+            early_stopping_condition="goals are met",
+            max_turns=5,
+        )
         user.simulator.return_value = "Thank you, all is clear </stop>"
 
         initial_turn_count = user._turn_count
@@ -453,7 +514,12 @@ class TestUserConfig:
         """gather_config() includes stop_token."""
         from conftest import DummyUser
 
-        user = DummyUser(name="test", model=dummy_model, stop_token="</end>")
+        user = DummyUser(
+            name="test",
+            model=dummy_model,
+            stop_token="</end>",
+            early_stopping_condition="goals are met",
+        )
 
         config = user.gather_config()
 

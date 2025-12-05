@@ -253,6 +253,8 @@ class UserLLMSimulator(LLMSimulator):
         template: Optional[str] = None,
         max_try: int = 3,
         generation_params: Optional[Dict[str, Any]] = None,
+        stop_token: Optional[str] = None,
+        early_stopping_condition: Optional[str] = None,
     ):
         """
         Initializes the UserLLMSimulator.
@@ -261,11 +263,29 @@ class UserLLMSimulator(LLMSimulator):
             model (ModelAdapter): The language model to use for generation.
             user_profile (Dict[str, str]): A dictionary containing the user's profile.
             scenario (str): The scenario for the user.
-            template (str, optional): A prompt template. Defaults to the one in the library. See `maseval.utils.templates.user_llm_simulator_template.txt`.
+            template (str, optional): A prompt template. Defaults to the one in the library.
+                See `maseval.utils.templates.user_llm_simulator_template.txt`.
             max_try (int, optional): Maximum number of model calls to attempt. Defaults to 3.
-            generation_params (Dict[str, Any], optional): Default generation parameters for the model. This overwrites the ModelAdapter's defaults if provided.
+            generation_params (Dict[str, Any], optional): Default generation parameters for the model.
+                This overwrites the ModelAdapter's defaults if provided.
                 Both can be overridden at call time. Defaults to None.
+            stop_token (Optional[str], optional): Token to include in responses when early
+                stopping condition is met. Must be provided together with early_stopping_condition.
+                Defaults to None.
+            early_stopping_condition (Optional[str], optional): A description of when the
+                user should stop the conversation (e.g., "all goals have been accomplished").
+                Must be provided together with stop_token. Defaults to None.
+
+        Raises:
+            ValueError: If only one of stop_token or early_stopping_condition is provided.
         """
+        # Validate early stopping configuration
+        if (stop_token is None) != (early_stopping_condition is None):
+            raise ValueError(
+                "stop_token and early_stopping_condition must both be set or both be None. "
+                f"Got stop_token={stop_token!r}, early_stopping_condition={early_stopping_condition!r}"
+            )
+
         if template is None:
             template_path = os.path.join(os.path.dirname(__file__), "utils", "templates", "user_llm_simulator_template.txt")
             with open(template_path, "r") as f:
@@ -274,6 +294,8 @@ class UserLLMSimulator(LLMSimulator):
         self.user_profile = user_profile
         self.scenario = scenario
         self.generation_params = generation_params or {}
+        self.stop_token = stop_token
+        self.early_stopping_condition = early_stopping_condition
 
     def __call__(
         self,
@@ -318,10 +340,20 @@ class UserLLMSimulator(LLMSimulator):
         for message in conversation_history:
             formatted_history += f"{message['role']}: {message['content']}\n"
 
+        # Build early stopping instructions if configured
+        early_stopping_instructions = ""
+        if self.stop_token and self.early_stopping_condition:
+            early_stopping_instructions = (
+                f"\n### EARLY STOPPING\n"
+                f"If the following condition is satisfied: {self.early_stopping_condition}\n"
+                f"Then end your response with the token `{self.stop_token}` to signal that the conversation should end.\n"
+            )
+
         replacements = {
             "user_profile": json.dumps(self.user_profile, indent=2),
             "scenario": self.scenario,
             "conversation_history": formatted_history,
+            "early_stopping_instructions": early_stopping_instructions,
         }
         for k, v in replacements.items():
             prompt = prompt.replace("{{" + k + "}}", str(v))

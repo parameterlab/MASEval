@@ -407,7 +407,7 @@ class MACSUser(User):
 
     DEFAULT_MAX_TURNS = 5
     DEFAULT_STOP_TOKEN = "</stop>"
-    TEMPLATE_PATH = Path(__file__).parent / "prompt_templates" / "user_simulator.txt"
+    DEFAULT_EARLY_STOPPING_CONDITION = "ALL goals have been satisfactorily addressed by the assistant"
 
     def __init__(
         self,
@@ -418,6 +418,7 @@ class MACSUser(User):
         template: Optional[str] = None,
         max_turns: int = DEFAULT_MAX_TURNS,
         stop_token: str = DEFAULT_STOP_TOKEN,
+        early_stopping_condition: str = DEFAULT_EARLY_STOPPING_CONDITION,
     ):
         """Initialize MACS user simulator.
 
@@ -426,14 +427,12 @@ class MACSUser(User):
             scenario: Full scenario text (contains goals and user background)
             initial_query: The initial query to the agent
             name: User name for identification (default: "Simulated User")
-            template: Optional custom prompt template (uses MACS-specific default)
+            template: Optional custom prompt template (uses base UserLLMSimulator template)
             max_turns: Maximum conversation turns (default: 5, per MACS paper)
             stop_token: Token indicating user satisfaction (default: "</stop>")
+            early_stopping_condition: Description of when to emit stop token
+                (default: "ALL goals have been satisfactorily addressed by the assistant")
         """
-        # Load MACS-specific user simulator template if not provided
-        if template is None and self.TEMPLATE_PATH.exists():
-            template = self.TEMPLATE_PATH.read_text()
-
         # Extract user profile from scenario text
         user_profile = self._extract_user_profile(scenario)
 
@@ -446,6 +445,7 @@ class MACSUser(User):
             template=template,
             max_turns=max_turns,
             stop_token=stop_token,
+            early_stopping_condition=early_stopping_condition,
         )
 
     def get_tool(self) -> Any:

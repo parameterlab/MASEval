@@ -233,6 +233,7 @@ class TestExecutionLoopWithUser:
             initial_query="Start",
             max_turns=10,
             stop_token="</stop>",
+            early_stopping_condition="goals are met",
         )
         # User stops on second response
         user.simulator.side_effect = ["Continue please", "Thanks! </stop>"]

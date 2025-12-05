@@ -158,6 +158,7 @@ class DummyUser(User):
                 - initial_query: Optional initial message
                 - max_turns: Max interaction turns (default: 1)
                 - stop_token: Early termination token (default: None)
+                - early_stopping_condition: Description of when to stop (default: None)
         """
         super().__init__(
             name=name,
@@ -167,6 +168,7 @@ class DummyUser(User):
             initial_query=kwargs.get("initial_query"),
             max_turns=kwargs.get("max_turns", 1),
             stop_token=kwargs.get("stop_token"),
+            early_stopping_condition=kwargs.get("early_stopping_condition"),
         )
         # Replace simulator with a mock to avoid LLM calls
         # Tests can set simulator.return_value or side_effect as needed

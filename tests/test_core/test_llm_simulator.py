@@ -152,3 +152,58 @@ class TestLLMSimulator:
         assert "failed_calls" in traces
         assert "logs" in traces
         assert traces["successful_calls"] == 1
+
+
+@pytest.mark.core
+class TestUserLLMSimulatorValidation:
+    """Tests for UserLLMSimulator early stopping validation."""
+
+    def test_stop_token_without_condition_raises(self, dummy_model):
+        """ValueError raised when stop_token set but early_stopping_condition is None."""
+        from maseval.core.simulator import UserLLMSimulator
+
+        with pytest.raises(ValueError, match="must both be set or both be None"):
+            UserLLMSimulator(
+                model=dummy_model,
+                user_profile={"name": "test"},
+                scenario="test scenario",
+                stop_token="</stop>",
+            )
+
+    def test_condition_without_stop_token_raises(self, dummy_model):
+        """ValueError raised when early_stopping_condition set but stop_token is None."""
+        from maseval.core.simulator import UserLLMSimulator
+
+        with pytest.raises(ValueError, match="must both be set or both be None"):
+            UserLLMSimulator(
+                model=dummy_model,
+                user_profile={"name": "test"},
+                scenario="test scenario",
+                early_stopping_condition="goals are met",
+            )
+
+    def test_both_none_is_valid(self, dummy_model):
+        """No error when both stop_token and early_stopping_condition are None."""
+        from maseval.core.simulator import UserLLMSimulator
+
+        simulator = UserLLMSimulator(
+            model=dummy_model,
+            user_profile={"name": "test"},
+            scenario="test scenario",
+        )
+        assert simulator.stop_token is None
+        assert simulator.early_stopping_condition is None
+
+    def test_both_set_is_valid(self, dummy_model):
+        """No error when both stop_token and early_stopping_condition are set."""
+        from maseval.core.simulator import UserLLMSimulator
+
+        simulator = UserLLMSimulator(
+            model=dummy_model,
+            user_profile={"name": "test"},
+            scenario="test scenario",
+            stop_token="</stop>",
+            early_stopping_condition="all goals accomplished",
+        )
+        assert simulator.stop_token == "</stop>"
+        assert simulator.early_stopping_condition == "all goals accomplished"
