@@ -59,6 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The `Evaluator` class now has a `filter_traces` base method to conveniently adapt the same evaluator to different entities in the traces (PR: #10).
 
+**Simulator**
+
+- The `LLMSimulator` now throws an exception when json cannot be decoded instead of returning the error message as text to the agent (PR: #13).
+
 **Other**
 
 - Documentation formatting improved. Added darkmode and links to `Github` (PR: #11).

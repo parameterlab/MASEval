@@ -9,6 +9,42 @@ import uuid
 from enum import Enum
 
 
+class SimulatorError(Exception):
+    """Raised when a simulator fails to produce a valid result after all retries.
+
+    This exception is raised when the LLM simulator exhausts all retry attempts
+    without successfully parsing the model output. The benchmark catches this
+    exception and records it as a task execution failure.
+
+    Attributes:
+        message: Description of the failure.
+        attempts: Number of attempts made before failing.
+        last_error: The last error encountered during parsing.
+        logs: The complete log of all attempts for debugging.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        attempts: int = 0,
+        last_error: Optional[str] = None,
+        logs: Optional[List[Dict[str, Any]]] = None,
+    ):
+        self.message = message
+        self.attempts = attempts
+        self.last_error = last_error
+        self.logs = logs or []
+        super().__init__(self.message)
+
+    def __str__(self) -> str:
+        parts = [self.message]
+        if self.attempts > 0:
+            parts.append(f"(attempts: {self.attempts})")
+        if self.last_error:
+            parts.append(f"Last error: {self.last_error}")
+        return " ".join(parts)
+
+
 class LLMSimulator(ABC, TraceableMixin):
     """
     A base class for simulators that use an LLM.
@@ -103,7 +139,22 @@ class LLMSimulator(ABC, TraceableMixin):
                 # )
             self.logs.append(entry)
 
-        return parsed_result if parsed_result is not None else self._get_error_result()
+        if parsed_result is not None:
+            return parsed_result
+
+        # All attempts failed - raise exception with details
+        last_error = None
+        for log in reversed(self.logs):
+            if log.get("id") == request_id and log.get("error"):
+                last_error = log["error"]
+                break
+
+        raise SimulatorError(
+            message=f"{self.__class__.__name__} failed to parse model output after {self.max_try} attempts",
+            attempts=self.max_try,
+            last_error=last_error,
+            logs=[log for log in self.logs if log.get("id") == request_id],
+        )
 
     def _call_model_and_parse(self, prompt: str) -> Any:
         """
@@ -123,13 +174,6 @@ class LLMSimulator(ABC, TraceableMixin):
     def _parse_output(self, output: str) -> Any:
         """
         Parses the raw output from the model.
-        """
-        pass
-
-    @abstractmethod
-    def _get_error_result(self) -> Any:
-        """
-        Returns the error result when parsing fails.
         """
         pass
 
@@ -235,9 +279,6 @@ class ToolLLMSimulator(LLMSimulator):
         for k, v in replacements.items():
             prompt = prompt.replace("{{" + k + "}}", v)
         return prompt
-
-    def _get_error_result(self) -> tuple[str, Dict[str, Any]]:
-        return "Error: Failed to decode LLM output after multiple attempts.", {"raw_output": None}
 
 
 class UserLLMSimulator(LLMSimulator):
@@ -358,6 +399,3 @@ class UserLLMSimulator(LLMSimulator):
         for k, v in replacements.items():
             prompt = prompt.replace("{{" + k + "}}", str(v))
         return prompt
-
-    def _get_error_result(self) -> str:
-        return "Error: Failed to get a response from the user simulator."

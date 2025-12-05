@@ -4,7 +4,7 @@ These tests verify that LLMSimulator retry logic and tracing work correctly.
 """
 
 import pytest
-from maseval.core.simulator import ToolLLMSimulator, SimulatorCallStatus
+from maseval.core.simulator import ToolLLMSimulator, SimulatorCallStatus, SimulatorError
 
 
 @pytest.mark.core
@@ -44,7 +44,7 @@ class TestLLMSimulator:
         assert len(simulator.logs) == 2
 
     def test_llm_simulator_parsing_error_retry(self, dummy_model):
-        """Test that parsing errors trigger retries."""
+        """Test that parsing errors trigger retries and raise SimulatorError on exhaustion."""
         from conftest import DummyModelAdapter
 
         # All responses are invalid JSON
@@ -58,11 +58,15 @@ class TestLLMSimulator:
             max_try=3,
         )
 
-        result = simulator(actual_inputs={"param": "test"})
+        # Should raise SimulatorError after max_try attempts
+        with pytest.raises(SimulatorError) as exc_info:
+            simulator(actual_inputs={"param": "test"})
 
-        # Should fail after max_try attempts
-        assert result is not None  # Returns error result
-        assert len(simulator.logs) == 3  # All 3 attempts logged
+        # Verify exception details
+        assert exc_info.value.attempts == 3
+        assert exc_info.value.last_error is not None
+        assert len(exc_info.value.logs) == 3  # All 3 attempts in exception logs
+        assert len(simulator.logs) == 3  # All 3 attempts logged in simulator
 
     def test_llm_simulator_max_attempts_respected(self, dummy_model):
         """Test that max_try limit is respected."""
@@ -78,10 +82,13 @@ class TestLLMSimulator:
             max_try=2,  # Only allow 2 attempts
         )
 
-        _ = simulator(actual_inputs={"param": "test"})
+        # Should raise after 2 attempts
+        with pytest.raises(SimulatorError) as exc_info:
+            simulator(actual_inputs={"param": "test"})
 
         # Should stop after 2 attempts, not continue to 10
         assert len(simulator.logs) == 2
+        assert exc_info.value.attempts == 2
 
     def test_llm_simulator_history_structure(self, dummy_model):
         """Test that history entries have correct structure."""

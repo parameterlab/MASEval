@@ -15,7 +15,7 @@ from .core.benchmark import Benchmark, TaskExecutionStatus
 from .core.callback_handler import CallbackHandler
 from .core.callback import BenchmarkCallback, EnvironmentCallback, AgentCallback
 from .core.callbacks import MessageTracingAgentCallback
-from .core.simulator import ToolLLMSimulator, UserLLMSimulator
+from .core.simulator import ToolLLMSimulator, UserLLMSimulator, SimulatorError
 from .core.model import ModelAdapter
 from .core.user import User, TerminationReason
 from .core.evaluator import Evaluator
@@ -36,6 +36,7 @@ __all__ = [
     "MessageTracingAgentCallback",
     "ToolLLMSimulator",
     "UserLLMSimulator",
+    "SimulatorError",
     "User",
     "TerminationReason",
     "MessageHistory",
