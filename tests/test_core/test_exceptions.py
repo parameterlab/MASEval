@@ -163,6 +163,61 @@ class TestExceptionClassification:
         assert error["details"]["actual"] == "str"
 
 
+@pytest.mark.core
+class TestTaskTimeoutError:
+    """Tests for TaskTimeoutError exception."""
+
+    def test_timeout_error_attributes(self):
+        """TaskTimeoutError should have elapsed, timeout, partial_traces attributes."""
+        from maseval import TaskTimeoutError
+
+        error = TaskTimeoutError(
+            "Task exceeded 60s deadline",
+            component="execution_loop",
+            elapsed=62.5,
+            timeout=60.0,
+            partial_traces={"agents": {"agent1": {"steps": 3}}},
+        )
+
+        assert error.elapsed == 62.5
+        assert error.timeout == 60.0
+        assert error.partial_traces == {"agents": {"agent1": {"steps": 3}}}
+
+    def test_timeout_error_message(self):
+        """TaskTimeoutError message should include timing info."""
+        from maseval import TaskTimeoutError
+
+        error = TaskTimeoutError(
+            "Task exceeded 60s deadline after 62.5s",
+            component="timeout_check",
+            elapsed=62.5,
+            timeout=60.0,
+        )
+
+        assert "60s" in str(error)
+        assert "62.5s" in str(error)
+
+    def test_timeout_error_inherits_from_maseval_error(self):
+        """TaskTimeoutError should inherit from MASEvalError."""
+        from maseval import TaskTimeoutError
+        from maseval.core.exceptions import MASEvalError
+
+        error = TaskTimeoutError("timeout", elapsed=1.0, timeout=0.5)
+
+        assert isinstance(error, MASEvalError)
+        assert isinstance(error, Exception)
+
+    def test_timeout_error_defaults(self):
+        """TaskTimeoutError should have sensible defaults."""
+        from maseval import TaskTimeoutError
+
+        error = TaskTimeoutError("timeout")
+
+        assert error.elapsed == 0.0
+        assert error.timeout == 0.0
+        assert error.partial_traces == {}
+
+
 class TestAgentErrorSuggestion:
     """Tests for AgentError suggestion field."""
 
