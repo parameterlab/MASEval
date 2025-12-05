@@ -15,33 +15,67 @@ from .core.benchmark import Benchmark, TaskExecutionStatus
 from .core.callback_handler import CallbackHandler
 from .core.callback import BenchmarkCallback, EnvironmentCallback, AgentCallback
 from .core.callbacks import MessageTracingAgentCallback
-from .core.simulator import ToolLLMSimulator, UserLLMSimulator, SimulatorError
+from .core.simulator import (
+    ToolLLMSimulator,
+    UserLLMSimulator,
+    SimulatorError,
+    ToolSimulatorError,
+    UserSimulatorError,
+)
 from .core.model import ModelAdapter
 from .core.user import User, TerminationReason
 from .core.evaluator import Evaluator
 from .core.history import MessageHistory, ToolInvocationHistory
 from .core.tracing import TraceableMixin
+from .core.exceptions import (
+    MASEvalError,
+    AgentError,
+    EnvironmentError,
+    UserError,
+    validate_argument_type,
+    validate_required_arguments,
+    validate_no_extra_arguments,
+    validate_arguments_from_schema,
+)
 
 __all__ = [
+    # Tasks
     "Task",
     "TaskCollection",
+    # Core abstractions
     "Environment",
     "AgentAdapter",
     "Benchmark",
     "TaskExecutionStatus",
+    # Callbacks
     "CallbackHandler",
     "BenchmarkCallback",
     "EnvironmentCallback",
     "AgentCallback",
     "MessageTracingAgentCallback",
+    # Simulators
     "ToolLLMSimulator",
     "UserLLMSimulator",
     "SimulatorError",
+    "ToolSimulatorError",
+    "UserSimulatorError",
+    # User simulation
     "User",
     "TerminationReason",
-    "MessageHistory",
+    # Evaluation
     "Evaluator",
+    # History and tracing
+    "MessageHistory",
     "ToolInvocationHistory",
     "ModelAdapter",
     "TraceableMixin",
+    # Exceptions and validation
+    "MASEvalError",
+    "AgentError",
+    "EnvironmentError",
+    "UserError",
+    "validate_argument_type",
+    "validate_required_arguments",
+    "validate_no_extra_arguments",
+    "validate_arguments_from_schema",
 ]

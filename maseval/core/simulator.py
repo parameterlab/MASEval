@@ -5,16 +5,21 @@ import os
 from datetime import datetime
 from .model import ModelAdapter
 from .tracing import TraceableMixin
+from .exceptions import EnvironmentError, UserError
 import uuid
 from enum import Enum
 
 
 class SimulatorError(Exception):
-    """Raised when a simulator fails to produce a valid result after all retries.
+    """Base exception for simulator failures.
 
-    This exception is raised when the LLM simulator exhausts all retry attempts
-    without successfully parsing the model output. The benchmark catches this
-    exception and records it as a task execution failure.
+    This exception is raised when an LLM simulator exhausts all retry attempts
+    without successfully parsing the model output.
+
+    Note:
+        Subclasses (ToolSimulatorError, UserSimulatorError) inherit from the
+        appropriate MASEval exception type for proper error classification.
+        Use those specific subclasses in concrete simulators.
 
     Attributes:
         message: Description of the failure.
@@ -29,15 +34,20 @@ class SimulatorError(Exception):
         attempts: int = 0,
         last_error: Optional[str] = None,
         logs: Optional[List[Dict[str, Any]]] = None,
+        component: Optional[str] = None,
     ):
         self.message = message
         self.attempts = attempts
         self.last_error = last_error
         self.logs = logs or []
+        self.component = component
         super().__init__(self.message)
 
     def __str__(self) -> str:
-        parts = [self.message]
+        parts = []
+        if self.component:
+            parts.append(f"[{self.component}]")
+        parts.append(self.message)
         if self.attempts > 0:
             parts.append(f"(attempts: {self.attempts})")
         if self.last_error:
@@ -45,10 +55,84 @@ class SimulatorError(Exception):
         return " ".join(parts)
 
 
+class ToolSimulatorError(SimulatorError, EnvironmentError):
+    """Tool simulator failed - not the agent's fault.
+
+    Raised when ToolLLMSimulator fails after exhausting retries.
+    This inherits from EnvironmentError, so it's classified as
+    ENVIRONMENT_ERROR in benchmark results.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        attempts: int = 0,
+        last_error: Optional[str] = None,
+        logs: Optional[List[Dict[str, Any]]] = None,
+        component: Optional[str] = None,
+    ):
+        # Initialize SimulatorError (sets message, attempts, last_error, logs, component)
+        SimulatorError.__init__(
+            self,
+            message=message,
+            attempts=attempts,
+            last_error=last_error,
+            logs=logs,
+            component=component,
+        )
+        # Initialize EnvironmentError for MASEval classification
+        EnvironmentError.__init__(
+            self,
+            message=message,
+            component=component,
+            details={"attempts": attempts, "last_error": last_error},
+        )
+
+
+class UserSimulatorError(SimulatorError, UserError):
+    """User simulator failed - not the agent's fault.
+
+    Raised when UserLLMSimulator fails after exhausting retries.
+    This inherits from UserError, so it's classified as
+    USER_ERROR in benchmark results.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        attempts: int = 0,
+        last_error: Optional[str] = None,
+        logs: Optional[List[Dict[str, Any]]] = None,
+        component: Optional[str] = None,
+    ):
+        # Initialize SimulatorError (sets message, attempts, last_error, logs, component)
+        SimulatorError.__init__(
+            self,
+            message=message,
+            attempts=attempts,
+            last_error=last_error,
+            logs=logs,
+            component=component,
+        )
+        # Initialize UserError for MASEval classification
+        UserError.__init__(
+            self,
+            message=message,
+            component=component,
+            details={"attempts": attempts, "last_error": last_error},
+        )
+
+
 class LLMSimulator(ABC, TraceableMixin):
     """
     A base class for simulators that use an LLM.
+
+    Subclasses should override `_create_error` to return the appropriate
+    exception type (ToolSimulatorError, UserSimulatorError, etc.).
     """
+
+    # Override in subclasses to specify component name for error messages
+    _component_name: Optional[str] = None
 
     def __init__(
         self,
@@ -76,6 +160,34 @@ class LLMSimulator(ABC, TraceableMixin):
         # attempt (successful or failed) is appended as a separate entry.
         # Entry schema: {id, timestamp, input, raw_output, parsed_output, status}
         self.logs: list[dict[str, Any]] = []
+
+    def _create_error(
+        self,
+        message: str,
+        attempts: int,
+        last_error: Optional[str],
+        logs: List[Dict[str, Any]],
+    ) -> SimulatorError:
+        """Create the appropriate error type for this simulator.
+
+        Override in subclasses to return ToolSimulatorError or UserSimulatorError.
+
+        Args:
+            message: Error description.
+            attempts: Number of attempts made.
+            last_error: The last error encountered.
+            logs: Complete log of attempts.
+
+        Returns:
+            SimulatorError (or subclass) instance.
+        """
+        return SimulatorError(
+            message=message,
+            attempts=attempts,
+            last_error=last_error,
+            logs=logs,
+            component=self._component_name,
+        )
 
     def __call__(self, generation_params: Optional[Dict[str, Any]] = None, **kwargs) -> Any:
         """
@@ -149,7 +261,7 @@ class LLMSimulator(ABC, TraceableMixin):
                 last_error = log["error"]
                 break
 
-        raise SimulatorError(
+        raise self._create_error(
             message=f"{self.__class__.__name__} failed to parse model output after {self.max_try} attempts",
             attempts=self.max_try,
             last_error=last_error,
@@ -214,6 +326,9 @@ class SimulatorCallStatus(Enum):
 class ToolLLMSimulator(LLMSimulator):
     """
     A simulator that uses an LLM to generate plausible tool outputs.
+
+    Raises ToolSimulatorError on failure, which is classified as
+    ENVIRONMENT_ERROR (not the agent's fault).
     """
 
     def __init__(
@@ -246,9 +361,26 @@ class ToolLLMSimulator(LLMSimulator):
                 template = f.read()
         super().__init__(model, template, max_try)
         self.tool_name = tool_name
+        self._component_name = tool_name  # For error messages
         self.tool_description = tool_description
         self.tool_inputs = tool_inputs
         self.generation_params = generation_params or {}
+
+    def _create_error(
+        self,
+        message: str,
+        attempts: int,
+        last_error: Optional[str],
+        logs: List[Dict[str, Any]],
+    ) -> ToolSimulatorError:
+        """Create ToolSimulatorError for tool simulation failures."""
+        return ToolSimulatorError(
+            message=message,
+            attempts=attempts,
+            last_error=last_error,
+            logs=logs,
+            component=self.tool_name,
+        )
 
     def __call__(self, generation_params: Optional[Dict[str, Any]] = None, **actual_inputs: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
         return super().__call__(generation_params=generation_params, **actual_inputs)
@@ -284,7 +416,12 @@ class ToolLLMSimulator(LLMSimulator):
 class UserLLMSimulator(LLMSimulator):
     """
     A simulator that uses an LLM to act as the user.
+
+    Raises UserSimulatorError on failure, which is classified as
+    USER_ERROR (not the agent's fault).
     """
+
+    _component_name = "user_simulator"
 
     def __init__(
         self,
@@ -337,6 +474,22 @@ class UserLLMSimulator(LLMSimulator):
         self.generation_params = generation_params or {}
         self.stop_token = stop_token
         self.early_stopping_condition = early_stopping_condition
+
+    def _create_error(
+        self,
+        message: str,
+        attempts: int,
+        last_error: Optional[str],
+        logs: List[Dict[str, Any]],
+    ) -> UserSimulatorError:
+        """Create UserSimulatorError for user simulation failures."""
+        return UserSimulatorError(
+            message=message,
+            attempts=attempts,
+            last_error=last_error,
+            logs=logs,
+            component="user_simulator",
+        )
 
     def __call__(
         self,

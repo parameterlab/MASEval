@@ -753,16 +753,36 @@ def run_benchmark(
     summary = compute_benchmark_metrics(results)
 
     # Print summary
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print("BENCHMARK SUMMARY")
-    print("=" * 50)
+    print("=" * 60)
     print(f"Framework: {framework}")
     print(f"Domain: {domain}")
-    print(f"Total Tasks: {summary['total_tasks']}")
+    total = summary["total_tasks"]
+    print(f"Total Tasks: {total}")
+    print(f"Scored Tasks: {summary['scored_tasks']}")
     print(f"Successful Tasks (Overall GSR=1.0): {summary['successful_tasks']}")
     print(f"Success Rate: {summary['success_rate']:.2%}")
 
-    print("\nMean Metrics:")
+    # Show status breakdown with counts and proportions
+    print("\nStatus Breakdown:")
+    status_counts = summary.get("status_counts", {})
+    for status, count in sorted(status_counts.items()):
+        pct = (count / total * 100) if total > 0 else 0
+        print(f"  {status:<25} {count:>4} ({pct:5.1f}%)")
+
+    # Show excluded tasks if any
+    excluded = summary.get("excluded", {})
+    total_excluded = sum(excluded.values())
+    if total_excluded > 0:
+        pct_excluded = (total_excluded / total * 100) if total > 0 else 0
+        print(f"\nExcluded from scoring: {total_excluded} ({pct_excluded:.1f}%)")
+        for status, count in sorted(excluded.items()):
+            if count > 0:
+                pct = (count / total * 100) if total > 0 else 0
+                print(f"  {status:<25} {count:>4} ({pct:5.1f}%)")
+
+    print("\nMean Metrics (scored tasks only):")
     for metric, value in summary["mean_metrics"].items():
         print(f"  {metric:<25} {value:.4f}")
 

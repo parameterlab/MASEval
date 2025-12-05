@@ -21,6 +21,7 @@ from .callbacks.progress_bar import (
     TqdmProgressBarCallback,
     RichProgressBarCallback,
 )
+from .exceptions import AgentError, EnvironmentError, UserError
 
 
 class TaskExecutionStatus(Enum):
@@ -29,17 +30,35 @@ class TaskExecutionStatus(Enum):
     This enum tracks the execution state of a task through the benchmark lifecycle,
     enabling graceful failure handling and comprehensive result reporting.
 
+    The status distinguishes between errors caused by the agent (agent's fault) and
+    errors caused by the evaluation infrastructure (environment, user simulator).
+    This enables fair scoring by excluding infrastructure failures.
+
     Attributes:
-        SUCCESS: Task executed and evaluated successfully
-        TASK_EXECUTION_FAILED: Agent execution raised an exception
-        EVALUATION_FAILED: Task executed but evaluation raised an exception
-        SETUP_FAILED: Setup phase (environment, agents, evaluators) raised an exception
+        SUCCESS: Task executed and evaluated successfully.
+        AGENT_ERROR: Agent violated contract at a boundary (agent's fault, counts against score).
+        ENVIRONMENT_ERROR: Environment/tool infrastructure failed (not agent's fault, exclude from scoring).
+        USER_ERROR: User simulator failed (not agent's fault, exclude from scoring).
+        UNKNOWN_EXECUTION_ERROR: Unclassified execution error (e.g., agent framework internal failure).
+        EVALUATION_FAILED: Task executed but evaluation raised an exception.
+        SETUP_FAILED: Setup phase (environment, agents, evaluators) raised an exception.
+
+    Scoring Guidance:
+        - Include in agent score: SUCCESS, AGENT_ERROR
+        - Exclude from agent score: ENVIRONMENT_ERROR, USER_ERROR, UNKNOWN_EXECUTION_ERROR
+        - Handle separately: EVALUATION_FAILED, SETUP_FAILED
     """
 
     SUCCESS = "success"
-    TASK_EXECUTION_FAILED = "task_execution_failed"
+    AGENT_ERROR = "agent_error"
+    ENVIRONMENT_ERROR = "environment_error"
+    USER_ERROR = "user_error"
+    UNKNOWN_EXECUTION_ERROR = "unknown_execution_error"
     EVALUATION_FAILED = "evaluation_failed"
     SETUP_FAILED = "setup_failed"
+
+    # Deprecated: kept for backward compatibility, use specific error types instead
+    TASK_EXECUTION_FAILED = "task_execution_failed"
 
 
 class Benchmark(ABC):
@@ -1168,8 +1187,63 @@ class Benchmark(ABC):
                 # 2. Execute agent system with optional user interaction loop
                 try:
                     final_answers = self.execution_loop(agents_to_run, task, environment, user)
+                except AgentError as e:
+                    # Agent violated contract at boundary (agent's fault)
+                    execution_status = TaskExecutionStatus.AGENT_ERROR
+                    error_info = {
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "component": e.component,
+                        "details": e.details,
+                        "traceback": "".join(__import__("traceback").format_exception(type(e), e, e.__traceback__)),
+                    }
+
+                    if self.fail_on_task_error:
+                        # Clear registry before re-raising
+                        self.clear_registry()
+                        raise
+
+                    # Continue with trace collection even if task failed
+                    final_answers = None
+                except EnvironmentError as e:
+                    # Environment/tool infrastructure failed (not agent's fault)
+                    execution_status = TaskExecutionStatus.ENVIRONMENT_ERROR
+                    error_info = {
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "component": e.component,
+                        "details": e.details,
+                        "traceback": "".join(__import__("traceback").format_exception(type(e), e, e.__traceback__)),
+                    }
+
+                    if self.fail_on_task_error:
+                        # Clear registry before re-raising
+                        self.clear_registry()
+                        raise
+
+                    # Continue with trace collection even if task failed
+                    final_answers = None
+                except UserError as e:
+                    # User simulator failed (not agent's fault)
+                    execution_status = TaskExecutionStatus.USER_ERROR
+                    error_info = {
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "component": e.component,
+                        "details": e.details,
+                        "traceback": "".join(__import__("traceback").format_exception(type(e), e, e.__traceback__)),
+                    }
+
+                    if self.fail_on_task_error:
+                        # Clear registry before re-raising
+                        self.clear_registry()
+                        raise
+
+                    # Continue with trace collection even if task failed
+                    final_answers = None
                 except Exception as e:
-                    execution_status = TaskExecutionStatus.TASK_EXECUTION_FAILED
+                    # Unclassified error (e.g., agent framework internal failure)
+                    execution_status = TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR
                     error_info = {
                         "error_type": type(e).__name__,
                         "error_message": str(e),
@@ -1332,11 +1406,16 @@ class Benchmark(ABC):
 
         # Normalize status_filter to a set of status values (strings)
         if status_filter is None:
-            # All non-success statuses
+            # All non-success statuses (includes all classified and unclassified failures)
             filter_values = {
-                TaskExecutionStatus.TASK_EXECUTION_FAILED.value,
+                TaskExecutionStatus.AGENT_ERROR.value,
+                TaskExecutionStatus.ENVIRONMENT_ERROR.value,
+                TaskExecutionStatus.USER_ERROR.value,
+                TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR.value,
                 TaskExecutionStatus.EVALUATION_FAILED.value,
                 TaskExecutionStatus.SETUP_FAILED.value,
+                # Include deprecated status for backward compatibility
+                TaskExecutionStatus.TASK_EXECUTION_FAILED.value,
             }
         elif isinstance(status_filter, TaskExecutionStatus):
             filter_values = {status_filter.value}

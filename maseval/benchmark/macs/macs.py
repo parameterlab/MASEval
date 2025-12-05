@@ -56,6 +56,9 @@ from maseval import (
     ToolInvocationHistory,
     ToolLLMSimulator,
     User,
+    AgentError,
+    EnvironmentError,
+    validate_arguments_from_schema,
 )
 from maseval.core.config import ConfigurableMixin
 from maseval.core.tracing import TraceableMixin
@@ -85,6 +88,12 @@ class MACSGenericTool(TraceableMixin, ConfigurableMixin):
 
             def forward(self, **kwargs) -> str:
                 return self.generic_tool(**kwargs)
+
+    Error Classification:
+        - AgentError: Raised when agent provides invalid arguments (wrong types,
+          missing required args, constraint violations). Agent's fault.
+        - EnvironmentError: Raised when tool infrastructure fails after input
+          validation (LLM simulator fails, internal error). Not agent's fault.
     """
 
     def __init__(self, spec: Dict[str, Any], model: ModelAdapter):
@@ -125,8 +134,54 @@ class MACSGenericTool(TraceableMixin, ConfigurableMixin):
         return inputs
 
     def __call__(self, **kwargs) -> str:
-        """Execute the tool with simulated response."""
-        response, details = self.simulator(actual_inputs=kwargs)
+        """Execute the tool with simulated response.
+
+        Args:
+            **kwargs: Tool arguments provided by the agent.
+
+        Returns:
+            Simulated tool response string.
+
+        Raises:
+            AgentError: If agent provides invalid arguments (wrong types, missing
+                required args). This is the agent's fault.
+            EnvironmentError: If tool infrastructure fails after validation (LLM
+                simulator fails, internal error). Not the agent's fault.
+        """
+        # 1. VALIDATE INPUTS (agent's responsibility to get this right)
+        try:
+            validate_arguments_from_schema(
+                kwargs,
+                self.input_schema,
+                component=self.name,
+                strict=False,  # Allow extra args (some agents add metadata)
+            )
+        except AgentError:
+            # Re-raise AgentError as-is
+            raise
+        except (TypeError, ValueError, KeyError) as e:
+            # Convert other validation errors to AgentError
+            raise AgentError(
+                f"Invalid arguments for tool '{self.name}': {e}",
+                component=self.name,
+            ) from e
+
+        # 2. EXECUTE (our responsibility - if this fails after validation, it's on us)
+        try:
+            # ToolLLMSimulator raises ToolSimulatorError (subclass of EnvironmentError)
+            # on failure, so it's automatically classified correctly
+            response, details = self.simulator(actual_inputs=kwargs)
+        except EnvironmentError:
+            # Re-raise EnvironmentError as-is (includes ToolSimulatorError)
+            raise
+        except Exception as e:
+            # Any other error in our tool code is our fault
+            raise EnvironmentError(
+                f"Tool '{self.name}' internal error: {e}",
+                component=self.name,
+            ) from e
+
+        # 3. RECORD INVOCATION
         self.history.add_invocation(
             inputs=kwargs,
             outputs=response,
@@ -910,26 +965,69 @@ class MACSBenchmark(Benchmark):
 def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Compute summary metrics across all benchmark results.
 
+    Infrastructure errors (environment errors, user simulator errors, evaluation errors,
+    unknown errors) are excluded from scoring metrics to ensure fair evaluation. Only
+    tasks that completed execution (successfully or with agent errors) are included in
+    the success rate and mean metric calculations.
+
     Args:
         results: List of result dicts from benchmark.run()
 
     Returns:
-        Dict with total_tasks, successful_tasks, success_rate, mean_metrics
+        Dict with:
+            - total_tasks: Total number of tasks attempted
+            - scored_tasks: Tasks included in scoring (excludes infrastructure errors)
+            - successful_tasks: Tasks with overall_gsr=1.0
+            - success_rate: successful_tasks / scored_tasks
+            - mean_metrics: Mean of each metric across scored tasks
+            - excluded: Dict with counts of excluded tasks by category
+            - status_counts: Dict with counts of each status type
     """
+    # Status values that indicate infrastructure failures (not agent's fault)
+    INFRASTRUCTURE_STATUSES = {
+        "environment_error",
+        "user_error",
+        "unknown_execution_error",
+        "evaluation_failed",
+        "setup_failed",
+    }
+
     if not results:
         return {
             "total_tasks": 0,
+            "scored_tasks": 0,
             "successful_tasks": 0,
             "success_rate": 0.0,
             "mean_metrics": {},
+            "excluded": {
+                "environment_error": 0,
+                "user_error": 0,
+                "unknown_execution_error": 0,
+                "evaluation_failed": 0,
+                "setup_failed": 0,
+            },
+            "status_counts": {},
         }
 
     total_tasks = len(results)
     metric_sums: Dict[str, float] = {}
     metric_counts: Dict[str, int] = {}
     successful_tasks = 0
+    scored_tasks = 0
+    status_counts: Dict[str, int] = {}
+    excluded_counts: Dict[str, int] = {s: 0 for s in INFRASTRUCTURE_STATUSES}
 
     for res in results:
+        status = res.get("status", "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+        # Skip infrastructure failures from scoring
+        if status in INFRASTRUCTURE_STATUSES:
+            excluded_counts[status] = excluded_counts.get(status, 0) + 1
+            continue
+
+        # Task is included in scoring
+        scored_tasks += 1
         evals = res.get("eval") or []
         found_success = False
 
@@ -945,12 +1043,15 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         if found_success:
             successful_tasks += 1
 
-    success_rate = successful_tasks / total_tasks if total_tasks > 0 else 0.0
+    success_rate = successful_tasks / scored_tasks if scored_tasks > 0 else 0.0
     mean_metrics = {k: metric_sums[k] / metric_counts[k] if metric_counts[k] else 0.0 for k in metric_sums}
 
     return {
         "total_tasks": total_tasks,
+        "scored_tasks": scored_tasks,
         "successful_tasks": successful_tasks,
         "success_rate": success_rate,
         "mean_metrics": mean_metrics,
+        "excluded": excluded_counts,
+        "status_counts": status_counts,
     }

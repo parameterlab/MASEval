@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Exceptions and Error Classification**
+
+- Added `AgentError`, `EnvironmentError`, `UserError` exception hierarchy in `maseval.core.exceptions` for classifying execution failures by responsibility (PR: #13)
+- Added `TaskExecutionStatus.AGENT_ERROR`, `ENVIRONMENT_ERROR`, `USER_ERROR`, `UNKNOWN_EXECUTION_ERROR` for fine-grained error classification enabling fair scoring (PR: #13)
+- Added validation helpers: `validate_argument_type()`, `validate_required_arguments()`, `validate_no_extra_arguments()`, `validate_arguments_from_schema()` for tool implementers (PR: #13)
+- Added `ToolSimulatorError` and `UserSimulatorError` exception subclasses that inherit from both `SimulatorError` and the appropriate MASEval error type (PR: #13)
+
 **Benchmarks**
 
 - MACS Benchmark: Multi-Agent Collaboration Scenarios benchmark (PR: #13)
@@ -40,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a new example: The `5_a_day_benchmark` (PR: #10)
 
 ### Changed
+
+**Exception Handling**
+
+- Benchmark now classifies execution errors into `AGENT_ERROR` (agent's fault), `ENVIRONMENT_ERROR` (tool/infra failure), `USER_ERROR` (user simulator failure), or `UNKNOWN_EXECUTION_ERROR` (unclassified) instead of generic `TASK_EXECUTION_FAILED` (PR: #13)
+- `ToolLLMSimulator` now raises `ToolSimulatorError` (classified as `ENVIRONMENT_ERROR`) on failure (PR: #13)
+- `UserLLMSimulator` now raises `UserSimulatorError` (classified as `USER_ERROR`) on failure (PR: #13)
 
 **Environment**
 
