@@ -27,11 +27,11 @@ class TestMACSBenchmarkSetup:
     """Tests for MACSBenchmark initialization and setup methods."""
 
     def test_init_configures_benchmark(self, macs_model, sample_agent_data):
-        """Benchmark initializes with agent_data and optional params."""
+        """Benchmark initializes with optional params."""
         callbacks = [MagicMock()]
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model, callbacks=callbacks, n_task_repeats=3)
+        benchmark = ConcreteMACSBenchmark(macs_model, callbacks=callbacks, n_task_repeats=3)
 
-        assert benchmark.agent_data == sample_agent_data
+        # agent_data is now passed to run(), not __init__
         assert benchmark.callbacks == callbacks
         assert benchmark.n_task_repeats == 3
 
@@ -41,13 +41,13 @@ class TestMACSBenchmarkSetup:
         This is a MACS-specific default that differs from the base class default of 1.
         The MACS paper specifies up to 5 agent-user interaction rounds.
         """
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
 
         assert benchmark.max_invocations == 5
 
     def test_setup_environment_creates_macs_environment(self, macs_model, sample_agent_data, sample_task):
         """setup_environment returns MACSEnvironment with tools."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
 
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 
@@ -56,7 +56,7 @@ class TestMACSBenchmarkSetup:
 
     def test_setup_user_creates_macs_user(self, macs_model, sample_agent_data, sample_task):
         """setup_user returns MACSUser with scenario from task."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 
         user = benchmark.setup_user(sample_agent_data, env, sample_task)
@@ -66,7 +66,7 @@ class TestMACSBenchmarkSetup:
 
     def test_setup_user_handles_no_scenario(self, macs_model, sample_agent_data, sample_task_no_scenario):
         """Handles missing scenario gracefully."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task_no_scenario)
 
         user = benchmark.setup_user(sample_agent_data, env, sample_task_no_scenario)
@@ -75,7 +75,7 @@ class TestMACSBenchmarkSetup:
 
     def test_setup_evaluators_creates_user_and_system(self, macs_model, sample_agent_data, sample_task):
         """Creates both user and system evaluators."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents = [MACSAgentAdapter()]
 
@@ -114,7 +114,7 @@ class TestRunAgents:
 
     def test_run_agents_executes_agents_with_query(self, macs_model, sample_agent_data, sample_task):
         """Agents are executed with the query parameter."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 
         agents_list, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
@@ -134,7 +134,7 @@ class TestRunAgents:
         This is critical for multi-turn interaction where the query changes
         between invocations (e.g., user's response becomes the next query).
         """
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
@@ -150,7 +150,7 @@ class TestRunAgents:
 
     def test_run_agents_returns_answer(self, macs_model, sample_agent_data, sample_task):
         """Returns final answer(s) as MessageHistory."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
@@ -164,7 +164,7 @@ class TestRunAgents:
 
     def test_run_agents_single_agent(self, macs_model, sample_agent_data, sample_task):
         """Single agent returns MessageHistory."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
@@ -176,9 +176,9 @@ class TestRunAgents:
         """Multiple agents return list of answers."""
 
         class MultiAgentBenchmark(MACSBenchmark):
-            def __init__(self, agent_data, model_factory, **kwargs):
+            def __init__(self, model_factory, **kwargs):
                 self._model_factory = model_factory if callable(model_factory) else lambda _: model_factory
-                super().__init__(agent_data, **kwargs)
+                super().__init__(**kwargs)
 
             def get_model_adapter(self, model_id: str, **kwargs):
                 return self._model_factory(model_id)
@@ -194,7 +194,7 @@ class TestRunAgents:
                 agent2: AgentAdapter = MACSAgentAdapter("agent2")
                 return [agent1, agent2], {"agent1": agent1, "agent2": agent2}
 
-        benchmark = MultiAgentBenchmark(sample_agent_data, macs_model)
+        benchmark = MultiAgentBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
@@ -221,7 +221,7 @@ class TestEvaluation:
             '[{"assertion": "System assertion", "answer": "TRUE", "evidence": "OK"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -251,7 +251,7 @@ class TestEvaluation:
             '[{"assertion": "B", "answer": "TRUE", "evidence": "OK"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -281,7 +281,7 @@ class TestEvaluation:
             '[{"assertion": "B", "answer": "FALSE", "evidence": "Fail"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -305,7 +305,7 @@ class TestEvaluation:
             '[{"assertion": "B", "answer": "FALSE", "evidence": "Fail"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -327,7 +327,7 @@ class TestEvaluation:
             '[{"assertion": "System B", "answer": "TRUE", "evidence": "OK"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -612,7 +612,7 @@ class TestMACSBenchmarkIntegration:
             '[{"assertion": "Database updated", "answer": "TRUE", "evidence": "Updated"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
 
         # Setup phase
         env = benchmark.setup_environment(sample_agent_data, sample_task)
@@ -646,7 +646,7 @@ class TestMACSBenchmarkIntegration:
     def test_benchmark_with_real_environment(self, sample_agent_data, sample_task):
         """Test with real MACSEnvironment tool creation."""
         model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
 
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 

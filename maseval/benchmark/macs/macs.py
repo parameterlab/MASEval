@@ -36,8 +36,8 @@ Usage:
             return adapter
 
     # Run
-    benchmark = MyMACSBenchmark(agent_data=agent_config)
-    results = benchmark.run(tasks)
+    benchmark = MyMACSBenchmark()
+    results = benchmark.run(tasks, agent_data=agent_config)
 """
 
 import json
@@ -691,7 +691,6 @@ class MACSBenchmark(Benchmark):
 
     def __init__(
         self,
-        agent_data: Dict[str, Any],
         callbacks: Optional[List[Any]] = None,
         n_task_repeats: int = 1,
         max_invocations: int = 5,
@@ -700,12 +699,11 @@ class MACSBenchmark(Benchmark):
         """Initialize benchmark.
 
         Args:
-            agent_data: Agent configuration from load_agent_config().
             callbacks: Benchmark callbacks
             n_task_repeats: Repetitions per task
             max_invocations: Maximum agent-user interaction rounds (default: 5 per MACS paper)
         """
-        super().__init__(agent_data, callbacks, n_task_repeats, max_invocations, **kwargs)
+        super().__init__(callbacks=callbacks, n_task_repeats=n_task_repeats, max_invocations=max_invocations, **kwargs)
 
     def _get_tool_model_id(self, task: Task) -> str:
         """Get tool simulator model ID from task.environment_data.

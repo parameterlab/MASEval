@@ -319,13 +319,14 @@ def dummy_task_queue():
 
 @pytest.fixture
 def simple_benchmark(dummy_task_queue):
-    """Create a simple benchmark instance with tasks.
+    """Create a simple benchmark instance with tasks and agent_data.
 
     Returns:
-        tuple: (benchmark, tasks) - Call as benchmark.run(tasks)
+        tuple: (benchmark, tasks, agent_data) - Call as benchmark.run(tasks, agent_data=agent_data)
     """
-    benchmark = DummyBenchmark(agent_data={"model": "test"})
-    return benchmark, dummy_task_queue
+    benchmark = DummyBenchmark()
+    agent_data = {"model": "test"}
+    return benchmark, dummy_task_queue, agent_data
 
 
 @pytest.fixture

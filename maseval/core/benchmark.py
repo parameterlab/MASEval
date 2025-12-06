@@ -99,21 +99,26 @@ class Benchmark(ABC):
                 # ... implement other abstract methods
 
             # Run the benchmark
-            benchmark = MyBenchmark(agent_data=config)
-            reports = benchmark.run(tasks=my_tasks)
+            config = {"model": "gpt-4", "temperature": 0.7}
+            benchmark = MyBenchmark()
+            reports = benchmark.run(tasks=my_tasks, agent_data=config)
 
             # Retry failed tasks elegantly (graceful task failure handling by default)
             failed_tasks = benchmark.get_failed_tasks()
             if len(failed_tasks) > 0:
-                retry_reports = benchmark.run(tasks=failed_tasks)
+                retry_reports = benchmark.run(tasks=failed_tasks, agent_data=config)
+
+            # Parallel execution for I/O-bound workloads
+            benchmark = MyBenchmark(max_workers=4)
+            reports = benchmark.run(tasks=my_tasks, agent_data=config)
 
             # Or use strict mode for debugging (fail fast)
             benchmark = MyBenchmark(
-                agent_data=config,
                 fail_on_task_error=True,
                 fail_on_evaluation_error=True,
                 fail_on_setup_error=True
             )
+            reports = benchmark.run(tasks=my_tasks, agent_data=config)
             ```
 
         The framework handles task iteration, repetitions for statistical robustness, callback
@@ -123,21 +128,18 @@ class Benchmark(ABC):
 
     def __init__(
         self,
-        agent_data: Dict[str, Any] | Iterable[Dict[str, Any]],
         callbacks: Optional[List[BenchmarkCallback]] = None,
         n_task_repeats: int = 1,
         max_invocations: int = 1,
+        max_workers: int = 1,
         fail_on_setup_error: bool = False,
         fail_on_task_error: bool = False,
         fail_on_evaluation_error: bool = False,
         progress_bar: bool | str = True,
     ):
-        """Initialize a benchmark with agent configurations.
+        """Initialize a benchmark with execution configuration.
 
         Args:
-            agent_data: Configuration for agents. Either a single dict applied to all tasks, or
-                an iterable of dicts with one configuration per task. Agent data typically includes
-                model parameters, agent architecture details, and tool specifications.
             callbacks: Optional list of callback handlers for monitoring execution, tracing messages,
                 or collecting custom metrics during the benchmark run.
             n_task_repeats: Number of times to repeat each task. Useful for measuring variance in
@@ -146,6 +148,9 @@ class Benchmark(ABC):
                 For simple benchmarks, the default (1) means agents run once per task. For interactive
                 benchmarks with user feedback loops, set higher (e.g., 5 for MACS) to allow multiple
                 agent-user interaction rounds.
+            max_workers: Maximum number of parallel task executions. Default 1 (sequential).
+                Set higher for I/O-bound workloads (e.g., LLM API calls). This controls the
+                ThreadPoolExecutor worker count for concurrent task processing.
             fail_on_setup_error: If True, raise exceptions when setup fails (environment, agents, evaluators).
                 If False (default), catch exceptions during setup and record them in the report with status
                 SETUP_FAILED. This allows the benchmark to continue running remaining tasks even if setup fails.
@@ -168,52 +173,32 @@ class Benchmark(ABC):
             ValueError: If n_task_repeats is less than 1.
 
         How to use:
-            Provide either a single agent configuration for all tasks, or task-specific configurations:
+            Configure execution settings at initialization:
 
             ```python
-            # Single config for all tasks
-            benchmark = MyBenchmark(agent_data={"model": "gpt-4", "temperature": 0.7})
+            # Sequential execution (default)
+            benchmark = MyBenchmark()
 
-            # Task-specific configs (will be validated in run() based on task count)
-            benchmark = MyBenchmark(
-                agent_data=[
-                    {"model": "gpt-4", "config": "easy"},
-                    {"model": "gpt-4", "config": "hard"}
-                ]
-            )
-
-            # Enable failure-safe execution (default behavior)
-            benchmark = MyBenchmark(
-                agent_data=config,
-                fail_on_task_error=False,  # Continue on task failures
-                fail_on_evaluation_error=False  # Continue on evaluation failures
-            )
+            # Parallel execution for faster I/O-bound workloads
+            benchmark = MyBenchmark(max_workers=4)
 
             # Strict mode - fail fast on any error (useful for debugging)
             benchmark = MyBenchmark(
-                agent_data=config,
                 fail_on_task_error=True,
                 fail_on_evaluation_error=True,
                 fail_on_setup_error=True
             )
 
-            # Progress bar configuration (automatically adds a callback)
-            benchmark = MyBenchmark(agent_data=config)  # Default: adds TqdmProgressBarCallback
-            benchmark = MyBenchmark(agent_data=config, progress_bar=True)  # Explicit: TqdmProgressBarCallback
-            benchmark = MyBenchmark(agent_data=config, progress_bar="tqdm")  # Same as True
-            benchmark = MyBenchmark(agent_data=config, progress_bar="rich")  # Uses RichProgressBarCallback
-            benchmark = MyBenchmark(agent_data=config, progress_bar=False)  # No automatic callback
+            # Progress bar configuration
+            benchmark = MyBenchmark()  # Default: adds TqdmProgressBarCallback
+            benchmark = MyBenchmark(progress_bar=True)  # Explicit: TqdmProgressBarCallback
+            benchmark = MyBenchmark(progress_bar="rich")  # Uses RichProgressBarCallback
+            benchmark = MyBenchmark(progress_bar=False)  # No automatic callback
 
-            # Progress bar configuration (manually add a callback)
-            benchmark = MyBenchmark(
-                agent_data=config,
-                callbacks=[MyCustomProgressBarCallback()]  # User-defined progress bar
-            )
+            # Custom callbacks
+            benchmark = MyBenchmark(callbacks=[MyCustomProgressBarCallback()])
             ```
         """
-        # Store agent_data as-is (will be normalized in run())
-        self.agent_data = agent_data
-
         # Initialize tasks to empty queue (will be set in run())
         self.tasks: BaseTaskQueue = SequentialTaskQueue([])
 
@@ -238,8 +223,9 @@ class Benchmark(ABC):
         if self.n_task_repeats < 1:
             raise ValueError("n_task_repeats must be at least 1")
 
-        # Execution loop configuration
+        # Execution configuration
         self.max_invocations = max_invocations
+        self.max_workers = max_workers
 
         # Failure handling configuration
         self.fail_on_task_error = fail_on_task_error
@@ -411,9 +397,7 @@ class Benchmark(ABC):
         """
         return self._registry.collect_configs()
 
-    def _invoke_callbacks(
-        self, method_name: str, *args, suppress_errors: bool = True, **kwargs
-    ) -> List[Exception]:
+    def _invoke_callbacks(self, method_name: str, *args, suppress_errors: bool = True, **kwargs) -> List[Exception]:
         """Invoke a callback method on all registered callbacks (thread-safe).
 
         This method serializes all callback invocations using an internal lock,
@@ -1318,7 +1302,7 @@ class Benchmark(ABC):
     def run(
         self,
         tasks: Union[Task, BaseTaskQueue, Iterable[Union[Task, dict]]],
-        max_workers: int = 1,
+        agent_data: Dict[str, Any] | Iterable[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """Initialize and execute the complete benchmark loop across all tasks.
 
@@ -1331,8 +1315,9 @@ class Benchmark(ABC):
                 When a BaseTaskQueue is provided, it controls the task ordering. AdaptiveTaskQueue
                 subclasses are automatically registered as callbacks to receive task completion
                 notifications.
-            max_workers: Maximum number of parallel task executions. Default 1 (sequential).
-                Set higher for I/O-bound workloads (e.g., LLM API calls).
+            agent_data: Configuration for agents. Either a single dict applied to all tasks, or
+                an iterable of dicts with one configuration per task. Agent data typically includes
+                model parameters, agent architecture details, and tool specifications.
 
         Returns:
             List of report dictionaries, one per task repetition. Each report contains:
@@ -1401,8 +1386,8 @@ class Benchmark(ABC):
 
             ```python
             # Typical usage
-            benchmark = MyBenchmark(agent_data=config)
-            reports = benchmark.run(tasks=tasks)
+            benchmark = MyBenchmark()
+            reports = benchmark.run(tasks=tasks, agent_data=config)
 
             # Analyze results
             for report in reports:
@@ -1411,14 +1396,27 @@ class Benchmark(ABC):
                 print(f"Traces: {report['traces']}")
 
             # Parallel execution with 4 workers
-            reports = benchmark.run(tasks=tasks, max_workers=4)
+            benchmark = MyBenchmark(max_workers=4)
+            reports = benchmark.run(tasks=tasks, agent_data=config)
+
+            # Single agent config for all tasks
+            reports = benchmark.run(tasks=tasks, agent_data={"model": "gpt-4"})
+
+            # Task-specific agent configs (must match task count)
+            reports = benchmark.run(
+                tasks=tasks,
+                agent_data=[
+                    {"model": "gpt-4", "difficulty": "easy"},
+                    {"model": "gpt-4", "difficulty": "hard"},
+                ]
+            )
 
             # Priority-based execution
             from maseval.core.task import PriorityTaskQueue
             for task in tasks:
                 task.protocol.priority = compute_priority(task)
             queue = PriorityTaskQueue(tasks)
-            reports = benchmark.run(tasks=queue)
+            reports = benchmark.run(tasks=queue, agent_data=config)
 
             # Adaptive queue (auto-registered as callback)
             queue = MyAdaptiveTaskQueue(tasks)
@@ -1441,7 +1439,7 @@ class Benchmark(ABC):
         self.tasks = queue
 
         # Build agent_data lookup (task_id -> agent_data)
-        agent_data_lookup = self._build_agent_data_lookup(queue)
+        agent_data_lookup = self._build_agent_data_lookup(queue, agent_data)
 
         # Clear reports from previous run() calls to prevent accumulation
         self.reports = []
@@ -1457,10 +1455,10 @@ class Benchmark(ABC):
             self._invoke_callbacks("on_run_start", self)
 
             # Execute based on max_workers
-            if max_workers == 1:
+            if self.max_workers == 1:
                 self._run_sequential(queue, agent_data_lookup)
             else:
-                self._run_parallel(queue, agent_data_lookup, max_workers)
+                self._run_parallel(queue, agent_data_lookup, self.max_workers)
 
             # Callbacks at the end of the run
             self._invoke_callbacks("on_run_end", self, self.reports)
@@ -1471,11 +1469,14 @@ class Benchmark(ABC):
 
         return self.reports
 
-    def _build_agent_data_lookup(self, tasks: BaseTaskQueue) -> Dict[str, Dict[str, Any]]:
+    def _build_agent_data_lookup(
+        self, tasks: BaseTaskQueue, agent_data: Dict[str, Any] | Iterable[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
         """Build a mapping from task_id to agent_data configuration.
 
         Args:
             tasks: The task queue containing all tasks.
+            agent_data: Agent configuration(s) to map to tasks.
 
         Returns:
             Dict mapping task_id (string) to agent_data configuration.
@@ -1483,12 +1484,12 @@ class Benchmark(ABC):
         Raises:
             ValueError: If agent_data is a list but doesn't match the number of tasks.
         """
-        if isinstance(self.agent_data, dict):
+        if isinstance(agent_data, dict):
             # Single config - replicate for all tasks
-            return {str(task.id): cast(Dict[str, Any], self.agent_data) for task in tasks}
+            return {str(task.id): cast(Dict[str, Any], agent_data) for task in tasks}
 
         # List of configs - pair by position
-        agent_data_list = list(self.agent_data)
+        agent_data_list = list(agent_data)
         if len(agent_data_list) != len(tasks):
             raise ValueError(
                 f"`agent_data` must either be a single dict or an iterable matching the number of tasks. "
@@ -1527,8 +1528,8 @@ class Benchmark(ABC):
         How to use:
             ```python
             # Run benchmark
-            benchmark = MyBenchmark(agent_data=config)
-            reports = benchmark.run(tasks=tasks)
+            benchmark = MyBenchmark()
+            reports = benchmark.run(tasks=tasks, agent_data=config)
 
             # Get all failed tasks (from internal state)
             failed = benchmark.get_failed_tasks()

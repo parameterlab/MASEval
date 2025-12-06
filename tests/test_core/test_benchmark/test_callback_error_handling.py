@@ -72,10 +72,12 @@ class TrackingCallback(BenchmarkCallback):
 @pytest.fixture
 def simple_tasks():
     """Create simple tasks for testing."""
-    return TaskQueue.from_list([
-        {"query": "Task 1", "environment_data": {}},
-        {"query": "Task 2", "environment_data": {}},
-    ])
+    return TaskQueue.from_list(
+        [
+            {"query": "Task 1", "environment_data": {}},
+            {"query": "Task 2", "environment_data": {}},
+        ]
+    )
 
 
 # ==================== Error Suppression Tests ====================
@@ -91,12 +93,11 @@ class TestCallbackErrorSuppression:
 
         failing_cb = FailingCallback(fail_on="on_task_start")
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb],
         )
 
         # Should complete despite callback failure
-        reports = benchmark.run(simple_tasks)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         assert len(reports) == 2
         assert all(r["status"] == "success" for r in reports)
@@ -114,11 +115,10 @@ class TestCallbackErrorSuppression:
         tracking_cb = TrackingCallback()
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb, tracking_cb],
         )
 
-        reports = benchmark.run(simple_tasks)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         # Execution completes
         assert len(reports) == 2
@@ -138,11 +138,10 @@ class TestCallbackErrorSuppression:
 
         failing_cb = FailingCallback(fail_on="on_task_repeat_end")
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb],
         )
 
-        reports = benchmark.run(simple_tasks)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         # All tasks complete
         assert len(reports) == 2
@@ -160,11 +159,10 @@ class TestCallbackErrorSuppression:
                 raise RuntimeError("Failed at run start")
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[RunStartFailer()],
         )
 
-        reports = benchmark.run(simple_tasks)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         assert len(reports) == 2
         assert "on_run_start" in caplog.text
@@ -178,11 +176,10 @@ class TestCallbackErrorSuppression:
                 raise RuntimeError("Failed at run end")
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[RunEndFailer()],
         )
 
-        reports = benchmark.run(simple_tasks)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         # Reports are generated (run_end happens after report collection)
         assert len(reports) == 2
@@ -204,12 +201,11 @@ class TestCallbackErrorHandlingParallel:
         tracking_cb = TrackingCallback()
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb, tracking_cb],
         )
 
         # Run in parallel
-        reports = benchmark.run(simple_tasks, max_workers=2)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         # All tasks complete
         assert len(reports) == 2
@@ -225,19 +221,15 @@ class TestCallbackErrorHandlingParallel:
         """Callback failures should not interfere across parallel workers."""
         caplog.set_level(logging.ERROR)
 
-        tasks = TaskQueue.from_list([
-            {"query": f"Task {i}", "environment_data": {}}
-            for i in range(5)
-        ])
+        tasks = TaskQueue.from_list([{"query": f"Task {i}", "environment_data": {}} for i in range(5)])
 
         failing_cb = FailingCallback(fail_on="on_task_repeat_start")
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb],
         )
 
-        reports = benchmark.run(tasks, max_workers=3)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
 
         # All 5 tasks complete despite callback failures
         assert len(reports) == 5
@@ -259,7 +251,6 @@ class TestCallbackErrorReturnValues:
         """_invoke_callbacks should return empty list when no errors occur."""
         tracking_cb = TrackingCallback()
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[tracking_cb],
         )
 
@@ -276,7 +267,6 @@ class TestCallbackErrorReturnValues:
         tracking_cb = TrackingCallback()
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb1, tracking_cb, failing_cb2],
         )
 
@@ -296,7 +286,6 @@ class TestCallbackErrorReturnValues:
         tracking_cb = TrackingCallback()
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb, tracking_cb],
         )
 
@@ -327,11 +316,10 @@ class TestCallbackExceptionTypes:
 
         failing_cb = FailingCallback(fail_on="on_task_repeat_start")
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb],
         )
 
-        reports = benchmark.run(simple_tasks)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         assert len(reports) == 2
         assert "ValueError" in caplog.text
@@ -342,11 +330,10 @@ class TestCallbackExceptionTypes:
 
         failing_cb = FailingCallback(fail_on="on_task_repeat_end")
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb],
         )
 
-        reports = benchmark.run(simple_tasks)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         assert len(reports) == 2
         assert "TypeError" in caplog.text
@@ -357,11 +344,10 @@ class TestCallbackExceptionTypes:
 
         failing_cb = FailingCallback(fail_on="on_task_end")
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb],
         )
 
-        reports = benchmark.run(simple_tasks)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         assert len(reports) == 2
         assert "KeyError" in caplog.text
@@ -383,12 +369,11 @@ class TestCallbackErrorHandlingIntegration:
         failing_cb = FailingCallback(fail_on="on_task_repeat_end")
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             n_task_repeats=3,
             callbacks=[failing_cb],
         )
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
 
         # 3 reports (one per repeat)
         assert len(reports) == 3
@@ -410,11 +395,10 @@ class TestCallbackErrorHandlingIntegration:
         tracking_cb2 = TrackingCallback()
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[failing_cb1, tracking_cb1, failing_cb2, tracking_cb2],
         )
 
-        reports = benchmark.run(simple_tasks)
+        reports = benchmark.run(simple_tasks, agent_data={"model": "test"})
 
         # Execution completes
         assert len(reports) == 2

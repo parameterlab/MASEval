@@ -44,7 +44,7 @@ class TestFullBenchmarkIntegration:
             json.dumps([{"assertion": "Tool called", "answer": "TRUE", "evidence": "OK"}]),
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
 
         # Setup phase
         env = benchmark.setup_environment(sample_agent_data, travel_task)
@@ -111,7 +111,7 @@ class TestDataLoadingIntegration:
             metadata={"scenario": "Travel booking scenario", "task_id": "task-000001"},
         )
 
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, task)
 
         assert "search" in env.tools
@@ -199,8 +199,8 @@ class TestEndToEndPipeline:
             ]
         )
 
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
-        reports = benchmark.run([travel_task])
+        benchmark = ConcreteMACSBenchmark(model)
+        reports = benchmark.run([travel_task], agent_data=sample_agent_data)
 
         # Verify complete report structure
         assert len(reports) == 1
@@ -222,8 +222,8 @@ class TestEndToEndPipeline:
             ]
         )
 
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
-        reports = benchmark.run(macs_task_queue)
+        benchmark = ConcreteMACSBenchmark(model)
+        reports = benchmark.run(macs_task_queue, agent_data=sample_agent_data)
 
         assert len(reports) == len(macs_task_queue)
         for report in reports:
@@ -241,8 +241,8 @@ class TestEndToEndPipeline:
         )
 
         n_repeats = 3
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model, n_task_repeats=n_repeats)
-        reports = benchmark.run([sample_task])
+        benchmark = ConcreteMACSBenchmark(model, n_task_repeats=n_repeats)
+        reports = benchmark.run([sample_task], agent_data=sample_agent_data)
 
         assert len(reports) == n_repeats
         for i, report in enumerate(reports):
@@ -284,8 +284,8 @@ class TestEndToEndPipeline:
         )
 
         callback = TrackingCallback()
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model, callbacks=[callback])
-        benchmark.run([sample_task])
+        benchmark = ConcreteMACSBenchmark(model, callbacks=[callback])
+        benchmark.run([sample_task], agent_data=sample_agent_data)
 
         # Verify callback sequence
         expected_order = ["run_start", "task_start", "repeat_start_0", "repeat_end_0", "task_end", "run_end"]

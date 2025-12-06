@@ -23,7 +23,7 @@ def test_automatic_agent_registration():
     tasks = TaskQueue.from_list([{"query": "test", "id": "1", "environment_data": {}}])
     agent_data = {}
 
-    benchmark = DummyBenchmark(agent_data=agent_data)
+    benchmark = DummyBenchmark()
 
     # Before run, registry should be empty
     assert len(benchmark._registry._trace_registry) == 0
@@ -57,7 +57,7 @@ def test_duplicate_registration_detection():
     Verifies that the ID-based tracking system detects when a component instance
     is registered multiple times with different names, preventing data confusion.
     """
-    benchmark = DummyBenchmark(agent_data={})
+    benchmark = DummyBenchmark()
 
     # Create a component
     model = DummyModelAdapter()
@@ -84,7 +84,7 @@ def test_duplicate_registration_helpful_message():
     Verifies that error message includes both the existing registration name
     and the attempted new name, plus mentions automatic registration.
     """
-    benchmark = DummyBenchmark(agent_data={})
+    benchmark = DummyBenchmark()
 
     # Create and register an agent
     agent = DummyAgent()
@@ -108,7 +108,7 @@ def test_manual_registration_for_models():
     Verifies that models are not automatically registered (unlike agents,
     environments, and users), requiring explicit register() calls.
     """
-    benchmark = DummyBenchmark(agent_data={})
+    benchmark = DummyBenchmark()
 
     # Create a model
     model = DummyModelAdapter()
@@ -128,7 +128,7 @@ def test_component_id_tracking():
     Verifies that benchmark maintains a Python id() to name mapping for
     detecting duplicate registrations of the same component instance.
     """
-    benchmark = DummyBenchmark(agent_data={})
+    benchmark = DummyBenchmark()
 
     # Create a component
     model = DummyModelAdapter()
@@ -156,10 +156,10 @@ def test_registry_cleared_after_repetition():
     )
     agent_data = {}
 
-    benchmark = DummyBenchmark(agent_data=agent_data, n_task_repeats=2)
+    benchmark = DummyBenchmark(n_task_repeats=2)
 
     # Run the benchmark
-    benchmark.run(tasks)
+    benchmark.run(tasks, agent_data=agent_data)
 
     # After run completes, registry should be empty (cleared after last repetition)
     assert len(benchmark._registry._trace_registry) == 0
