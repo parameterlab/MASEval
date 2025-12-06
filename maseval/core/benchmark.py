@@ -1,14 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Iterable, Optional, Sequence, Tuple, Union, cast
-from datetime import datetime
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 import warnings
 import traceback
 
 from .evaluator import Evaluator
-from .task import Task, TaskCollection
+from .task import Task, BaseTaskQueue, SequentialTaskQueue
 from .environment import Environment
 from .agent import AgentAdapter
 from .model import ModelAdapter
@@ -16,9 +15,7 @@ from .callback_handler import CallbackHandler
 from .callback import BenchmarkCallback
 from .user import User
 from .tracing import TraceableMixin
-from .config import ConfigurableMixin
 from .registry import ComponentRegistry
-from .queue import TaskQueue, SequentialQueue
 from .context import TaskContext
 from .utils.system_info import gather_benchmark_config
 from .callbacks.progress_bar import (
@@ -216,8 +213,8 @@ class Benchmark(ABC):
         # Store agent_data as-is (will be normalized in run())
         self.agent_data = agent_data
 
-        # Initialize tasks to empty collection (will be set in run())
-        self.tasks = TaskCollection([])
+        # Initialize tasks to empty queue (will be set in run())
+        self.tasks: BaseTaskQueue = SequentialTaskQueue([])
 
         self.callback_handler = CallbackHandler()
         self.callbacks = callbacks or []
@@ -1148,14 +1145,18 @@ class Benchmark(ABC):
 
     def _run_sequential(
         self,
-        queue: TaskQueue,
+        queue: BaseTaskQueue,
+        agent_data_lookup: Dict[str, Dict[str, Any]],
     ) -> None:
         """Execute tasks sequentially with optional timeout support.
 
         Args:
             queue: Task queue providing task ordering.
+            agent_data_lookup: Mapping from task_id to agent_data configuration.
         """
-        for task, agent_data in queue:
+        for task in queue:
+            agent_data = agent_data_lookup[str(task.id)]
+
             # Callbacks at the start of each task
             self._invoke_callbacks("on_task_start", self, task)
 
@@ -1181,23 +1182,26 @@ class Benchmark(ABC):
 
     def _run_parallel(
         self,
-        queue: TaskQueue,
+        queue: BaseTaskQueue,
+        agent_data_lookup: Dict[str, Dict[str, Any]],
         max_workers: int,
     ) -> None:
         """Execute tasks in parallel with thread pool.
 
         Args:
             queue: Task queue providing task ordering.
+            agent_data_lookup: Mapping from task_id to agent_data configuration.
             max_workers: Maximum number of concurrent workers.
         """
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures: Dict[Any, Tuple[Task, int]] = {}
             task_repeat_counts: Dict[str, int] = {}  # Track submitted repeats per task
 
-            def submit_task_repeats(task: Task, agent_data: Dict[str, Any]) -> None:
+            def submit_task_repeats(task: Task) -> None:
                 """Submit all repeats for a task."""
                 task_id = str(task.id)
                 task_repeat_counts[task_id] = 0
+                agent_data = agent_data_lookup[task_id]
 
                 self._invoke_callbacks("on_task_start", self, task)
 
@@ -1215,8 +1219,8 @@ class Benchmark(ABC):
 
             # Submit initial batch from queue
             submitted_tasks: List[Task] = []
-            for task, agent_data in queue:
-                submit_task_repeats(task, agent_data)
+            for task in queue:
+                submit_task_repeats(task)
                 submitted_tasks.append(task)
 
                 # Limit initial submission to avoid over-committing
@@ -1226,7 +1230,7 @@ class Benchmark(ABC):
             # Process completions
             completed_task_ids: set = set()
             queue_iter = iter(queue)
-            queue_exhausted = len(submitted_tasks) >= len(list(queue))  # Approximate check
+            queue_exhausted = len(submitted_tasks) >= len(queue)
 
             while futures:
                 # Wait for at least one completion
@@ -1285,24 +1289,28 @@ class Benchmark(ABC):
                 # Submit more work if queue not exhausted
                 if not queue_exhausted and len(futures) < max_workers:
                     try:
-                        task, agent_data = next(queue_iter)
-                        submit_task_repeats(task, agent_data)
+                        task = next(queue_iter)
+                        submit_task_repeats(task)
                         submitted_tasks.append(task)
                     except StopIteration:
                         queue_exhausted = True
 
     def run(
         self,
-        tasks: Union[Task, TaskCollection, Iterable[Union[Task, dict]]],
-        queue: Optional[TaskQueue] = None,
+        tasks: Union[Task, BaseTaskQueue, Iterable[Union[Task, dict]]],
         max_workers: int = 1,
     ) -> List[Dict[str, Any]]:
         """Initialize and execute the complete benchmark loop across all tasks.
 
         Args:
-            tasks: Collection of tasks to execute. Can be a single Task, TaskCollection,
-                list of Task objects, or list of dicts that will be converted to Tasks.
-            queue: Optional task queue for custom scheduling. If None, uses SequentialQueue.
+            tasks: Task source for execution. Can be:
+                - A single Task object
+                - A BaseTaskQueue (SequentialTaskQueue, PriorityTaskQueue, or custom AdaptiveTaskQueue)
+                - An iterable of Task objects or dicts that will be converted to Tasks
+
+                When a BaseTaskQueue is provided, it controls the task ordering. AdaptiveTaskQueue
+                subclasses are automatically registered as callbacks to receive task completion
+                notifications.
             max_workers: Maximum number of parallel task executions. Default 1 (sequential).
                 Set higher for I/O-bound workloads (e.g., LLM API calls).
 
@@ -1385,62 +1393,95 @@ class Benchmark(ABC):
             # Parallel execution with 4 workers
             reports = benchmark.run(tasks=tasks, max_workers=4)
 
-            # Custom queue for priority-based execution
-            from maseval.core.queue import PriorityQueue
-            queue = PriorityQueue(tasks, agent_data_list)
-            reports = benchmark.run(tasks=tasks, queue=queue)
+            # Priority-based execution
+            from maseval.core.task import PriorityTaskQueue
+            for task in tasks:
+                task.protocol.priority = compute_priority(task)
+            queue = PriorityTaskQueue(tasks)
+            reports = benchmark.run(tasks=queue)
+
+            # Adaptive queue (auto-registered as callback)
+            queue = MyAdaptiveTaskQueue(tasks)
+            reports = benchmark.run(tasks=queue)  # queue receives on_task_complete callbacks
             ```
         """
-        # Normalize tasks into a TaskCollection
+        # Normalize tasks into a queue
+        queue: BaseTaskQueue
         if isinstance(tasks, Task):
-            # Single task
-            self.tasks = TaskCollection([tasks])
-        elif isinstance(tasks, TaskCollection):
-            self.tasks = tasks
+            # Single task - wrap in SequentialTaskQueue
+            queue = SequentialTaskQueue([tasks])
+        elif isinstance(tasks, BaseTaskQueue):
+            # Already a queue - use directly
+            queue = tasks
         else:
-            # Iterable of tasks or dicts
-            self.tasks = TaskCollection.from_list(list(tasks))
+            # Iterable of tasks or dicts - wrap in SequentialTaskQueue
+            queue = SequentialTaskQueue.from_list(list(tasks))
 
-        # Normalize agent_data into a list matching the number of tasks
-        if isinstance(self.agent_data, dict):
-            # Single config for all tasks
-            agent_data_list: List[Dict[str, Any]] = [cast(Dict[str, Any], self.agent_data) for _ in range(len(self.tasks))]
-        else:
-            # Task-specific configs
-            agent_data_list = list(self.agent_data)
+        # Store tasks reference for get_failed_tasks() compatibility
+        self.tasks = queue
 
-        if len(agent_data_list) != len(self.tasks):
-            raise ValueError(
-                f"`agent_data` must either be a single dict or an iterable matching the number of tasks. "
-                f"Got {len(agent_data_list)} agent configs for {len(self.tasks)} tasks."
-            )
+        # Build agent_data lookup (task_id -> agent_data)
+        agent_data_lookup = self._build_agent_data_lookup(queue)
 
         # Clear reports from previous run() calls to prevent accumulation
         self.reports = []
 
-        # Create queue if not provided
-        if queue is None:
-            queue = SequentialQueue(self.tasks, agent_data_list)
+        # Auto-register queue as callback if it's a BenchmarkCallback (e.g., AdaptiveTaskQueue)
+        queue_was_added_as_callback = False
+        if isinstance(queue, BenchmarkCallback) and queue not in self.callbacks:
+            self.callbacks.append(queue)
+            queue_was_added_as_callback = True
 
-        # Callbacks at the start of the run
-        self._invoke_callbacks("on_run_start", self)
+        try:
+            # Callbacks at the start of the run
+            self._invoke_callbacks("on_run_start", self)
 
-        # Execute based on max_workers
-        if max_workers == 1:
-            self._run_sequential(queue)
-        else:
-            self._run_parallel(queue, max_workers)
+            # Execute based on max_workers
+            if max_workers == 1:
+                self._run_sequential(queue, agent_data_lookup)
+            else:
+                self._run_parallel(queue, agent_data_lookup, max_workers)
 
-        # Callbacks at the end of the run
-        self._invoke_callbacks("on_run_end", self, self.reports)
+            # Callbacks at the end of the run
+            self._invoke_callbacks("on_run_end", self, self.reports)
+        finally:
+            # Remove queue from callbacks if we added it
+            if queue_was_added_as_callback:
+                self.callbacks.remove(queue)
 
         return self.reports
+
+    def _build_agent_data_lookup(self, tasks: BaseTaskQueue) -> Dict[str, Dict[str, Any]]:
+        """Build a mapping from task_id to agent_data configuration.
+
+        Args:
+            tasks: The task queue containing all tasks.
+
+        Returns:
+            Dict mapping task_id (string) to agent_data configuration.
+
+        Raises:
+            ValueError: If agent_data is a list but doesn't match the number of tasks.
+        """
+        if isinstance(self.agent_data, dict):
+            # Single config - replicate for all tasks
+            return {str(task.id): cast(Dict[str, Any], self.agent_data) for task in tasks}
+
+        # List of configs - pair by position
+        agent_data_list = list(self.agent_data)
+        if len(agent_data_list) != len(tasks):
+            raise ValueError(
+                f"`agent_data` must either be a single dict or an iterable matching the number of tasks. "
+                f"Got {len(agent_data_list)} agent configs for {len(tasks)} tasks."
+            )
+
+        return {str(task.id): agent_data_list[i] for i, task in enumerate(tasks)}
 
     def get_failed_tasks(
         self,
         status_filter: Optional[Union[TaskExecutionStatus, List[TaskExecutionStatus]]] = None,
         reports: Optional[List[Dict[str, Any]]] = None,
-    ) -> TaskCollection:
+    ) -> SequentialTaskQueue:
         """Get tasks that failed during benchmark execution.
 
         This method retrieves failed tasks based on their execution status, useful for
@@ -1458,7 +1499,7 @@ class Benchmark(ABC):
                 run() call. This allows analyzing externally stored or modified reports.
 
         Returns:
-            TaskCollection containing the failed tasks. Empty if no failures match the filter.
+            SequentialTaskQueue containing the failed tasks. Empty if no failures match the filter.
 
         Raises:
             RuntimeError: If reports is None and run() has not been executed yet.
@@ -1531,6 +1572,6 @@ class Benchmark(ABC):
             if report["status"] in filter_values:
                 failed_task_ids.add(report["task_id"])
 
-        # Build TaskCollection from original tasks that failed
+        # Build queue from original tasks that failed
         failed_tasks = [task for task in self.tasks if str(task.id) in failed_task_ids]
-        return TaskCollection(failed_tasks)
+        return SequentialTaskQueue(failed_tasks)

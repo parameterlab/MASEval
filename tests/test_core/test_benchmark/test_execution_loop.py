@@ -11,7 +11,7 @@ import pytest
 from typing import Any, List, Optional, Tuple
 import warnings
 
-from maseval import Benchmark, Task, TaskCollection, User
+from maseval import Benchmark, Task, TaskQueue, User
 
 
 # =============================================================================
@@ -350,7 +350,7 @@ class TestMaxInvocations:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            benchmark.run(TaskCollection([task]))
+            benchmark.run(TaskQueue([task]))
 
             # Check for warning about max_invocations without user
             warning_messages = [str(warning.message) for warning in w]
@@ -381,7 +381,7 @@ class TestBenchmarkRunWithUser:
 
         benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=user)
 
-        benchmark.run(TaskCollection([task]))
+        benchmark.run(TaskQueue([task]))
 
         # Verify run_agents was called with user's initial prompt
         assert len(benchmark.run_agents_calls) == 1
@@ -407,7 +407,7 @@ class TestBenchmarkRunWithUser:
             max_invocations=2,
         )
 
-        reports = benchmark.run(TaskCollection([task]))
+        reports = benchmark.run(TaskQueue([task]))
 
         # Check that user traces are in the report
         assert len(reports) == 1

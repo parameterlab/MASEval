@@ -5,7 +5,7 @@ parameters and that TimeoutAction enum values are correct.
 """
 
 import pytest
-from maseval import Task, TaskCollection
+from maseval import Task, TaskQueue
 from maseval.core.task import TaskProtocol, TimeoutAction
 
 
@@ -97,11 +97,11 @@ class TestTaskWithProtocol:
         assert task.protocol.timeout_seconds == 30.0
         assert task.protocol.priority == 5
 
-    def test_task_collection_preserves_protocol(self):
-        """TaskCollection should preserve protocol on tasks."""
+    def test_task_queue_preserves_protocol(self):
+        """TaskQueue should preserve protocol on tasks."""
         task1 = Task(query="Q1", protocol=TaskProtocol(priority=1))
         task2 = Task(query="Q2", protocol=TaskProtocol(priority=2))
-        tasks = TaskCollection([task1, task2])
+        tasks = TaskQueue([task1, task2])
 
         first_task: Task = tasks[0]  # type: ignore[assignment]
         second_task: Task = tasks[1]  # type: ignore[assignment]

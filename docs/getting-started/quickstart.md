@@ -117,7 +117,7 @@ Once implemented, run your benchmark:
 
 ```python
 # Define your tasks
-tasks = TaskCollection([Task(query="...", expected="..."), ...])
+tasks = TaskQueue([Task(query="..."), ...])
 
 # Configure your agents (e.g., model parameters, tool settings)
 agent_config = {"model": "gpt-4", "temperature": 0.7}

@@ -15,7 +15,7 @@ sys.path.insert(0, str(tests_dir))
 
 from conftest import DummyBenchmark  # noqa: E402
 
-from maseval.core.task import Task, TaskCollection  # noqa: E402
+from maseval.core.task import Task, TaskQueue  # noqa: E402
 from maseval.core.callbacks.progress_bar import (  # noqa: E402
     TqdmProgressBarCallback,
     RichProgressBarCallback,
@@ -25,7 +25,7 @@ from maseval.core.callbacks.progress_bar import (  # noqa: E402
 @pytest.mark.core
 def test_benchmark_with_default_progress_bar():
     """Test that benchmark attaches tqdm progress bar by default."""
-    tasks = TaskCollection([Task(query="What is 2+2?")])
+    tasks = TaskQueue([Task(query="What is 2+2?")])
 
     # Default should have progress bar
     benchmark = DummyBenchmark(agent_data={"model": "test"})
@@ -43,7 +43,7 @@ def test_benchmark_with_default_progress_bar():
 @pytest.mark.core
 def test_benchmark_with_disabled_progress_bar():
     """Test that progress bar can be disabled."""
-    tasks = TaskCollection([Task(query="What is 2+2?")])
+    tasks = TaskQueue([Task(query="What is 2+2?")])
 
     benchmark = DummyBenchmark(agent_data={"model": "test"}, progress_bar=False)
 
@@ -58,7 +58,7 @@ def test_benchmark_with_disabled_progress_bar():
 @pytest.mark.core
 def test_benchmark_with_rich_progress_bar():
     """Test that rich progress bar can be specified."""
-    tasks = TaskCollection([Task(query="What is 2+2?")])
+    tasks = TaskQueue([Task(query="What is 2+2?")])
 
     benchmark = DummyBenchmark(agent_data={"model": "test"}, progress_bar="rich")
 
@@ -73,7 +73,7 @@ def test_benchmark_with_rich_progress_bar():
 @pytest.mark.core
 def test_benchmark_with_custom_progress_bar():
     """Test that custom progress bar callback prevents default from being added."""
-    tasks = TaskCollection([Task(query="What is 2+2?")])
+    tasks = TaskQueue([Task(query="What is 2+2?")])
 
     # User provides their own progress bar
     custom_pbar = TqdmProgressBarCallback(desc="Custom Progress")
@@ -96,7 +96,7 @@ def test_benchmark_with_custom_progress_bar():
 @pytest.mark.core
 def test_benchmark_with_multiple_tasks_and_repeats():
     """Test progress bar with multiple tasks and repeats."""
-    tasks = TaskCollection([Task(query=f"Task {i}") for i in range(3)])
+    tasks = TaskQueue([Task(query=f"Task {i}") for i in range(3)])
 
     benchmark = DummyBenchmark(agent_data={"model": "test"}, n_task_repeats=2, progress_bar=True)
 

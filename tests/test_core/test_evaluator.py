@@ -4,7 +4,7 @@ These tests verify that Evaluator receives correct inputs and produces results.
 """
 
 import pytest
-from maseval import TaskCollection
+from maseval import TaskQueue
 
 
 @pytest.mark.core
@@ -35,7 +35,7 @@ class TestEvaluator:
             def setup_evaluators(self, environment, task, agents, user):
                 return [TracingEvaluator(task, environment, user)]
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})
 
         benchmark.run(tasks)
@@ -57,7 +57,7 @@ class TestEvaluator:
                 assert "test_agent" in agents
                 return super().evaluate(evaluators, agents, final_answer, traces)
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})
 
         benchmark.run(tasks)
@@ -73,7 +73,7 @@ class TestEvaluator:
                 received_answers.append(final_answer)
                 return super().evaluate(evaluators, agents, final_answer, traces)
 
-        tasks = TaskCollection.from_list([{"query": "My test query", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "My test query", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})
 
         benchmark.run(tasks)
@@ -92,7 +92,7 @@ class TestEvaluator:
                 received_traces.append(traces)
                 return super().evaluate(evaluators, agents, final_answer, traces)
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})
 
         benchmark.run(tasks)
@@ -138,7 +138,7 @@ class TestEvaluator:
                     Evaluator2(task, environment, user),
                 ]
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})
 
         benchmark.run(tasks)
@@ -150,7 +150,7 @@ class TestEvaluator:
         """Test that evaluator results appear in the final report."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)

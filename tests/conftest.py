@@ -8,7 +8,7 @@ from maseval import (
     Environment,
     User,
     Task,
-    TaskCollection,
+    TaskQueue,
     Evaluator,
     MessageHistory,
 )
@@ -306,9 +306,9 @@ def dummy_task():
 
 
 @pytest.fixture
-def dummy_task_collection():
+def dummy_task_queue():
     """Create a collection of dummy tasks."""
-    return TaskCollection.from_list(
+    return TaskQueue.from_list(
         [
             {"query": "Query 1", "environment_data": {"task": 1}},
             {"query": "Query 2", "environment_data": {"task": 2}},
@@ -318,14 +318,14 @@ def dummy_task_collection():
 
 
 @pytest.fixture
-def simple_benchmark(dummy_task_collection):
+def simple_benchmark(dummy_task_queue):
     """Create a simple benchmark instance with tasks.
 
     Returns:
         tuple: (benchmark, tasks) - Call as benchmark.run(tasks)
     """
     benchmark = DummyBenchmark(agent_data={"model": "test"})
-    return benchmark, dummy_task_collection
+    return benchmark, dummy_task_queue
 
 
 @pytest.fixture

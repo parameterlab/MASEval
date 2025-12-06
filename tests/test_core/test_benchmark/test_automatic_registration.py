@@ -8,7 +8,7 @@ with different names.
 """
 
 import pytest
-from maseval import TaskCollection, TraceableMixin
+from maseval import TaskQueue, TraceableMixin
 from conftest import DummyBenchmark, DummyModelAdapter, DummyAgentAdapter, DummyAgent
 
 
@@ -20,7 +20,7 @@ def test_automatic_agent_registration():
     returned from setup_agents() for trace and config collection without
     requiring manual register() calls.
     """
-    tasks = TaskCollection.from_list([{"query": "test", "id": "1", "environment_data": {}}])
+    tasks = TaskQueue.from_list([{"query": "test", "id": "1", "environment_data": {}}])
     agent_data = {}
 
     benchmark = DummyBenchmark(agent_data=agent_data)
@@ -148,7 +148,7 @@ def test_registry_cleared_after_repetition():
     Verifies that after each task iteration completes, the registry is reset
     to allow fresh components for the next iteration while preserving reports.
     """
-    tasks = TaskCollection.from_list(
+    tasks = TaskQueue.from_list(
         [
             {"query": "test1", "id": "1", "environment_data": {}},
             {"query": "test2", "id": "2", "environment_data": {}},
