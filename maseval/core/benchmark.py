@@ -1165,20 +1165,13 @@ class Benchmark(ABC):
 
                 report = self._execute_task_repetition(task, agent_data, repeat_idx)
                 self._append_report_safe(report)
-                queue.on_task_complete(task, report)
 
                 self._invoke_callbacks("on_task_repeat_end", self, report)
-
-                if not queue.should_continue():
-                    return
 
             # Callbacks at the end of each task
             task_reports = [r for r in self.reports if r["task_id"] == str(task.id)]
             last_report = task_reports[-1] if task_reports else {}
             self._invoke_callbacks("on_task_end", self, task, last_report)
-
-            if not queue.should_continue():
-                return
 
     def _run_parallel(
         self,
@@ -1269,7 +1262,6 @@ class Benchmark(ABC):
                         }
 
                     self._append_report_safe(report)
-                    queue.on_task_complete(task, report)
 
                     self._invoke_callbacks("on_task_repeat_end", self, report)
 
@@ -1279,12 +1271,6 @@ class Benchmark(ABC):
                         completed_task_ids.add(task_id)
                         last_report = task_reports[-1] if task_reports else {}
                         self._invoke_callbacks("on_task_end", self, task, last_report)
-
-                    if not queue.should_continue():
-                        # Cancel remaining futures
-                        for f in futures:
-                            f.cancel()
-                        return
 
                 # Submit more work if queue not exhausted
                 if not queue_exhausted and len(futures) < max_workers:
