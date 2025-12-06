@@ -310,15 +310,21 @@ class AdaptiveTaskQueue(BaseTaskQueue, BenchmarkCallback, ABC):
     """Abstract base class for adaptive task scheduling.
 
     AdaptiveTaskQueue enables dynamic task ordering based on execution results.
-    It inherits from BenchmarkCallback to receive notifications after each task
-    completes, allowing the queue to update internal state and adjust the execution
-    order.
+    It inherits from BenchmarkCallback to integrate with the benchmark's callback
+    system, creating a clean bidirectional communication model:
+
+    - **Benchmark → Queue**: Via iterator protocol (``for task in queue``)
+    - **Queue → Benchmark**: Via callback (``on_task_repeat_end()``)
+
+    The queue automatically moves completed tasks from ``_remaining`` to
+    ``_completed`` and calls ``_update_state()`` to let subclasses adapt their
+    scheduling strategy based on task results.
 
     Subclasses must implement:
         - ``_select_next_task()``: Choose the next task to execute
         - ``_update_state()``: Update internal model after task completion
 
-    The queue maintains:
+    Internal state:
         - ``_remaining``: Tasks not yet executed
         - ``_completed``: Completed tasks paired with their reports
         - ``_stop_flag``: Flag to signal early termination
@@ -421,6 +427,10 @@ class AdaptiveTaskQueue(BaseTaskQueue, BenchmarkCallback, ABC):
 
         Call this from ``_update_state()`` or ``_select_next_task()`` to
         trigger early termination (e.g., when confidence threshold is reached).
+
+        The ``_stop_flag`` is checked in ``__iter__``, which will stop yielding
+        tasks and naturally terminate the benchmark's iteration loop via Python's
+        iterator protocol.
         """
         self._stop_flag = True
 
