@@ -8,7 +8,7 @@ failures.
 
 import pytest
 from maseval import (
-    TaskCollection,
+    TaskQueue,
     TaskExecutionStatus,
     AgentError,
     EnvironmentError,
@@ -41,9 +41,9 @@ class TestExceptionClassification:
                 adapter = AgentErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = AgentErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
+        benchmark = AgentErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         assert reports[0]["status"] == TaskExecutionStatus.AGENT_ERROR.value
@@ -68,9 +68,9 @@ class TestExceptionClassification:
                 adapter = EnvironmentErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = EnvironmentErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
+        benchmark = EnvironmentErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         assert reports[0]["status"] == TaskExecutionStatus.ENVIRONMENT_ERROR.value
@@ -95,9 +95,9 @@ class TestExceptionClassification:
                 adapter = UserErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = UserErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
+        benchmark = UserErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         assert reports[0]["status"] == TaskExecutionStatus.USER_ERROR.value
@@ -122,9 +122,9 @@ class TestExceptionClassification:
                 adapter = GenericErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = GenericErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
+        benchmark = GenericErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         assert reports[0]["status"] == TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR.value
@@ -152,15 +152,70 @@ class TestExceptionClassification:
                 adapter = DetailedAgentErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DetailedAgentErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
+        benchmark = DetailedAgentErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         error = reports[0]["error"]
         assert error["component"] == "my_tool"
         assert error["details"]["expected"] == "int"
         assert error["details"]["actual"] == "str"
+
+
+@pytest.mark.core
+class TestTaskTimeoutError:
+    """Tests for TaskTimeoutError exception."""
+
+    def test_timeout_error_attributes(self):
+        """TaskTimeoutError should have elapsed, timeout, partial_traces attributes."""
+        from maseval import TaskTimeoutError
+
+        error = TaskTimeoutError(
+            "Task exceeded 60s deadline",
+            component="execution_loop",
+            elapsed=62.5,
+            timeout=60.0,
+            partial_traces={"agents": {"agent1": {"steps": 3}}},
+        )
+
+        assert error.elapsed == 62.5
+        assert error.timeout == 60.0
+        assert error.partial_traces == {"agents": {"agent1": {"steps": 3}}}
+
+    def test_timeout_error_message(self):
+        """TaskTimeoutError message should include timing info."""
+        from maseval import TaskTimeoutError
+
+        error = TaskTimeoutError(
+            "Task exceeded 60s deadline after 62.5s",
+            component="timeout_check",
+            elapsed=62.5,
+            timeout=60.0,
+        )
+
+        assert "60s" in str(error)
+        assert "62.5s" in str(error)
+
+    def test_timeout_error_inherits_from_maseval_error(self):
+        """TaskTimeoutError should inherit from MASEvalError."""
+        from maseval import TaskTimeoutError
+        from maseval.core.exceptions import MASEvalError
+
+        error = TaskTimeoutError("timeout", elapsed=1.0, timeout=0.5)
+
+        assert isinstance(error, MASEvalError)
+        assert isinstance(error, Exception)
+
+    def test_timeout_error_defaults(self):
+        """TaskTimeoutError should have sensible defaults."""
+        from maseval import TaskTimeoutError
+
+        error = TaskTimeoutError("timeout")
+
+        assert error.elapsed == 0.0
+        assert error.timeout == 0.0
+        assert error.partial_traces == {}
 
 
 class TestAgentErrorSuggestion:
@@ -346,7 +401,7 @@ class TestFilteringByErrorType:
                 adapter = DummyAgentAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list(
+        tasks = TaskQueue.from_list(
             [
                 {"query": "Task 1", "environment_data": {}},
                 {"query": "Task 2", "environment_data": {}},
@@ -354,8 +409,8 @@ class TestFilteringByErrorType:
             ]
         )
 
-        benchmark = MixedErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        benchmark = MixedErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         # Should have 1 success, 1 agent error, 1 env error
         statuses = [r["status"] for r in reports]

@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Union
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-from maseval import Task, TaskCollection
+from maseval import Task, TaskQueue
 
 
 # =============================================================================
@@ -422,7 +422,7 @@ def load_tasks(
     domain: str,
     data_dir: Optional[Path] = None,
     limit: Optional[int] = None,
-) -> TaskCollection:
+) -> TaskQueue:
     """Load tasks for a MACS domain.
 
     Args:
@@ -432,7 +432,7 @@ def load_tasks(
         limit: Maximum number of tasks to load
 
     Returns:
-        TaskCollection containing Task objects
+        TaskQueue containing Task objects
 
     Raises:
         ValueError: If domain is not valid
@@ -465,7 +465,7 @@ def load_tasks(
             )
         )
 
-    return TaskCollection(tasks)
+    return TaskQueue(tasks)
 
 
 def load_agent_config(
@@ -503,12 +503,12 @@ def load_agent_config(
 
 
 def configure_model_ids(
-    tasks: Union[TaskCollection, List[Task]],
+    tasks: Union[TaskQueue, List[Task]],
     *,
     tool_model_id: Optional[str] = None,
     user_model_id: Optional[str] = None,
     evaluator_model_id: Optional[str] = None,
-) -> Union[TaskCollection, List[Task]]:
+) -> Union[TaskQueue, List[Task]]:
     """Configure model IDs for benchmark components in task data.
 
     This helper merges runtime model configuration into task data structures,
@@ -519,13 +519,13 @@ def configure_model_ids(
     task-specific overrides in the original data to take precedence.
 
     Args:
-        tasks: TaskCollection or list of Tasks to configure
+        tasks: TaskQueue or list of Tasks to configure
         tool_model_id: Model ID for tool simulators (stored in environment_data)
         user_model_id: Model ID for user simulator (stored in user_data)
         evaluator_model_id: Model ID for evaluators (stored in evaluation_data)
 
     Returns:
-        The same collection (mutated in place for convenience)
+        The same queue or list (mutated in place for convenience)
 
     Example:
         ```python
