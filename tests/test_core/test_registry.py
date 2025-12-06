@@ -8,7 +8,7 @@ import pytest
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from maseval.core.registry import ComponentRegistry
 from maseval.core.tracing import TraceableMixin
@@ -21,7 +21,7 @@ from maseval.core.config import ConfigurableMixin
 class MockTraceableComponent(TraceableMixin):
     """Component that implements TraceableMixin for testing."""
 
-    def __init__(self, name: str, trace_data: Dict[str, Any] = None):
+    def __init__(self, name: str, trace_data: Optional[Dict[str, Any]] = None):
         super().__init__()
         self._name = name
         self._trace_data = trace_data or {"component": name}
@@ -36,7 +36,7 @@ class MockTraceableComponent(TraceableMixin):
 class MockConfigurableComponent(TraceableMixin, ConfigurableMixin):
     """Component that implements both TraceableMixin and ConfigurableMixin."""
 
-    def __init__(self, name: str, config: Dict[str, Any] = None):
+    def __init__(self, name: str, config: Optional[Dict[str, Any]] = None):
         TraceableMixin.__init__(self)
         ConfigurableMixin.__init__(self)
         self._name = name

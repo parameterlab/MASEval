@@ -79,8 +79,9 @@ class TestTaskContextTimeout:
         with pytest.raises(TaskTimeoutError) as exc_info:
             context.check_timeout()
 
-        assert exc_info.value.timeout == 0.01
-        assert exc_info.value.elapsed >= 0.01
+        error: TaskTimeoutError = exc_info.value  # type: ignore[assignment]
+        assert error.timeout == 0.01
+        assert error.elapsed >= 0.01
 
     def test_check_timeout_includes_partial_traces(self):
         """TaskTimeoutError should include partial traces if set."""
@@ -93,7 +94,8 @@ class TestTaskContextTimeout:
         with pytest.raises(TaskTimeoutError) as exc_info:
             context.check_timeout()
 
-        assert exc_info.value.partial_traces == partial_traces
+        error: TaskTimeoutError = exc_info.value  # type: ignore[assignment]
+        assert error.partial_traces == partial_traces
 
     def test_check_timeout_no_traces_if_not_set(self):
         """TaskTimeoutError should have empty traces if not set."""
@@ -104,7 +106,8 @@ class TestTaskContextTimeout:
         with pytest.raises(TaskTimeoutError) as exc_info:
             context.check_timeout()
 
-        assert exc_info.value.partial_traces == {}
+        error: TaskTimeoutError = exc_info.value  # type: ignore[assignment]
+        assert error.partial_traces == {}
 
     def test_check_timeout_does_not_raise_before_deadline(self):
         """check_timeout() should not raise before deadline."""

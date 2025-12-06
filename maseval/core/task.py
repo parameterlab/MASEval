@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, overload
 from uuid import UUID, uuid4
 from collections.abc import Sequence
 from typing import Iterable, List, Union, Iterator, Optional
@@ -107,6 +107,12 @@ class BaseTaskQueue(ABC, Sequence):
     def __len__(self) -> int:
         """Return the total number of tasks in the queue."""
         return len(self._tasks)
+
+    @overload
+    def __getitem__(self, idx: int) -> Task: ...
+
+    @overload
+    def __getitem__(self, idx: slice) -> "BaseTaskQueue": ...
 
     def __getitem__(self, idx: Union[int, slice]) -> Union[Task, "BaseTaskQueue"]:
         """Get a task by index or a slice of tasks.
