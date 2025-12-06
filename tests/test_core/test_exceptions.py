@@ -42,8 +42,8 @@ class TestExceptionClassification:
                 return [adapter], {"agent": adapter}
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = AgentErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        benchmark = AgentErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         assert reports[0]["status"] == TaskExecutionStatus.AGENT_ERROR.value
@@ -69,8 +69,8 @@ class TestExceptionClassification:
                 return [adapter], {"agent": adapter}
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = EnvironmentErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        benchmark = EnvironmentErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         assert reports[0]["status"] == TaskExecutionStatus.ENVIRONMENT_ERROR.value
@@ -96,8 +96,8 @@ class TestExceptionClassification:
                 return [adapter], {"agent": adapter}
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = UserErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        benchmark = UserErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         assert reports[0]["status"] == TaskExecutionStatus.USER_ERROR.value
@@ -123,8 +123,8 @@ class TestExceptionClassification:
                 return [adapter], {"agent": adapter}
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = GenericErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        benchmark = GenericErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         assert reports[0]["status"] == TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR.value
@@ -153,8 +153,8 @@ class TestExceptionClassification:
                 return [adapter], {"agent": adapter}
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DetailedAgentErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        benchmark = DetailedAgentErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         assert len(reports) == 1
         error = reports[0]["error"]
@@ -409,8 +409,8 @@ class TestFilteringByErrorType:
             ]
         )
 
-        benchmark = MixedErrorBenchmark(agent_data={})
-        reports = benchmark.run(tasks)
+        benchmark = MixedErrorBenchmark()
+        reports = benchmark.run(tasks, agent_data={})
 
         # Should have 1 success, 1 agent error, 1 env error
         statuses = [r["status"] for r in reports]

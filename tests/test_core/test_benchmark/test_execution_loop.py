@@ -72,7 +72,7 @@ class TestExecutionLoopNoUser:
     def test_uses_task_query_without_user(self, dummy_model):
         """Uses task.query when no user present."""
         task = Task(query="What is the weather?", environment_data={})
-        benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=None)
+        benchmark = ExecutionLoopBenchmark(return_user=None)
 
         env = benchmark.setup_environment({}, task)
         agents, _ = benchmark.setup_agents({}, env, task, None)
@@ -86,7 +86,7 @@ class TestExecutionLoopNoUser:
     def test_single_invocation_without_user(self, dummy_model):
         """Single agent run without user (default max_invocations=1)."""
         task = Task(query="Query", environment_data={})
-        benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=None)
+        benchmark = ExecutionLoopBenchmark(return_user=None)
 
         env = benchmark.setup_environment({}, task)
         agents, _ = benchmark.setup_agents({}, env, task, None)
@@ -98,7 +98,7 @@ class TestExecutionLoopNoUser:
     def test_returns_final_answer(self, dummy_model):
         """Returns final answer from agent."""
         task = Task(query="Test query", environment_data={})
-        benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=None)
+        benchmark = ExecutionLoopBenchmark(return_user=None)
 
         env = benchmark.setup_environment({}, task)
         agents, _ = benchmark.setup_agents({}, env, task, None)
@@ -129,7 +129,7 @@ class TestExecutionLoopWithUser:
             initial_query="User's initial message",
             max_turns=5,
         )
-        benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=user)
+        benchmark = ExecutionLoopBenchmark(return_user=user)
 
         env = benchmark.setup_environment({}, task)
         agents, _ = benchmark.setup_agents({}, env, task, user)
@@ -149,7 +149,7 @@ class TestExecutionLoopWithUser:
         # No initial_query, so messages is empty
         user.simulator.return_value = "LLM generated initial query"
 
-        benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=user)
+        benchmark = ExecutionLoopBenchmark(return_user=user)
 
         env = benchmark.setup_environment({}, task)
         agents, _ = benchmark.setup_agents({}, env, task, user)
@@ -175,7 +175,6 @@ class TestExecutionLoopWithUser:
         user.simulator.side_effect = ["Turn 1 response", "Turn 2 response", "Turn 3 response"]
 
         benchmark = ExecutionLoopBenchmark(
-            agent_data={},
             return_user=user,
             max_invocations=3,
         )
@@ -208,7 +207,6 @@ class TestExecutionLoopWithUser:
         user.simulator.side_effect = ["Response 1", "Response 2", "Response 3"]
 
         benchmark = ExecutionLoopBenchmark(
-            agent_data={},
             return_user=user,
             max_invocations=5,  # Would allow 5, but user stops at 3 turns
         )
@@ -239,7 +237,6 @@ class TestExecutionLoopWithUser:
         user.simulator.side_effect = ["Continue please", "Thanks! </stop>"]
 
         benchmark = ExecutionLoopBenchmark(
-            agent_data={},
             return_user=user,
             max_invocations=5,
         )
@@ -265,7 +262,7 @@ class TestExecutionLoopWithUser:
         )
         user.simulator.return_value = "Thanks"
 
-        benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=user)
+        benchmark = ExecutionLoopBenchmark(return_user=user)
 
         env = benchmark.setup_environment({}, task)
         agents, _ = benchmark.setup_agents({}, env, task, user)
@@ -294,7 +291,6 @@ class TestExecutionLoopWithUser:
         user.simulator.side_effect = ["User reply 1", "User reply 2", "User reply 3"]
 
         benchmark = ExecutionLoopBenchmark(
-            agent_data={},
             return_user=user,
             max_invocations=3,  # Will stop after 3 due to max_invocations
         )
@@ -331,26 +327,25 @@ class TestMaxInvocations:
 
     def test_default_max_invocations_is_one(self):
         """Default is single invocation."""
-        benchmark = ExecutionLoopBenchmark(agent_data={})
+        benchmark = ExecutionLoopBenchmark()
         assert benchmark.max_invocations == 1
 
     def test_custom_max_invocations(self):
         """Custom max_invocations is stored."""
-        benchmark = ExecutionLoopBenchmark(agent_data={}, max_invocations=5)
+        benchmark = ExecutionLoopBenchmark(max_invocations=5)
         assert benchmark.max_invocations == 5
 
     def test_warning_max_invocations_without_user(self):
         """Warning issued when max_invocations > 1 but no user."""
         task = Task(query="Test", environment_data={})
         benchmark = ExecutionLoopBenchmark(
-            agent_data={},
             return_user=None,
             max_invocations=5,
         )
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            benchmark.run(TaskQueue([task]))
+            benchmark.run(TaskQueue([task]), agent_data={})
 
             # Check for warning about max_invocations without user
             warning_messages = [str(warning.message) for warning in w]
@@ -379,9 +374,9 @@ class TestBenchmarkRunWithUser:
         )
         user.simulator.return_value = "Done"
 
-        benchmark = ExecutionLoopBenchmark(agent_data={}, return_user=user)
+        benchmark = ExecutionLoopBenchmark(return_user=user)
 
-        benchmark.run(TaskQueue([task]))
+        benchmark.run(TaskQueue([task]), agent_data={})
 
         # Verify run_agents was called with user's initial prompt
         assert len(benchmark.run_agents_calls) == 1
@@ -402,12 +397,11 @@ class TestBenchmarkRunWithUser:
         user.simulator.side_effect = ["Reply 1", "Reply 2"]
 
         benchmark = ExecutionLoopBenchmark(
-            agent_data={},
             return_user=user,
             max_invocations=2,
         )
 
-        reports = benchmark.run(TaskQueue([task]))
+        reports = benchmark.run(TaskQueue([task]), agent_data={})
 
         # Check that user traces are in the report
         assert len(reports) == 1

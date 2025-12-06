@@ -17,9 +17,9 @@ class TestTraceCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         traces = reports[0]["traces"]
 
         # Verify traces have the expected structure
@@ -50,9 +50,9 @@ class TestTraceCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test query", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         traces = reports[0]["traces"]
 
         # Get agent trace
@@ -90,10 +90,10 @@ class TestTraceCollection:
                 return [agent_adapter], {"failing_agent": agent_adapter}  # type: ignore[return-value]
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = TestBenchmark(agent_data={"model": "test"})
+        benchmark = TestBenchmark()
 
         # Should complete without raising, with error info in traces
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         traces = reports[0]["traces"]
 
         # Verify trace collection handled the error
@@ -131,9 +131,9 @@ class TestTraceCollection:
                 return [agent_adapter], {"test_agent": agent_adapter}  # type: ignore[return-value]
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = TestBenchmark(agent_data={"model": "test"})
+        benchmark = TestBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         traces = reports[0]["traces"]
 
         # Verify model traces
@@ -152,9 +152,9 @@ class TestTraceCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         traces = reports[0]["traces"]
 
         # Verify environment traces include tools
@@ -218,12 +218,12 @@ class TestTraceCollection:
 
         callback = CustomCallback()
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"}, callbacks=[callback])
+        benchmark = DummyBenchmark(callbacks=[callback])
 
         # Register callback for tracing
         benchmark.register("callbacks", "custom_callback", callback)
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         traces = reports[0]["traces"]
 
         # Verify callback traces
@@ -239,9 +239,9 @@ class TestTraceCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {"key": "value"}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         traces = reports[0]["traces"]
 
         # Should be able to serialize to JSON
@@ -260,9 +260,9 @@ class TestTraceCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         traces = reports[0]["traces"]
 
         # Check metadata timestamp
@@ -281,9 +281,9 @@ class TestTraceCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         traces = reports[0]["traces"]
 
         # Check agent type

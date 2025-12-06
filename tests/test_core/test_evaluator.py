@@ -36,9 +36,9 @@ class TestEvaluator:
                 return [TracingEvaluator(task, environment, user)]
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = TestBenchmark(agent_data={"model": "test"})
+        benchmark = TestBenchmark()
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         assert len(received_traces) == 1
         assert isinstance(received_traces[0], dict)
@@ -58,9 +58,9 @@ class TestEvaluator:
                 return super().evaluate(evaluators, agents, final_answer, traces)
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = TestBenchmark(agent_data={"model": "test"})
+        benchmark = TestBenchmark()
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
     def test_evaluator_receives_final_answer(self):
         """Test that evaluate() receives the final answer from agents."""
@@ -74,9 +74,9 @@ class TestEvaluator:
                 return super().evaluate(evaluators, agents, final_answer, traces)
 
         tasks = TaskQueue.from_list([{"query": "My test query", "environment_data": {}}])
-        benchmark = TestBenchmark(agent_data={"model": "test"})
+        benchmark = TestBenchmark()
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         assert len(received_answers) == 1
         assert "Response to: My test query" in received_answers[0]
@@ -93,9 +93,9 @@ class TestEvaluator:
                 return super().evaluate(evaluators, agents, final_answer, traces)
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = TestBenchmark(agent_data={"model": "test"})
+        benchmark = TestBenchmark()
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         assert len(received_traces) == 1
         traces = received_traces[0]
@@ -139,9 +139,9 @@ class TestEvaluator:
                 ]
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = TestBenchmark(agent_data={"model": "test"})
+        benchmark = TestBenchmark()
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         assert call_counts["eval1"] == 1
         assert call_counts["eval2"] == 1
@@ -151,9 +151,9 @@ class TestEvaluator:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
 
         assert len(reports) == 1
         report = reports[0]

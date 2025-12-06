@@ -39,12 +39,11 @@ class TestCallbackOrchestration:
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             n_task_repeats=2,
             callbacks=[OrderedCallback()],
         )
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         expected = [
             "run_start",
@@ -80,9 +79,9 @@ class TestCallbackOrchestration:
                 callback2_calls.append("end")
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"}, callbacks=[Callback1(), Callback2()])
+        benchmark = DummyBenchmark(callbacks=[Callback1(), Callback2()])
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         assert callback1_calls == ["start", "end"]
         assert callback2_calls == ["start", "end"]
@@ -106,14 +105,13 @@ class TestCallbackOrchestration:
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[FailingCallback(), SuccessfulCallback()],
         )
 
         # Note: Current implementation may not catch callback errors
         # This test documents the expected behavior
         try:
-            benchmark.run(tasks)
+            benchmark.run(tasks, agent_data={"model": "test"})
             # If callbacks are isolated, successful callback should work
             assert "start" in successful_calls or "end" in successful_calls
         except RuntimeError:
@@ -143,12 +141,11 @@ class TestCallbackOrchestration:
             ]
         )
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             n_task_repeats=3,
             callbacks=[CountingCallback()],
         )
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         # 2 tasks, each called once
         assert task_count == 2
@@ -173,9 +170,9 @@ class TestCallbackOrchestration:
                 contexts["results_count"] = len(results)
 
         tasks = TaskQueue.from_list([{"query": "TestQuery", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"}, callbacks=[ContextCapturingCallback()])
+        benchmark = DummyBenchmark(callbacks=[ContextCapturingCallback()])
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         # Verify contexts captured correctly
         assert contexts["task_query"] == "TestQuery"
@@ -202,12 +199,11 @@ class TestCallbackOrchestration:
             ]
         )
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             n_task_repeats=2,
             callbacks=[StateAccessingCallback()],
         )
 
-        benchmark.run(tasks)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         assert captured_state["n_tasks"] == 2
         assert captured_state["n_repeats"] == 2

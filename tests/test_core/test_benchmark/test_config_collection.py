@@ -17,9 +17,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         # Verify config has the expected structure
@@ -49,9 +49,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         # Verify benchmark-level config exists
@@ -68,9 +68,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         system_info = config["benchmark"]["system"]
@@ -82,9 +82,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         # Git info may not be available in all environments
@@ -99,9 +99,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         # Should capture package information
@@ -115,9 +115,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         # Top-level keys
@@ -167,10 +167,10 @@ class TestConfigCollection:
                 return [agent_adapter], {"failing_agent": agent_adapter}  # type: ignore[return-value]
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = TestBenchmark(agent_data={"model": "test"})
+        benchmark = TestBenchmark()
 
         # Should complete without raising, with error info in config
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         # Verify config collection handled the error
@@ -185,9 +185,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {"key": "value"}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         # Should be able to serialize to JSON
@@ -206,9 +206,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         # Check metadata timestamp
@@ -230,9 +230,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
         config = reports[0]["config"]
 
         # Check agent type
@@ -250,9 +250,9 @@ class TestConfigCollection:
         from conftest import DummyBenchmark
 
         tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
-        benchmark = DummyBenchmark(agent_data={"model": "test"}, n_task_repeats=3)
+        benchmark = DummyBenchmark(n_task_repeats=3)
 
-        reports = benchmark.run(tasks)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
 
         # Should have 3 reports
         assert len(reports) == 3

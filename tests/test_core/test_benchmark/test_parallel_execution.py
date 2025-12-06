@@ -105,27 +105,27 @@ class TestParallelExecutionBasics:
 
     def test_parallel_execution_completes(self, parallel_tasks):
         """Verify parallel execution completes all tasks."""
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark()
 
-        reports = benchmark.run(parallel_tasks, max_workers=3)
+        reports = benchmark.run(parallel_tasks, agent_data={"model": "test"})
 
         assert len(reports) == 5
 
     def test_parallel_produces_same_report_count(self, parallel_tasks):
         """Parallel and sequential should produce same number of reports."""
-        benchmark_seq = DummyBenchmark(agent_data={"model": "test"})
-        benchmark_par = DummyBenchmark(agent_data={"model": "test"})
+        benchmark_seq = DummyBenchmark()
+        benchmark_par = DummyBenchmark()
 
-        reports_seq = benchmark_seq.run(parallel_tasks, max_workers=1)
-        reports_par = benchmark_par.run(parallel_tasks, max_workers=3)
+        reports_seq = benchmark_seq.run(parallel_tasks, agent_data={"model": "test"})
+        reports_par = benchmark_par.run(parallel_tasks, agent_data={"model": "test"})
 
         assert len(reports_seq) == len(reports_par)
 
     def test_parallel_reports_have_correct_structure(self, parallel_tasks):
         """Verify parallel reports have expected fields."""
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark(max_workers=3)
 
-        reports = benchmark.run(parallel_tasks, max_workers=2)
+        reports = benchmark.run(parallel_tasks, agent_data={"model": "test"})
 
         for report in reports:
             assert "task_id" in report
@@ -139,11 +139,10 @@ class TestParallelExecutionBasics:
         """max_workers=1 should behave identically to sequential."""
         callback = OrderTrackingCallback()
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[callback],
         )
 
-        benchmark.run(parallel_tasks, max_workers=1)
+        benchmark.run(parallel_tasks, agent_data={"model": "test"})
 
         # Verify ordering is strictly sequential (task_start before all repeat_starts)
         assert callback.invocations[0] == "run_start"
@@ -159,11 +158,10 @@ class TestParallelExecutionBasics:
             ]
         )
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             n_task_repeats=3,
         )
 
-        reports = benchmark.run(tasks, max_workers=2)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
 
         assert len(reports) == 6  # 2 tasks × 3 repeats
 
@@ -182,11 +180,10 @@ class TestParallelThreadSafety:
     def test_reports_all_collected(self, parallel_tasks):
         """All reports should be collected regardless of completion order."""
         benchmark = SlowBenchmark(
-            agent_data={"model": "test"},
             delay_seconds=0.02,
         )
 
-        reports = benchmark.run(parallel_tasks, max_workers=4)
+        reports = benchmark.run(parallel_tasks, agent_data={"model": "test"})
 
         assert len(reports) == 5
         task_ids = {r["task_id"] for r in reports}
@@ -194,9 +191,9 @@ class TestParallelThreadSafety:
 
     def test_traces_not_cross_contaminated(self, parallel_tasks):
         """Traces from one task should not appear in another's report."""
-        benchmark = DummyBenchmark(agent_data={"model": "test"})
+        benchmark = DummyBenchmark(max_workers=4)
 
-        reports = benchmark.run(parallel_tasks, max_workers=3)
+        reports = benchmark.run(parallel_tasks, agent_data={"model": "test"})
 
         for report in reports:
             # Each report should have its own traces
@@ -221,11 +218,10 @@ class TestParallelThreadSafety:
                     )
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[DataCapturingCallback()],
         )
 
-        benchmark.run(tasks, max_workers=2)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         assert len(received_data) == 3
         statuses = {d["status"] for d in received_data}
@@ -234,10 +230,7 @@ class TestParallelThreadSafety:
     def test_callback_exceptions_suppressed_by_default(self):
         """Callback exceptions are suppressed by default to prevent disruption."""
         # Create fresh tasks for this test
-        tasks = TaskQueue.from_list([
-            {"query": f"Task {i}", "environment_data": {}}
-            for i in range(5)
-        ])
+        tasks = TaskQueue.from_list([{"query": f"Task {i}", "environment_data": {}} for i in range(5)])
 
         call_count = [0]
 
@@ -248,13 +241,12 @@ class TestParallelThreadSafety:
                     raise RuntimeError("Intentional failure")
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[FailingCallback()],
         )
 
         # New behavior: callback exceptions are suppressed by default
         # This prevents one failing callback from disrupting parallel execution
-        reports = benchmark.run(tasks, max_workers=2)
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
 
         # Execution completes despite callback failure
         assert len(reports) == 5
@@ -275,15 +267,15 @@ class TestParallelConcurrency:
         delay = 0.05
 
         # Sequential timing
-        benchmark_seq = SlowBenchmark(agent_data={"model": "test"}, delay_seconds=delay)
+        benchmark_seq = SlowBenchmark(delay_seconds=delay)
         start_seq = time.time()
-        benchmark_seq.run(tasks, max_workers=1)
+        benchmark_seq.run(tasks, agent_data={"model": "test"})
         time_seq = time.time() - start_seq
 
         # Parallel timing
-        benchmark_par = SlowBenchmark(agent_data={"model": "test"}, delay_seconds=delay)
+        benchmark_par = SlowBenchmark(delay_seconds=delay, max_workers=4)
         start_par = time.time()
-        benchmark_par.run(tasks, max_workers=4)
+        benchmark_par.run(tasks, agent_data={"model": "test"})
         time_par = time.time() - start_par
 
         # Parallel should be significantly faster (at least 2x)
@@ -294,11 +286,11 @@ class TestParallelConcurrency:
         tasks = TaskQueue.from_list([{"query": f"T{i}", "environment_data": {}} for i in range(3)])
 
         benchmark = SlowBenchmark(
-            agent_data={"model": "test"},
             delay_seconds=0.05,
+            max_workers=3,
         )
 
-        benchmark.run(tasks, max_workers=3)
+        benchmark.run(tasks, agent_data={"model": "test"})
 
         # Check for overlapping execution times
         times = benchmark.execution_times
@@ -341,8 +333,8 @@ class TestParallelErrorHandling:
             ]
         )
 
-        benchmark = FailingBenchmark(agent_data={"model": "test"})
-        reports = benchmark.run(tasks, max_workers=2)
+        benchmark = FailingBenchmark()
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
 
         assert len(reports) == 3
 
@@ -370,8 +362,8 @@ class TestParallelErrorHandling:
 
         tasks = TaskQueue.from_list([{"query": f"T{i}", "environment_data": {}} for i in range(4)])
 
-        benchmark = HalfFailingBenchmark(agent_data={"model": "test"})
-        reports = benchmark.run(tasks, max_workers=2)
+        benchmark = HalfFailingBenchmark()
+        reports = benchmark.run(tasks, agent_data={"model": "test"})
 
         assert len(reports) == 4
 
@@ -409,11 +401,10 @@ class TestParallelQueueIntegration:
                     execution_order.append(task.query)
 
         benchmark = DummyBenchmark(
-            agent_data={"model": "test"},
             callbacks=[OrderTracker()],
         )
 
         # With max_workers=1, order should be strictly by priority
-        benchmark.run(queue, max_workers=1)
+        benchmark.run(queue, agent_data={"model": "test"})
 
         assert execution_order == ["P5", "P4", "P3", "P2", "P1"]
