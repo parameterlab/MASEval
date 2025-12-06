@@ -296,25 +296,25 @@ class TestAdaptiveTaskQueue:
     """Tests for AdaptiveTaskQueue adaptive behavior."""
 
     def test_basic_iteration_with_completion(self, simple_tasks):
-        """AdaptiveTaskQueue should yield all tasks when on_task_complete is called."""
+        """AdaptiveTaskQueue should yield all tasks when on_task_repeat_end is called."""
         queue = ConcreteAdaptiveQueue(simple_tasks)
 
         count = 0
         for task in queue:
             count += 1
-            # Must call on_task_complete to progress to next task
-            queue.on_task_complete(task, {"status": "success"})
+            # Simulate callback from benchmark
+            queue.on_task_repeat_end(None, {"task_id": str(task.id), "status": "success"})  # type: ignore[arg-type]
 
         assert count == 3
 
-    def test_on_task_complete_moves_to_completed(self, simple_tasks):
-        """on_task_complete should move task to completed list."""
+    def test_on_task_repeat_end_moves_to_completed(self, simple_tasks):
+        """on_task_repeat_end should move task to completed list."""
         queue = ConcreteAdaptiveQueue(simple_tasks)
         task = next(iter(queue))
 
         assert len(queue._completed) == 0
 
-        queue.on_task_complete(task, {"status": "success"})
+        queue.on_task_repeat_end(None, {"task_id": str(task.id), "status": "success"})  # type: ignore[arg-type]
 
         assert len(queue._completed) == 1
         assert queue._completed[0][0].id == task.id
@@ -330,21 +330,22 @@ class TestAdaptiveTaskQueue:
 
         assert len(items) == 1
 
-    def test_should_continue_false_after_stop(self, simple_tasks):
-        """should_continue() should return False after stop()."""
+    def test_stop_sets_flag(self, simple_tasks):
+        """stop() should set the internal stop flag."""
         queue = ConcreteAdaptiveQueue(simple_tasks)
 
-        assert queue.should_continue() is True
+        assert queue._stop_flag is False
 
         queue.stop()
 
-        assert queue.should_continue() is False
+        assert queue._stop_flag is True
 
-    def test_should_continue_false_when_empty(self):
-        """should_continue() should return False when no pending tasks."""
+    def test_iterator_stops_when_empty(self):
+        """Iterator should stop when no pending tasks."""
         queue = ConcreteAdaptiveQueue([])
 
-        assert queue.should_continue() is False
+        tasks_yielded = list(queue)
+        assert len(tasks_yielded) == 0
 
     def test_remaining_decreases_after_completion(self, simple_tasks):
         """Remaining list should shrink as tasks complete."""
@@ -353,7 +354,7 @@ class TestAdaptiveTaskQueue:
         assert len(queue._remaining) == 3
 
         task = next(iter(queue))
-        queue.on_task_complete(task, {"status": "success"})
+        queue.on_task_repeat_end(None, {"task_id": str(task.id), "status": "success"})  # type: ignore[arg-type]
 
         assert len(queue._remaining) == 2
         assert len(queue._completed) == 1
@@ -366,17 +367,9 @@ class TestAdaptiveTaskQueue:
 class TestQueueCallbacks:
     """Tests for queue callback mechanisms."""
 
-    def test_on_task_complete_callable_without_error(self, simple_tasks):
-        """on_task_complete should be callable without error."""
+    def test_sequential_queue_iterates_all_tasks(self, simple_tasks):
+        """SequentialTaskQueue should iterate through all tasks."""
         queue = SequentialTaskQueue(simple_tasks)
 
-        for task in queue:
-            # SequentialTaskQueue's on_task_complete is a no-op, but should not raise
-            queue.on_task_complete(task, {"status": "success"})
-
-    def test_should_continue_always_true_for_sequential(self, simple_tasks):
-        """SequentialTaskQueue should always return True for should_continue."""
-        queue = SequentialTaskQueue(simple_tasks)
-
-        for task in queue:
-            assert queue.should_continue() is True
+        tasks_yielded = list(queue)
+        assert len(tasks_yielded) == len(simple_tasks)

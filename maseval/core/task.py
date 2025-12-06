@@ -1,12 +1,18 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Tuple, overload
+from typing import Any, Dict, Tuple, overload, TYPE_CHECKING
 from uuid import UUID, uuid4
 from collections.abc import Sequence
 from typing import Iterable, List, Union, Iterator, Optional
 import json
 from pathlib import Path
 from enum import Enum
+
+if TYPE_CHECKING:
+    from .benchmark import Benchmark
+
+# Import BenchmarkCallback at runtime to enable inheritance
+from .callback import BenchmarkCallback
 
 
 class TimeoutAction(Enum):
@@ -70,15 +76,13 @@ class Task:
 class BaseTaskQueue(ABC, Sequence):
     """Abstract base class for task scheduling strategies.
 
-    BaseTaskQueue provides a sequence-like interface for task execution with hooks
-    for adaptive behavior based on task results. Concrete implementations can
-    reorder tasks, skip tasks, or terminate early based on execution outcomes.
-
-    The queue yields Task objects for execution. After each task completes,
-    ``on_task_complete()`` is called with the result, allowing the queue to
-    adapt its scheduling strategy.
+    BaseTaskQueue provides a sequence-like interface for task execution.
+    Concrete implementations can reorder tasks, skip tasks, or terminate
+    early based on execution outcomes.
 
     Subclasses must implement ``__iter__`` to define the iteration order.
+    For adaptive behavior based on task results, use ``AdaptiveTaskQueue``
+    which integrates with the benchmark callback system.
 
     Attributes:
         _tasks: Internal list of tasks.
@@ -89,10 +93,7 @@ class BaseTaskQueue(ABC, Sequence):
 
         for task in queue:
             report = execute_task(task)
-            queue.on_task_complete(task, report)
-
-            if not queue.should_continue():
-                break
+            # Iterator handles termination automatically
         ```
     """
 
@@ -136,31 +137,6 @@ class BaseTaskQueue(ABC, Sequence):
             Iterator yielding Task objects.
         """
         pass
-
-    def on_task_complete(self, task: Task, report: Dict[str, Any]) -> None:
-        """Called after each task completes.
-
-        Override this method for adaptive scheduling behavior that responds
-        to task execution results (e.g., updating ability estimates, adjusting
-        priorities, or marking related tasks for skipping).
-
-        Args:
-            task: The task that just completed.
-            report: The execution report containing status, traces, and eval results.
-        """
-        pass
-
-    def should_continue(self) -> bool:
-        """Whether to continue processing tasks.
-
-        Default implementation returns True. Override for early termination
-        conditions (e.g., confidence threshold reached, maximum tasks processed,
-        or error limit exceeded).
-
-        Returns:
-            True to continue processing, False to stop.
-        """
-        return True
 
     def append(self, task: Task) -> None:
         """Add a task to the end of the queue.
@@ -330,13 +306,13 @@ class PriorityTaskQueue(BaseTaskQueue):
         return iter(self._tasks)
 
 
-class AdaptiveTaskQueue(BaseTaskQueue, ABC):
+class AdaptiveTaskQueue(BaseTaskQueue, BenchmarkCallback, ABC):
     """Abstract base class for adaptive task scheduling.
 
     AdaptiveTaskQueue enables dynamic task ordering based on execution results.
-    It integrates with the benchmark callback system to receive notifications
-    after each task completes, allowing the queue to update internal state and
-    adjust the execution order.
+    It inherits from BenchmarkCallback to receive notifications after each task
+    completes, allowing the queue to update internal state and adjust the execution
+    order.
 
     Subclasses must implement:
         - ``_select_next_task()``: Choose the next task to execute
@@ -348,7 +324,7 @@ class AdaptiveTaskQueue(BaseTaskQueue, ABC):
         - ``_stop_flag``: Flag to signal early termination
 
     When used with ``Benchmark.run()``, the queue is automatically registered
-    as a callback if it implements the ``BenchmarkCallback`` interface.
+    as a callback and receives ``on_task_repeat_end()`` notifications.
 
     Example:
         ```python
@@ -360,9 +336,8 @@ class AdaptiveTaskQueue(BaseTaskQueue, ABC):
                 self._ability_estimate = 0.0
 
             def _select_next_task(self) -> Optional[Task]:
-                if not self._remaining:
-                    return None
                 # Select task with difficulty closest to current ability estimate
+                # (No need to check if _remaining is empty - guaranteed by base class)
                 return min(
                     self._remaining,
                     key=lambda t: abs(t.protocol.priority - self._ability_estimate)
@@ -395,40 +370,51 @@ class AdaptiveTaskQueue(BaseTaskQueue, ABC):
 
         Continues until ``_select_next_task()`` returns None, ``_remaining``
         is empty, or ``_stop_flag`` is set.
+
+        Note: ``_select_next_task()`` is only called when ``_remaining`` is
+        non-empty, so implementers don't need to check for empty list.
         """
-        while self._remaining and not self._stop_flag:
+        while not self._stop_flag and self._remaining:
             next_task = self._select_next_task()
             if next_task is not None:
                 yield next_task
             else:
                 break
 
-    def on_task_complete(self, task: Task, report: Dict[str, Any]) -> None:
-        """Update state based on task result.
+    def on_task_repeat_end(self, benchmark: "Benchmark", report: Dict[str, Any]) -> None:
+        """BenchmarkCallback hook called after each task repetition completes.
 
-        Moves the task from ``_remaining`` to ``_completed`` and calls
-        ``_update_state()`` to let the subclass update its internal model.
+        This method extracts the task from the report, moves it from
+        ``_remaining`` to ``_completed``, and calls ``_update_state()``
+        to let the subclass update its adaptive model.
 
         Args:
-            task: The task that just completed.
-            report: The execution report.
+            benchmark: The benchmark instance (unused in this implementation).
+            report: The execution report containing task_id and results.
         """
-        # Find and move task from remaining to completed
+        # Extract task from report
+        task_id_str = report.get("task_id")
+        if task_id_str is None:
+            return
+
+        # Find the task in remaining list
+        task = None
         for i, t in enumerate(self._remaining):
-            if t.id == task.id:
-                self._completed.append((self._remaining.pop(i), report))
+            if str(t.id) == task_id_str:
+                task = self._remaining.pop(i)
+                self._completed.append((task, report))
                 break
 
-        # Let subclass update its state
-        self._update_state(task, report)
+        # If not found in remaining, check completed (for n_task_repeats > 1)
+        if task is None:
+            for t, _ in self._completed:
+                if str(t.id) == task_id_str:
+                    task = t
+                    break
 
-    def should_continue(self) -> bool:
-        """Check if we should continue based on stopping criteria.
-
-        Returns:
-            True if stop flag is not set and tasks remain, False otherwise.
-        """
-        return not self._stop_flag and len(self._remaining) > 0
+        # Update subclass state
+        if task is not None:
+            self._update_state(task, report)
 
     def stop(self) -> None:
         """Signal that no more tasks should be processed.
@@ -445,8 +431,14 @@ class AdaptiveTaskQueue(BaseTaskQueue, ABC):
         Implement this method to define your adaptive selection algorithm
         (e.g., IRT-based selection, uncertainty sampling, bandit algorithms).
 
+        **Guaranteed precondition**: This method is only called when
+        ``self._remaining`` is non-empty, so you don't need to check for
+        an empty list. You can safely assume at least one task is available.
+
         Returns:
-            The next Task to execute, or None if no suitable task is available.
+            The next Task to execute from ``self._remaining``, or None to
+            signal early termination (e.g., if no suitable task meets your
+            selection criteria).
         """
         pass
 

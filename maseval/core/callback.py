@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from .tracing import TraceableMixin
 
