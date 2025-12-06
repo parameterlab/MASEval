@@ -5,7 +5,7 @@ from all registered components correctly.
 """
 
 import pytest
-from maseval import TaskCollection
+from maseval import TaskQueue
 
 
 @pytest.mark.core
@@ -16,7 +16,7 @@ class TestTraceCollection:
         """Test that traces are collected from all registered components."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -49,7 +49,7 @@ class TestTraceCollection:
         """Test that agent traces include complete message histories."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test query", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test query", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -89,7 +89,7 @@ class TestTraceCollection:
                 agent_adapter = FailingAgentAdapter(agent, "failing_agent")
                 return [agent_adapter], {"failing_agent": agent_adapter}  # type: ignore[return-value]
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})
 
         # Should complete without raising, with error info in traces
@@ -130,7 +130,7 @@ class TestTraceCollection:
                 self.register("models", "test_model", model)
                 return [agent_adapter], {"test_agent": agent_adapter}  # type: ignore[return-value]
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -151,7 +151,7 @@ class TestTraceCollection:
         """Test that Environment traces include tool information."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -217,7 +217,7 @@ class TestTraceCollection:
                 }
 
         callback = CustomCallback()
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"}, callbacks=[callback])
 
         # Register callback for tracing
@@ -238,7 +238,7 @@ class TestTraceCollection:
         import json
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {"key": "value"}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {"key": "value"}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -259,7 +259,7 @@ class TestTraceCollection:
         """Test that all trace components include timestamps."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -280,7 +280,7 @@ class TestTraceCollection:
         """Test that all traces include component type information."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)

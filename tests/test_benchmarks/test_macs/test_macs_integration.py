@@ -182,7 +182,7 @@ class TestErrorHandlingIntegration:
 
 @pytest.mark.benchmark
 class TestEndToEndPipeline:
-    """End-to-end tests that call benchmark.run() with TaskCollection.
+    """End-to-end tests that call benchmark.run() with TaskQueue.
 
     These tests verify the complete MACS benchmark pipeline by actually
     calling benchmark.run(). More granular integration tests are in
@@ -212,8 +212,8 @@ class TestEndToEndPipeline:
         assert "config" in report
         assert "eval" in report
 
-    def test_run_multiple_tasks(self, sample_agent_data, macs_task_collection):
-        """Run benchmark with multiple tasks via TaskCollection."""
+    def test_run_multiple_tasks(self, sample_agent_data, macs_task_queue):
+        """Run benchmark with multiple tasks via TaskQueue."""
         model = DummyModelAdapter(
             responses=[
                 '{"text": "User response", "details": {}}',
@@ -223,9 +223,9 @@ class TestEndToEndPipeline:
         )
 
         benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
-        reports = benchmark.run(macs_task_collection)
+        reports = benchmark.run(macs_task_queue)
 
-        assert len(reports) == len(macs_task_collection)
+        assert len(reports) == len(macs_task_queue)
         for report in reports:
             assert report["status"] == "success"
             assert "eval" in report

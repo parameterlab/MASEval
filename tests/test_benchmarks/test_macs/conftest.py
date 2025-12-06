@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock
 
 from conftest import DummyModelAdapter
-from maseval import AgentAdapter, Task, User, MessageHistory, TaskCollection
+from maseval import AgentAdapter, Task, User, MessageHistory, TaskQueue
 from maseval.benchmark.macs import MACSBenchmark, MACSEnvironment
 
 
@@ -415,9 +415,9 @@ Background:
 
 
 @pytest.fixture
-def macs_task_collection(sample_task, travel_task):
+def macs_task_queue(sample_task, travel_task):
     """Collection of MACS tasks for benchmark.run() tests."""
-    return TaskCollection.from_list([sample_task, travel_task])
+    return TaskQueue.from_list([sample_task, travel_task])
 
 
 # =============================================================================

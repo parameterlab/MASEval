@@ -5,7 +5,7 @@ the appropriate context at each lifecycle hook.
 """
 
 import pytest
-from maseval import BenchmarkCallback, TaskCollection
+from maseval import BenchmarkCallback, TaskQueue
 
 
 @pytest.mark.core
@@ -37,7 +37,7 @@ class TestCallbackOrchestration:
             def on_run_end(self, benchmark, results):
                 order.append("run_end")
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(
             agent_data={"model": "test"},
             n_task_repeats=2,
@@ -79,7 +79,7 @@ class TestCallbackOrchestration:
             def on_run_end(self, benchmark, results):
                 callback2_calls.append("end")
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"}, callbacks=[Callback1(), Callback2()])
 
         benchmark.run(tasks)
@@ -104,7 +104,7 @@ class TestCallbackOrchestration:
             def on_run_end(self, benchmark, results):
                 successful_calls.append("end")
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(
             agent_data={"model": "test"},
             callbacks=[FailingCallback(), SuccessfulCallback()],
@@ -136,7 +136,7 @@ class TestCallbackOrchestration:
                 nonlocal repeat_count
                 repeat_count += 1
 
-        tasks = TaskCollection.from_list(
+        tasks = TaskQueue.from_list(
             [
                 {"query": "Task1", "environment_data": {}},
                 {"query": "Task2", "environment_data": {}},
@@ -172,7 +172,7 @@ class TestCallbackOrchestration:
             def on_run_end(self, benchmark, results):
                 contexts["results_count"] = len(results)
 
-        tasks = TaskCollection.from_list([{"query": "TestQuery", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "TestQuery", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"}, callbacks=[ContextCapturingCallback()])
 
         benchmark.run(tasks)
@@ -195,7 +195,7 @@ class TestCallbackOrchestration:
                 captured_state["n_tasks"] = len(benchmark.tasks)
                 captured_state["n_repeats"] = benchmark.n_task_repeats
 
-        tasks = TaskCollection.from_list(
+        tasks = TaskQueue.from_list(
             [
                 {"query": "Q1", "environment_data": {}},
                 {"query": "Q2", "environment_data": {}},

@@ -12,7 +12,7 @@ from typing import List, Tuple, Optional
 from maseval import (
     BenchmarkCallback,
     Task,
-    TaskCollection,
+    TaskQueue,
     TaskExecutionStatus,
 )
 from conftest import DummyBenchmark
@@ -93,7 +93,7 @@ class OrderTrackingCallback(BenchmarkCallback):
 @pytest.fixture
 def parallel_tasks():
     """Create tasks for parallel execution testing."""
-    return TaskCollection.from_list([{"query": f"Task {i}", "environment_data": {"index": i}} for i in range(5)])
+    return TaskQueue.from_list([{"query": f"Task {i}", "environment_data": {"index": i}} for i in range(5)])
 
 
 # ==================== Basic Parallel Execution Tests ====================
@@ -152,7 +152,7 @@ class TestParallelExecutionBasics:
 
     def test_parallel_with_repetitions(self):
         """Verify parallel execution with n_task_repeats > 1."""
-        tasks = TaskCollection.from_list(
+        tasks = TaskQueue.from_list(
             [
                 {"query": "T1", "environment_data": {}},
                 {"query": "T2", "environment_data": {}},
@@ -205,7 +205,7 @@ class TestParallelThreadSafety:
 
     def test_callbacks_receive_correct_data(self):
         """Callbacks should receive correct task/report data in parallel."""
-        tasks = TaskCollection.from_list([{"query": f"Query_{i}", "environment_data": {"idx": i}} for i in range(3)])
+        tasks = TaskQueue.from_list([{"query": f"Query_{i}", "environment_data": {"idx": i}} for i in range(3)])
 
         received_data = []
         lock = threading.Lock()
@@ -260,7 +260,7 @@ class TestParallelConcurrency:
 
     def test_parallel_faster_than_sequential(self):
         """Parallel execution should be faster for I/O-bound tasks."""
-        tasks = TaskCollection.from_list([{"query": f"T{i}", "environment_data": {}} for i in range(4)])
+        tasks = TaskQueue.from_list([{"query": f"T{i}", "environment_data": {}} for i in range(4)])
         delay = 0.05
 
         # Sequential timing
@@ -280,7 +280,7 @@ class TestParallelConcurrency:
 
     def test_execution_overlaps(self):
         """Task executions should overlap in parallel mode."""
-        tasks = TaskCollection.from_list([{"query": f"T{i}", "environment_data": {}} for i in range(3)])
+        tasks = TaskQueue.from_list([{"query": f"T{i}", "environment_data": {}} for i in range(3)])
 
         benchmark = SlowBenchmark(
             agent_data={"model": "test"},
@@ -322,7 +322,7 @@ class TestParallelErrorHandling:
                     raise RuntimeError("Intentional failure")
                 return super().run_agents(agents, task, environment, query)
 
-        tasks = TaskCollection.from_list(
+        tasks = TaskQueue.from_list(
             [
                 {"query": "Normal 1", "environment_data": {}},
                 {"query": "FAIL task", "environment_data": {}},
@@ -357,7 +357,7 @@ class TestParallelErrorHandling:
                     raise ValueError("Every other task fails")
                 return super().run_agents(agents, task, environment, query)
 
-        tasks = TaskCollection.from_list([{"query": f"T{i}", "environment_data": {}} for i in range(4)])
+        tasks = TaskQueue.from_list([{"query": f"T{i}", "environment_data": {}} for i in range(4)])
 
         benchmark = HalfFailingBenchmark(agent_data={"model": "test"})
         reports = benchmark.run(tasks, max_workers=2)
@@ -374,22 +374,19 @@ class TestParallelQueueIntegration:
 
     def test_custom_queue_respected(self, parallel_tasks):
         """Custom queue ordering should be respected."""
-        from maseval.core.queue import PriorityQueue
+        from maseval.core.task import PriorityTaskQueue, TaskProtocol
 
         # Create tasks with priorities
-        prioritized_tasks = TaskCollection(
-            [
-                Task(
-                    query=f"P{p}",
-                    environment_data={},
-                    protocol=__import__("maseval.core.task", fromlist=["TaskProtocol"]).TaskProtocol(priority=p),
-                )
-                for p in [1, 5, 3, 2, 4]
-            ]
-        )
+        prioritized_tasks = [
+            Task(
+                query=f"P{p}",
+                environment_data={},
+                protocol=TaskProtocol(priority=p),
+            )
+            for p in [1, 5, 3, 2, 4]
+        ]
 
-        agent_data_list = [{"model": "test"}] * 5
-        queue = PriorityQueue(prioritized_tasks, agent_data_list)
+        queue = PriorityTaskQueue(prioritized_tasks)
 
         # Track execution order
         execution_order = []
@@ -406,6 +403,6 @@ class TestParallelQueueIntegration:
         )
 
         # With max_workers=1, order should be strictly by priority
-        benchmark.run(prioritized_tasks, queue=queue, max_workers=1)
+        benchmark.run(queue, max_workers=1)
 
         assert execution_order == ["P5", "P4", "P3", "P2", "P1"]

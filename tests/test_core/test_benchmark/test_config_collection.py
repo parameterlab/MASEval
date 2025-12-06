@@ -5,7 +5,7 @@ reproducibility data from all registered components correctly.
 """
 
 import pytest
-from maseval import TaskCollection
+from maseval import TaskQueue
 
 
 @pytest.mark.core
@@ -16,7 +16,7 @@ class TestConfigCollection:
         """Test that configs are collected from all registered components."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -48,7 +48,7 @@ class TestConfigCollection:
         """Test that benchmark-level configuration is included."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -67,7 +67,7 @@ class TestConfigCollection:
         """Test that system information is captured."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -81,7 +81,7 @@ class TestConfigCollection:
         """Test that git information is captured when available."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -98,7 +98,7 @@ class TestConfigCollection:
         """Test that installed package versions are captured."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -114,7 +114,7 @@ class TestConfigCollection:
         """Test that config structure matches expected specification."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -166,7 +166,7 @@ class TestConfigCollection:
                 agent_adapter = FailingConfigAdapter(agent, "failing_agent")
                 return [agent_adapter], {"failing_agent": agent_adapter}  # type: ignore[return-value]
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = TestBenchmark(agent_data={"model": "test"})
 
         # Should complete without raising, with error info in config
@@ -184,7 +184,7 @@ class TestConfigCollection:
         import json
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {"key": "value"}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {"key": "value"}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -205,7 +205,7 @@ class TestConfigCollection:
         """Test that all config components include timestamps."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -229,7 +229,7 @@ class TestConfigCollection:
         """Test that all configs include component type information."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"})
 
         reports = benchmark.run(tasks)
@@ -249,7 +249,7 @@ class TestConfigCollection:
         """Test that each repetition has its own config snapshot."""
         from conftest import DummyBenchmark
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DummyBenchmark(agent_data={"model": "test"}, n_task_repeats=3)
 
         reports = benchmark.run(tasks)

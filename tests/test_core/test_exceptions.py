@@ -8,7 +8,7 @@ failures.
 
 import pytest
 from maseval import (
-    TaskCollection,
+    TaskQueue,
     TaskExecutionStatus,
     AgentError,
     EnvironmentError,
@@ -41,7 +41,7 @@ class TestExceptionClassification:
                 adapter = AgentErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = AgentErrorBenchmark(agent_data={})
         reports = benchmark.run(tasks)
 
@@ -68,7 +68,7 @@ class TestExceptionClassification:
                 adapter = EnvironmentErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = EnvironmentErrorBenchmark(agent_data={})
         reports = benchmark.run(tasks)
 
@@ -95,7 +95,7 @@ class TestExceptionClassification:
                 adapter = UserErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = UserErrorBenchmark(agent_data={})
         reports = benchmark.run(tasks)
 
@@ -122,7 +122,7 @@ class TestExceptionClassification:
                 adapter = GenericErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = GenericErrorBenchmark(agent_data={})
         reports = benchmark.run(tasks)
 
@@ -152,7 +152,7 @@ class TestExceptionClassification:
                 adapter = DetailedAgentErrorAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list([{"query": "Test", "environment_data": {}}])
+        tasks = TaskQueue.from_list([{"query": "Test", "environment_data": {}}])
         benchmark = DetailedAgentErrorBenchmark(agent_data={})
         reports = benchmark.run(tasks)
 
@@ -401,7 +401,7 @@ class TestFilteringByErrorType:
                 adapter = DummyAgentAdapter(agent, "agent")
                 return [adapter], {"agent": adapter}
 
-        tasks = TaskCollection.from_list(
+        tasks = TaskQueue.from_list(
             [
                 {"query": "Task 1", "environment_data": {}},
                 {"query": "Task 2", "environment_data": {}},
