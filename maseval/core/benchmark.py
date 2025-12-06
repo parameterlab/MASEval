@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 import warnings
 import traceback
+import logging
 
 from .evaluator import Evaluator
 from .task import Task, BaseTaskQueue, SequentialTaskQueue
@@ -410,22 +411,53 @@ class Benchmark(ABC):
         """
         return self._registry.collect_configs()
 
-    def _invoke_callbacks(self, method_name: str, *args, **kwargs) -> None:
+    def _invoke_callbacks(
+        self, method_name: str, *args, suppress_errors: bool = True, **kwargs
+    ) -> List[Exception]:
         """Invoke a callback method on all registered callbacks (thread-safe).
 
         This method serializes all callback invocations using an internal lock,
         so users don't need to implement thread-safe callbacks.
 
+        Callback errors are caught and logged by default to prevent one failing
+        callback from disrupting the entire benchmark run. This is especially
+        important in parallel execution where callback failures could otherwise
+        cause difficult-to-debug issues.
+
         Args:
             method_name: Name of the callback method to invoke (e.g., "on_task_start").
             *args: Positional arguments to pass to the callback method.
+            suppress_errors: If True (default), catch and log callback errors instead
+                of propagating them. If False, first callback error will be raised.
             **kwargs: Keyword arguments to pass to the callback method.
+
+        Returns:
+            List of exceptions that occurred during callback invocation (empty if none).
+
+        Raises:
+            Exception: First callback exception if suppress_errors=False.
         """
+        errors: List[Exception] = []
+        logger = logging.getLogger(__name__)
+
         with self._callback_lock:
             for cb in self.callbacks:
                 method = getattr(cb, method_name, None)
                 if method is not None:
-                    method(*args, **kwargs)
+                    try:
+                        method(*args, **kwargs)
+                    except Exception as e:
+                        if not suppress_errors:
+                            raise
+
+                        # Log error with full context
+                        logger.error(
+                            f"Callback {cb.__class__.__name__}.{method_name}() failed: {e}",
+                            exc_info=True,
+                        )
+                        errors.append(e)
+
+        return errors
 
     def _append_report_safe(self, report: Dict[str, Any]) -> None:
         """Append a report to the reports list (thread-safe).
@@ -1212,18 +1244,20 @@ class Benchmark(ABC):
 
             # Submit initial batch from queue
             submitted_tasks: List[Task] = []
-            for task in queue:
-                submit_task_repeats(task)
-                submitted_tasks.append(task)
+            queue_iter = iter(queue)  # Create iterator once
+            queue_exhausted = False
 
-                # Limit initial submission to avoid over-committing
-                if len(futures) >= max_workers * 2:
-                    break
+            # Submit initial batch
+            try:
+                while len(futures) < max_workers * 2:
+                    task = next(queue_iter)
+                    submit_task_repeats(task)
+                    submitted_tasks.append(task)
+            except StopIteration:
+                queue_exhausted = True
 
             # Process completions
             completed_task_ids: set = set()
-            queue_iter = iter(queue)
-            queue_exhausted = len(submitted_tasks) >= len(queue)
 
             while futures:
                 # Wait for at least one completion

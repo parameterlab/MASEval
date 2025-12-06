@@ -231,8 +231,14 @@ class TestParallelThreadSafety:
         statuses = {d["status"] for d in received_data}
         assert statuses == {"success"}
 
-    def test_callback_exception_propagates(self, parallel_tasks):
-        """Callback exceptions propagate (current behavior)."""
+    def test_callback_exceptions_suppressed_by_default(self):
+        """Callback exceptions are suppressed by default to prevent disruption."""
+        # Create fresh tasks for this test
+        tasks = TaskQueue.from_list([
+            {"query": f"Task {i}", "environment_data": {}}
+            for i in range(5)
+        ])
+
         call_count = [0]
 
         class FailingCallback(BenchmarkCallback):
@@ -246,9 +252,14 @@ class TestParallelThreadSafety:
             callbacks=[FailingCallback()],
         )
 
-        # Current behavior: callback exceptions propagate
-        with pytest.raises(RuntimeError, match="Intentional failure"):
-            benchmark.run(parallel_tasks, max_workers=2)
+        # New behavior: callback exceptions are suppressed by default
+        # This prevents one failing callback from disrupting parallel execution
+        reports = benchmark.run(tasks, max_workers=2)
+
+        # Execution completes despite callback failure
+        assert len(reports) == 5
+        # Callback was called multiple times (not stopped at failure)
+        assert call_count[0] >= 2
 
 
 # ==================== Concurrency Verification Tests ====================
