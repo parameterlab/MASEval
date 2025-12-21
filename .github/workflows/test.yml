@@ -67,7 +67,7 @@ jobs:
       - name: Install all dependencies
         run: |
           pip install uv
-          uv sync --group dev --group typing --group examples
+          uv sync --all-extras --group dev
       - name: Run all tests
         run: |
           uv run pytest -v

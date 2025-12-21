@@ -60,17 +60,17 @@ uv run pytest -m interface -v
 Three types of dependencies:
 
 - **Core** (`[project.dependencies]`): Required, installed with `pip install maseval`. Keep minimal!
-- **Optional** (`[project.optional-dependencies]`): Published for end users. Framework integrations like `smolagents`, `langgraph`.
+- **Optional** (`[project.optional-dependencies]`): Published for end users. Framework integrations like `smolagents`, `langgraph`, plus convenience bundles like `all` and `examples`. Uses self-references (e.g., `maseval[all]`) to avoid duplication - this is a standard Python packaging feature.
 - **Dev Groups** (`[dependency-groups]`): NOT published. Only for contributors. Tools like `pytest`, `ruff`, `mkdocs`.
 
 ```bash
 # Add core dependency (use sparingly!)
 uv add <package-name>
 
-# Add optional dependency for end users
+# Add optional dependency for end users (e.g., framework integrations)
 uv add --optional <extra-name> <package-name>
 
-# Add development dependency (not published)
+# Add development dependency (not published - dev tools only)
 uv add --group dev <package-name>
 
 # Remove any dependency
@@ -78,6 +78,17 @@ uv remove <package-name>
 ```
 
 **Important:** `uv add` automatically updates both `pyproject.toml` and `uv.lock`. Never edit lockfile manually.
+
+**Understanding `uv sync` options:**
+
+- `uv sync`: Installs only core dependencies
+- `uv sync --extra <name>`: Adds specific optional dependency (e.g., `--extra smolagents`)
+- `uv sync --all-extras`: Installs ALL optional dependencies (includes `smolagents`, `langgraph`, etc.)
+- `uv sync --group <name>`: Adds specific dev group (e.g., `--group dev`)
+- `uv sync --all-groups`: Installs ALL dev groups (`dev`, `docs`)
+- `uv sync --all-extras --all-groups`: Full contributor setup with everything
+
+**Note:** Type checking requires `--all-extras` to install all framework packages needed for checking types across all interfaces.
 
 ## Architecture Rules
 
