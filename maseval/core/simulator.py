@@ -491,7 +491,7 @@ class UserLLMSimulator(LLMSimulator):
             component="user_simulator",
         )
 
-    def __call__(
+    def __call__(  # ty: ignore[invalid-method-override]
         self,
         conversation_history: List[Dict[str, str]],
         generation_params: Optional[Dict[str, Any]] = None,

@@ -9,7 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Parallel Execution**
+
+- Added parallel task execution with `max_workers` parameter in `Benchmark.run()` using `ThreadPoolExecutor` (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `ComponentRegistry` class for thread-safe component registration with thread-local storage (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `TaskContext` for cooperative timeout checking with `check_timeout()`, `elapsed`, `remaining`, and `is_expired` properties (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `TaskProtocol` dataclass with `timeout_seconds`, `timeout_action`, `max_retries`, `priority`, and `tags` fields for task-level execution control (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `TimeoutAction` enum (`SKIP`, `RETRY`, `RAISE`) for configurable timeout behavior (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `TaskTimeoutError` exception with `elapsed`, `timeout`, and `partial_traces` attributes (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `TASK_TIMEOUT` to `TaskExecutionStatus` enum for timeout classification (PR: #PR_NUMBER_PLACEHOLDER)
+
+**Task Queue Abstraction**
+
+- Added `TaskQueue` abstract base class with iterator interface for flexible task scheduling (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `SequentialQueue` for simple FIFO task ordering (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `PriorityQueue` for priority-based task scheduling using `TaskProtocol.priority` (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `AdaptiveQueue` placeholder for future feedback-based scheduling (PR: #PR_NUMBER_PLACEHOLDER)
+
 ### Changed
+
+- Refactored `Benchmark` to delegate registry operations to `ComponentRegistry` class (PR: #PR_NUMBER_PLACEHOLDER)
+- `Benchmark.run()` now accepts optional `queue` parameter for custom task scheduling (PR: #PR_NUMBER_PLACEHOLDER)
 
 ### Fixed
 

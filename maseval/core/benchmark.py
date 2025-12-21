@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Iterable, Optional, Sequence, Tuple, Union, cast
-from datetime import datetime
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 import warnings
+import traceback
+import logging
 
 from .evaluator import Evaluator
-from .task import Task, TaskCollection
+from .task import Task, BaseTaskQueue, SequentialTaskQueue
 from .environment import Environment
 from .agent import AgentAdapter
 from .model import ModelAdapter
@@ -14,14 +16,15 @@ from .callback_handler import CallbackHandler
 from .callback import BenchmarkCallback
 from .user import User
 from .tracing import TraceableMixin
-from .config import ConfigurableMixin
+from .registry import ComponentRegistry
+from .context import TaskContext
 from .utils.system_info import gather_benchmark_config
 from .callbacks.progress_bar import (
     ProgressBarCallback,
     TqdmProgressBarCallback,
     RichProgressBarCallback,
 )
-from .exceptions import AgentError, EnvironmentError, UserError
+from .exceptions import AgentError, EnvironmentError, UserError, TaskTimeoutError
 
 
 class TaskExecutionStatus(Enum):
@@ -39,13 +42,14 @@ class TaskExecutionStatus(Enum):
         AGENT_ERROR: Agent violated contract at a boundary (agent's fault, counts against score).
         ENVIRONMENT_ERROR: Environment/tool infrastructure failed (not agent's fault, exclude from scoring).
         USER_ERROR: User simulator failed (not agent's fault, exclude from scoring).
+        TASK_TIMEOUT: Task execution exceeded configured timeout (resource constraint).
         UNKNOWN_EXECUTION_ERROR: Unclassified execution error (e.g., agent framework internal failure).
         EVALUATION_FAILED: Task executed but evaluation raised an exception.
         SETUP_FAILED: Setup phase (environment, agents, evaluators) raised an exception.
 
     Scoring Guidance:
         - Include in agent score: SUCCESS, AGENT_ERROR
-        - Exclude from agent score: ENVIRONMENT_ERROR, USER_ERROR, UNKNOWN_EXECUTION_ERROR
+        - Exclude from agent score: ENVIRONMENT_ERROR, USER_ERROR, TASK_TIMEOUT, UNKNOWN_EXECUTION_ERROR
         - Handle separately: EVALUATION_FAILED, SETUP_FAILED
     """
 
@@ -53,6 +57,7 @@ class TaskExecutionStatus(Enum):
     AGENT_ERROR = "agent_error"
     ENVIRONMENT_ERROR = "environment_error"
     USER_ERROR = "user_error"
+    TASK_TIMEOUT = "task_timeout"
     UNKNOWN_EXECUTION_ERROR = "unknown_execution_error"
     EVALUATION_FAILED = "evaluation_failed"
     SETUP_FAILED = "setup_failed"
@@ -94,21 +99,26 @@ class Benchmark(ABC):
                 # ... implement other abstract methods
 
             # Run the benchmark
-            benchmark = MyBenchmark(agent_data=config)
-            reports = benchmark.run(tasks=my_tasks)
+            config = {"model": "gpt-4", "temperature": 0.7}
+            benchmark = MyBenchmark()
+            reports = benchmark.run(tasks=my_tasks, agent_data=config)
 
             # Retry failed tasks elegantly (graceful task failure handling by default)
             failed_tasks = benchmark.get_failed_tasks()
             if len(failed_tasks) > 0:
-                retry_reports = benchmark.run(tasks=failed_tasks)
+                retry_reports = benchmark.run(tasks=failed_tasks, agent_data=config)
+
+            # Parallel execution for I/O-bound workloads
+            benchmark = MyBenchmark(max_workers=4)
+            reports = benchmark.run(tasks=my_tasks, agent_data=config)
 
             # Or use strict mode for debugging (fail fast)
             benchmark = MyBenchmark(
-                agent_data=config,
                 fail_on_task_error=True,
                 fail_on_evaluation_error=True,
                 fail_on_setup_error=True
             )
+            reports = benchmark.run(tasks=my_tasks, agent_data=config)
             ```
 
         The framework handles task iteration, repetitions for statistical robustness, callback
@@ -118,21 +128,18 @@ class Benchmark(ABC):
 
     def __init__(
         self,
-        agent_data: Dict[str, Any] | Iterable[Dict[str, Any]],
         callbacks: Optional[List[BenchmarkCallback]] = None,
         n_task_repeats: int = 1,
         max_invocations: int = 1,
+        max_workers: int = 1,
         fail_on_setup_error: bool = False,
         fail_on_task_error: bool = False,
         fail_on_evaluation_error: bool = False,
         progress_bar: bool | str = True,
     ):
-        """Initialize a benchmark with agent configurations.
+        """Initialize a benchmark with execution configuration.
 
         Args:
-            agent_data: Configuration for agents. Either a single dict applied to all tasks, or
-                an iterable of dicts with one configuration per task. Agent data typically includes
-                model parameters, agent architecture details, and tool specifications.
             callbacks: Optional list of callback handlers for monitoring execution, tracing messages,
                 or collecting custom metrics during the benchmark run.
             n_task_repeats: Number of times to repeat each task. Useful for measuring variance in
@@ -141,6 +148,9 @@ class Benchmark(ABC):
                 For simple benchmarks, the default (1) means agents run once per task. For interactive
                 benchmarks with user feedback loops, set higher (e.g., 5 for MACS) to allow multiple
                 agent-user interaction rounds.
+            max_workers: Maximum number of parallel task executions. Default 1 (sequential).
+                Set higher for I/O-bound workloads (e.g., LLM API calls). This controls the
+                ThreadPoolExecutor worker count for concurrent task processing.
             fail_on_setup_error: If True, raise exceptions when setup fails (environment, agents, evaluators).
                 If False (default), catch exceptions during setup and record them in the report with status
                 SETUP_FAILED. This allows the benchmark to continue running remaining tasks even if setup fails.
@@ -163,54 +173,34 @@ class Benchmark(ABC):
             ValueError: If n_task_repeats is less than 1.
 
         How to use:
-            Provide either a single agent configuration for all tasks, or task-specific configurations:
+            Configure execution settings at initialization:
 
             ```python
-            # Single config for all tasks
-            benchmark = MyBenchmark(agent_data={"model": "gpt-4", "temperature": 0.7})
+            # Sequential execution (default)
+            benchmark = MyBenchmark()
 
-            # Task-specific configs (will be validated in run() based on task count)
-            benchmark = MyBenchmark(
-                agent_data=[
-                    {"model": "gpt-4", "config": "easy"},
-                    {"model": "gpt-4", "config": "hard"}
-                ]
-            )
-
-            # Enable failure-safe execution (default behavior)
-            benchmark = MyBenchmark(
-                agent_data=config,
-                fail_on_task_error=False,  # Continue on task failures
-                fail_on_evaluation_error=False  # Continue on evaluation failures
-            )
+            # Parallel execution for faster I/O-bound workloads
+            benchmark = MyBenchmark(max_workers=4)
 
             # Strict mode - fail fast on any error (useful for debugging)
             benchmark = MyBenchmark(
-                agent_data=config,
                 fail_on_task_error=True,
                 fail_on_evaluation_error=True,
                 fail_on_setup_error=True
             )
 
-            # Progress bar configuration (automatically adds a callback)
-            benchmark = MyBenchmark(agent_data=config)  # Default: adds TqdmProgressBarCallback
-            benchmark = MyBenchmark(agent_data=config, progress_bar=True)  # Explicit: TqdmProgressBarCallback
-            benchmark = MyBenchmark(agent_data=config, progress_bar="tqdm")  # Same as True
-            benchmark = MyBenchmark(agent_data=config, progress_bar="rich")  # Uses RichProgressBarCallback
-            benchmark = MyBenchmark(agent_data=config, progress_bar=False)  # No automatic callback
+            # Progress bar configuration
+            benchmark = MyBenchmark()  # Default: adds TqdmProgressBarCallback
+            benchmark = MyBenchmark(progress_bar=True)  # Explicit: TqdmProgressBarCallback
+            benchmark = MyBenchmark(progress_bar="rich")  # Uses RichProgressBarCallback
+            benchmark = MyBenchmark(progress_bar=False)  # No automatic callback
 
-            # Progress bar configuration (manually add a callback)
-            benchmark = MyBenchmark(
-                agent_data=config,
-                callbacks=[MyCustomProgressBarCallback()]  # User-defined progress bar
-            )
+            # Custom callbacks
+            benchmark = MyBenchmark(callbacks=[MyCustomProgressBarCallback()])
             ```
         """
-        # Store agent_data as-is (will be normalized in run())
-        self.agent_data = agent_data
-
-        # Initialize tasks to empty collection (will be set in run())
-        self.tasks = TaskCollection([])
+        # Initialize tasks to empty queue (will be set in run())
+        self.tasks: BaseTaskQueue = SequentialTaskQueue([])
 
         self.callback_handler = CallbackHandler()
         self.callbacks = callbacks or []
@@ -233,28 +223,28 @@ class Benchmark(ABC):
         if self.n_task_repeats < 1:
             raise ValueError("n_task_repeats must be at least 1")
 
-        # Execution loop configuration
+        # Execution configuration
         self.max_invocations = max_invocations
+        self.max_workers = max_workers
 
         # Failure handling configuration
         self.fail_on_task_error = fail_on_task_error
         self.fail_on_evaluation_error = fail_on_evaluation_error
         self.fail_on_setup_error = fail_on_setup_error
 
-        # Registry for Traceable components (cleared after each task repetition)
-        self._trace_registry: Dict[str, TraceableMixin] = {}
-        self._component_id_map: Dict[int, str] = {}  # Maps id(component) -> registry key
+        # Gather benchmark-level configuration (system, git, packages, etc.)
+        self.benchmark_level_config = gather_benchmark_config()
 
-        # Registry for Configurable components (cleared after each task repetition)
-        self._config_registry: Dict[str, ConfigurableMixin] = {}
-        self._config_component_id_map: Dict[int, str] = {}  # Maps id(component) -> registry key
+        # Thread-safe component registry (replaces inline registry dicts)
+        self._registry = ComponentRegistry(benchmark_config=self.benchmark_level_config)
+
+        # Thread safety locks for parallel execution
+        self._reports_lock = threading.Lock()
+        self._callback_lock = threading.Lock()
 
         # Persistent benchmark-level reports (stored across all task repetitions)
         # Each report contains both traces and configs for a single task repetition
         self.reports: List[Dict[str, Any]] = []
-
-        # Gather benchmark-level configuration (system, git, packages, etc.)
-        self.benchmark_level_config = gather_benchmark_config()
 
     def register(self, category: str, name: str, component: TraceableMixin) -> TraceableMixin:
         """Register a component for comprehensive trace and configuration collection.
@@ -304,35 +294,7 @@ class Benchmark(ABC):
             `collect_all_traces()` and `collect_all_configs()` which are called
             internally by the `run()` method.
         """
-        # Check if this component is already registered for traces
-        component_id = id(component)
-        if component_id in self._component_id_map:
-            existing_key = self._component_id_map[component_id]
-            existing_category, existing_name = existing_key.split(":", 1)
-            new_key = f"{category}:{name}"
-
-            if existing_key == new_key:
-                # Same component, same name - silently accept (idempotent)
-                return component
-            else:
-                raise ValueError(
-                    f"Component is already registered as '{existing_key}' and cannot be "
-                    f"re-registered as '{new_key}'. Note: Environments, users, and agents "
-                    f"returned from setup methods are automatically registered."
-                )
-
-        key = f"{category}:{name}"
-
-        # Register for trace collection
-        self._trace_registry[key] = component
-        self._component_id_map[component_id] = key
-
-        # Also register for configuration collection if component supports it
-        if isinstance(component, ConfigurableMixin):
-            self._config_registry[key] = component
-            self._config_component_id_map[component_id] = key
-
-        return component
+        return self._registry.register(category, name, component)
 
     def clear_registry(self) -> None:
         """Clear the component registry after a task repetition completes.
@@ -341,10 +303,7 @@ class Benchmark(ABC):
         to ensure components are not carried over between repetitions. The
         reports list persists across all repetitions for aggregated analysis.
         """
-        self._trace_registry.clear()
-        self._component_id_map.clear()
-        self._config_registry.clear()
-        self._config_component_id_map.clear()
+        self._registry.clear()
 
     def collect_all_traces(self) -> Dict[str, Any]:
         """Collect execution traces from all registered components for the current task repetition.
@@ -389,61 +348,7 @@ class Benchmark(ABC):
             The collected traces are passed to the evaluator's `evaluate()` method
             and stored in `benchmark.reports` for later analysis.
         """
-        traces: Dict[str, Any] = {
-            "metadata": {
-                "timestamp": datetime.now().isoformat(),
-                "thread_id": threading.current_thread().ident,
-                "total_components": len(self._trace_registry),
-            },
-            "agents": {},
-            "models": {},
-            "tools": {},
-            "simulators": {},
-            "callbacks": {},
-            "environment": None,
-            "user": None,
-            "other": {},
-        }
-
-        for key, component in self._trace_registry.items():
-            category, comp_name = key.split(":", 1)
-
-            try:
-                component_traces = component.gather_traces()
-
-                # Inject name from registry if component doesn't have it
-                # Is this intervention obfuscating the mechnaisms too much?
-                if "name" not in component_traces:
-                    component_traces["name"] = comp_name
-
-                # Handle environment and user as direct values (not nested in dict)
-                if category == "environment":
-                    traces["environment"] = component_traces
-                elif category == "user":
-                    traces["user"] = component_traces
-                else:
-                    # Ensure category exists in traces
-                    if category not in traces:
-                        traces[category] = {}
-                    traces[category][comp_name] = component_traces
-            except Exception as e:
-                # Gracefully handle tracing errors
-                error_info = {
-                    "error": f"Failed to gather traces: {e}",
-                    "error_type": type(e).__name__,
-                    "component_type": type(component).__name__,
-                }
-
-                if category == "environment":
-                    traces["environment"] = error_info
-                elif category == "user":
-                    traces["user"] = error_info
-                else:
-                    if category not in traces:
-                        traces[category] = {}
-                    traces[category][comp_name] = error_info
-
-        return traces
+        return self._registry.collect_traces()
 
     def collect_all_configs(self) -> Dict[str, Any]:
         """Collect configuration from all registered components for the current task repetition.
@@ -490,62 +395,62 @@ class Benchmark(ABC):
 
             The collected configs are available in the results for reproducibility analysis.
         """
-        configs: Dict[str, Any] = {
-            "metadata": {
-                "timestamp": datetime.now().isoformat(),
-                "thread_id": threading.current_thread().ident,
-                "total_components": len(self._config_registry),
-            },
-            "agents": {},
-            "models": {},
-            "tools": {},
-            "simulators": {},
-            "callbacks": {},
-            "environment": None,
-            "user": None,
-            "other": {},
-            "benchmark": self.benchmark_level_config,  # Include benchmark-level config
-        }
+        return self._registry.collect_configs()
 
-        for key, component in self._config_registry.items():
-            category, comp_name = key.split(":", 1)
+    def _invoke_callbacks(self, method_name: str, *args, suppress_errors: bool = True, **kwargs) -> List[Exception]:
+        """Invoke a callback method on all registered callbacks (thread-safe).
 
-            try:
-                component_config = component.gather_config()
+        This method serializes all callback invocations using an internal lock,
+        so users don't need to implement thread-safe callbacks.
 
-                # Inject name from registry if component doesn't have it
-                # Is this intervention obfuscating the mechnaisms too much?
-                if "name" not in component_config:
-                    component_config["name"] = comp_name
+        Callback errors are caught and logged by default to prevent one failing
+        callback from disrupting the entire benchmark run. This is especially
+        important in parallel execution where callback failures could otherwise
+        cause difficult-to-debug issues.
 
-                # Handle environment and user as direct values (not nested in dict)
-                if category == "environment":
-                    configs["environment"] = component_config
-                elif category == "user":
-                    configs["user"] = component_config
-                else:
-                    # Ensure category exists in configs
-                    if category not in configs:
-                        configs[category] = {}
-                    configs[category][comp_name] = component_config
-            except Exception as e:
-                # Gracefully handle config gathering errors
-                error_info = {
-                    "error": f"Failed to gather config: {e}",
-                    "error_type": type(e).__name__,
-                    "component_type": type(component).__name__,
-                }
+        Args:
+            method_name: Name of the callback method to invoke (e.g., "on_task_start").
+            *args: Positional arguments to pass to the callback method.
+            suppress_errors: If True (default), catch and log callback errors instead
+                of propagating them. If False, first callback error will be raised.
+            **kwargs: Keyword arguments to pass to the callback method.
 
-                if category == "environment":
-                    configs["environment"] = error_info
-                elif category == "user":
-                    configs["user"] = error_info
-                else:
-                    if category not in configs:
-                        configs[category] = {}
-                    configs[category][comp_name] = error_info
+        Returns:
+            List of exceptions that occurred during callback invocation (empty if none).
 
-        return configs
+        Raises:
+            Exception: First callback exception if suppress_errors=False.
+        """
+        errors: List[Exception] = []
+        logger = logging.getLogger(__name__)
+
+        with self._callback_lock:
+            for cb in self.callbacks:
+                method = getattr(cb, method_name, None)
+                if method is not None:
+                    try:
+                        method(*args, **kwargs)
+                    except Exception as e:
+                        if not suppress_errors:
+                            raise
+
+                        # Log error with full context
+                        logger.error(
+                            f"Callback {cb.__class__.__name__}.{method_name}() failed: {e}",
+                            exc_info=True,
+                        )
+                        errors.append(e)
+
+        return errors
+
+    def _append_report_safe(self, report: Dict[str, Any]) -> None:
+        """Append a report to the reports list (thread-safe).
+
+        Args:
+            report: The report dictionary to append.
+        """
+        with self._reports_lock:
+            self.reports.append(report)
 
     def add_callback(self, callback: BenchmarkCallback) -> None:
         """Register a callback handler to monitor benchmark execution.
@@ -992,12 +897,427 @@ class Benchmark(ABC):
 
         return final_answer
 
-    def run(self, tasks: Union[Task, TaskCollection, Iterable[Union[Task, dict]]]) -> List[Dict[str, Any]]:
+    def _execute_task_repetition(
+        self,
+        task: Task,
+        agent_data: Dict[str, Any],
+        repeat_idx: int,
+    ) -> Dict[str, Any]:
+        """Execute a single task repetition with timeout handling.
+
+        This method encapsulates the complete execution of one task repetition,
+        including setup, execution, trace collection, and evaluation. It is
+        designed to be called from both sequential and parallel execution paths.
+
+        Args:
+            task: The task to execute.
+            agent_data: Agent configuration for this task.
+            repeat_idx: Repetition index (0 to n_task_repeats-1).
+
+        Returns:
+            Report dictionary containing execution results.
+        """
+        # Initialize status and error tracking
+        execution_status = TaskExecutionStatus.SUCCESS
+        error_info: Optional[Dict[str, Any]] = None
+        final_answers: Any = None
+        eval_results: Any = None
+        execution_traces: Dict[str, Any] = {}
+        execution_configs: Dict[str, Any] = {}
+        evaluators: Sequence[Evaluator] = []
+        agents_dict: Dict[str, AgentAdapter] = {}
+
+        # Create execution context with optional timeout
+        timeout = task.protocol.timeout_seconds
+        context = TaskContext(deadline=timeout)
+
+        try:
+            # 1. Setup
+            environment = self.setup_environment(agent_data, task)
+            user = self.setup_user(agent_data, environment, task)
+            if user is None and self.max_invocations > 1:
+                # Warn if multi-turn is enabled but no user to drive interaction
+                warnings.warn(
+                    f"max_invocations={self.max_invocations} > 1 but no user simulator provided. "
+                    f"Falling back to single-turn execution for task {task.id}."
+                )
+            agents_to_run, agents_dict = self.setup_agents(agent_data, environment, task, user)
+            evaluators = self.setup_evaluators(environment, task, agents_to_run, user)
+
+            # Auto-register components returned from setup methods
+            # Environment
+            if environment is not None and isinstance(environment, TraceableMixin):
+                self.register("environment", "env", environment)
+
+            # User
+            if user is not None and isinstance(user, TraceableMixin):
+                self.register("user", "user", user)
+
+            # Agents (use their names from agents_dict)
+            for agent_name, agent in agents_dict.items():
+                if isinstance(agent, TraceableMixin):
+                    self.register("agents", agent_name, agent)
+
+            # Check timeout after setup
+            context.check_timeout()
+
+        except TaskTimeoutError as e:
+            # Timeout during setup
+            execution_status = TaskExecutionStatus.TASK_TIMEOUT
+            error_info = {
+                "error_type": "TaskTimeoutError",
+                "error_message": str(e),
+                "elapsed": e.elapsed,
+                "timeout": e.timeout,
+                "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+            }
+
+            # Create a minimal report for this timeout
+            report = {
+                "task_id": str(task.id),
+                "repeat_idx": repeat_idx,
+                "status": execution_status.value,
+                "error": error_info,
+                "traces": e.partial_traces,
+                "config": {},
+                "eval": None,
+            }
+            self.clear_registry()
+            return report
+
+        except Exception as e:
+            # Setup failed - record error
+            execution_status = TaskExecutionStatus.SETUP_FAILED
+            error_info = {
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+            }
+
+            # Create a minimal report for this failed setup
+            report = {
+                "task_id": str(task.id),
+                "repeat_idx": repeat_idx,
+                "status": execution_status.value,
+                "error": error_info,
+                "traces": {},
+                "config": {},
+                "eval": None,
+            }
+            self.clear_registry()
+
+            if self.fail_on_setup_error:
+                raise
+
+            return report
+
+        # 2. Execute agent system with optional user interaction loop
+        try:
+            # Check timeout before execution
+            context.check_timeout()
+            final_answers = self.execution_loop(agents_to_run, task, environment, user)
+        except TaskTimeoutError as e:
+            # Task timed out during execution
+            execution_status = TaskExecutionStatus.TASK_TIMEOUT
+            error_info = {
+                "error_type": "TaskTimeoutError",
+                "error_message": str(e),
+                "elapsed": e.elapsed,
+                "timeout": e.timeout,
+                "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+            }
+            final_answers = None
+        except AgentError as e:
+            # Agent violated contract at boundary (agent's fault)
+            execution_status = TaskExecutionStatus.AGENT_ERROR
+            error_info = {
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "component": e.component,
+                "details": e.details,
+                "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+            }
+
+            if self.fail_on_task_error:
+                self.clear_registry()
+                raise
+
+            final_answers = None
+        except EnvironmentError as e:
+            # Environment/tool infrastructure failed (not agent's fault)
+            execution_status = TaskExecutionStatus.ENVIRONMENT_ERROR
+            error_info = {
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "component": e.component,
+                "details": e.details,
+                "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+            }
+
+            if self.fail_on_task_error:
+                self.clear_registry()
+                raise
+
+            final_answers = None
+        except UserError as e:
+            # User simulator failed (not agent's fault)
+            execution_status = TaskExecutionStatus.USER_ERROR
+            error_info = {
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "component": e.component,
+                "details": e.details,
+                "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+            }
+
+            if self.fail_on_task_error:
+                self.clear_registry()
+                raise
+
+            final_answers = None
+        except Exception as e:
+            # Unclassified error (e.g., agent framework internal failure)
+            execution_status = TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR
+            error_info = {
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+            }
+
+            if self.fail_on_task_error:
+                self.clear_registry()
+                raise
+
+            final_answers = None
+
+        # 3. Collect traces and configs (always attempt this)
+        try:
+            execution_configs = self.collect_all_configs()
+            execution_traces = self.collect_all_traces()
+            # Store in context for potential timeout errors
+            context.set_collected_traces(execution_traces)
+        except Exception as e:
+            # If trace/config collection fails, record it but continue
+            execution_configs = {
+                "error": f"Failed to collect configs: {e}",
+                "error_type": type(e).__name__,
+            }
+            execution_traces = {
+                "error": f"Failed to collect traces: {e}",
+                "error_type": type(e).__name__,
+            }
+
+        # 4. Evaluate (skip if task execution failed)
+        if execution_status == TaskExecutionStatus.SUCCESS:
+            try:
+                # Check timeout before evaluation
+                context.check_timeout()
+                eval_results = self.evaluate(evaluators, agents_dict, final_answers, execution_traces)
+            except TaskTimeoutError as e:
+                execution_status = TaskExecutionStatus.TASK_TIMEOUT
+                error_info = {
+                    "error_type": "TaskTimeoutError",
+                    "error_message": str(e),
+                    "elapsed": e.elapsed,
+                    "timeout": e.timeout,
+                    "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+                }
+                eval_results = None
+            except Exception as e:
+                execution_status = TaskExecutionStatus.EVALUATION_FAILED
+                error_info = {
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+                }
+
+                if self.fail_on_evaluation_error:
+                    self.clear_registry()
+                    raise
+
+                eval_results = None
+        else:
+            # Task execution failed, so skip evaluation
+            eval_results = None
+
+        # 5. Build report
+        report: Dict[str, Any] = {
+            "task_id": str(task.id),
+            "repeat_idx": repeat_idx,
+            "status": execution_status.value,
+            "traces": execution_traces,
+            "config": execution_configs,
+            "eval": eval_results,
+        }
+
+        # Add error info if present
+        if error_info is not None:
+            report["error"] = error_info
+
+        # Clear registry after task repetition completes
+        self.clear_registry()
+
+        return report
+
+    def _run_sequential(
+        self,
+        queue: BaseTaskQueue,
+        agent_data_lookup: Dict[str, Dict[str, Any]],
+    ) -> None:
+        """Execute tasks sequentially with optional timeout support.
+
+        Args:
+            queue: Task queue providing task ordering.
+            agent_data_lookup: Mapping from task_id to agent_data configuration.
+        """
+        for task in queue:
+            agent_data = agent_data_lookup[str(task.id)]
+
+            # Callbacks at the start of each task
+            self._invoke_callbacks("on_task_start", self, task)
+
+            for repeat_idx in range(self.n_task_repeats):
+                self._invoke_callbacks("on_task_repeat_start", self, task, repeat_idx)
+
+                report = self._execute_task_repetition(task, agent_data, repeat_idx)
+                self._append_report_safe(report)
+
+                self._invoke_callbacks("on_task_repeat_end", self, report)
+
+            # Callbacks at the end of each task
+            task_reports = [r for r in self.reports if r["task_id"] == str(task.id)]
+            last_report = task_reports[-1] if task_reports else {}
+            self._invoke_callbacks("on_task_end", self, task, last_report)
+
+    def _run_parallel(
+        self,
+        queue: BaseTaskQueue,
+        agent_data_lookup: Dict[str, Dict[str, Any]],
+        max_workers: int,
+    ) -> None:
+        """Execute tasks in parallel with thread pool.
+
+        Args:
+            queue: Task queue providing task ordering.
+            agent_data_lookup: Mapping from task_id to agent_data configuration.
+            max_workers: Maximum number of concurrent workers.
+        """
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures: Dict[Any, Tuple[Task, int]] = {}
+            task_repeat_counts: Dict[str, int] = {}  # Track submitted repeats per task
+
+            def submit_task_repeats(task: Task) -> None:
+                """Submit all repeats for a task."""
+                task_id = str(task.id)
+                task_repeat_counts[task_id] = 0
+                agent_data = agent_data_lookup[task_id]
+
+                self._invoke_callbacks("on_task_start", self, task)
+
+                for repeat_idx in range(self.n_task_repeats):
+                    self._invoke_callbacks("on_task_repeat_start", self, task, repeat_idx)
+
+                    future = executor.submit(
+                        self._execute_task_repetition,
+                        task,
+                        agent_data,
+                        repeat_idx,
+                    )
+                    futures[future] = (task, repeat_idx)
+                    task_repeat_counts[task_id] += 1
+
+            # Submit initial batch from queue
+            submitted_tasks: List[Task] = []
+            queue_iter = iter(queue)  # Create iterator once
+            queue_exhausted = False
+
+            # Submit initial batch
+            try:
+                while len(futures) < max_workers * 2:
+                    task = next(queue_iter)
+                    submit_task_repeats(task)
+                    submitted_tasks.append(task)
+            except StopIteration:
+                queue_exhausted = True
+
+            # Process completions
+            completed_task_ids: set = set()
+
+            while futures:
+                # Wait for at least one completion
+                done_futures = []
+                for future in list(futures.keys()):
+                    if future.done():
+                        done_futures.append(future)
+
+                if not done_futures:
+                    # No futures done yet, wait a bit
+                    import time
+
+                    time.sleep(0.01)
+                    continue
+
+                for future in done_futures:
+                    task, repeat_idx = futures.pop(future)
+                    task_id = str(task.id)
+
+                    try:
+                        report = future.result()
+                    except Exception as e:
+                        # Create error report for unexpected failures
+                        report = {
+                            "task_id": task_id,
+                            "repeat_idx": repeat_idx,
+                            "status": TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR.value,
+                            "error": {
+                                "error_type": type(e).__name__,
+                                "error_message": str(e),
+                                "traceback": "".join(traceback.format_exception(type(e), e, e.__traceback__)),
+                            },
+                            "traces": {},
+                            "config": {},
+                            "eval": None,
+                        }
+
+                    self._append_report_safe(report)
+
+                    self._invoke_callbacks("on_task_repeat_end", self, report)
+
+                    # Check if all repeats for this task are done
+                    task_reports = [r for r in self.reports if r["task_id"] == task_id]
+                    if len(task_reports) >= self.n_task_repeats and task_id not in completed_task_ids:
+                        completed_task_ids.add(task_id)
+                        last_report = task_reports[-1] if task_reports else {}
+                        self._invoke_callbacks("on_task_end", self, task, last_report)
+
+                # Submit more work if queue not exhausted
+                if not queue_exhausted and len(futures) < max_workers:
+                    try:
+                        task = next(queue_iter)
+                        submit_task_repeats(task)
+                        submitted_tasks.append(task)
+                    except StopIteration:
+                        queue_exhausted = True
+
+    def run(
+        self,
+        tasks: Union[Task, BaseTaskQueue, Iterable[Union[Task, dict]]],
+        agent_data: Dict[str, Any] | Iterable[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
         """Initialize and execute the complete benchmark loop across all tasks.
 
         Args:
-            tasks: Collection of tasks to execute. Can be a single Task, TaskCollection,
-                list of Task objects, or list of dicts that will be converted to Tasks.
+            tasks: Task source for execution. Can be:
+                - A single Task object
+                - A BaseTaskQueue (SequentialTaskQueue, PriorityTaskQueue, or custom AdaptiveTaskQueue)
+                - An iterable of Task objects or dicts that will be converted to Tasks
+
+                When a BaseTaskQueue is provided, it controls the task ordering. AdaptiveTaskQueue
+                subclasses are automatically registered as callbacks to receive task completion
+                notifications.
+            agent_data: Configuration for agents. Either a single dict applied to all tasks, or
+                an iterable of dicts with one configuration per task. Agent data typically includes
+                model parameters, agent architecture details, and tool specifications.
 
         Returns:
             List of report dictionaries, one per task repetition. Each report contains:
@@ -1066,279 +1386,123 @@ class Benchmark(ABC):
 
             ```python
             # Typical usage
-            benchmark = MyBenchmark(agent_data=config)
-            reports = benchmark.run(tasks=tasks)
+            benchmark = MyBenchmark()
+            reports = benchmark.run(tasks=tasks, agent_data=config)
 
             # Analyze results
             for report in reports:
                 print(f"Task {report['task_id']}, Repeat {report['repeat_idx']}: {report['eval']}")
                 print(f"Config: {report['config']}")
                 print(f"Traces: {report['traces']}")
+
+            # Parallel execution with 4 workers
+            benchmark = MyBenchmark(max_workers=4)
+            reports = benchmark.run(tasks=tasks, agent_data=config)
+
+            # Single agent config for all tasks
+            reports = benchmark.run(tasks=tasks, agent_data={"model": "gpt-4"})
+
+            # Task-specific agent configs (must match task count)
+            reports = benchmark.run(
+                tasks=tasks,
+                agent_data=[
+                    {"model": "gpt-4", "difficulty": "easy"},
+                    {"model": "gpt-4", "difficulty": "hard"},
+                ]
+            )
+
+            # Priority-based execution
+            from maseval.core.task import PriorityTaskQueue
+            for task in tasks:
+                task.protocol.priority = compute_priority(task)
+            queue = PriorityTaskQueue(tasks)
+            reports = benchmark.run(tasks=queue, agent_data=config)
+
+            # Adaptive queue (auto-registered as callback)
+            queue = MyAdaptiveTaskQueue(tasks)
+            reports = benchmark.run(tasks=queue)  # queue receives on_task_complete callbacks
             ```
         """
-        # Normalize tasks into a TaskCollection
+        # Normalize tasks into a queue
+        queue: BaseTaskQueue
         if isinstance(tasks, Task):
-            # Single task
-            self.tasks = TaskCollection([tasks])
-        elif isinstance(tasks, TaskCollection):
-            self.tasks = tasks
+            # Single task - wrap in SequentialTaskQueue
+            queue = SequentialTaskQueue([tasks])
+        elif isinstance(tasks, BaseTaskQueue):
+            # Already a queue - use directly
+            queue = tasks
         else:
-            # Iterable of tasks or dicts
-            self.tasks = TaskCollection.from_list(list(tasks))
+            # Iterable of tasks or dicts - wrap in SequentialTaskQueue
+            queue = SequentialTaskQueue.from_list(list(tasks))
 
-        # Normalize agent_data into a list matching the number of tasks
-        if isinstance(self.agent_data, dict):
-            # Single config for all tasks
-            agent_data_list: List[Dict[str, Any]] = [cast(Dict[str, Any], self.agent_data) for _ in range(len(self.tasks))]
-        else:
-            # Task-specific configs
-            agent_data_list = list(self.agent_data)
+        # Store tasks reference for get_failed_tasks() compatibility
+        self.tasks = queue
 
-        if len(agent_data_list) != len(self.tasks):
-            raise ValueError(
-                f"`agent_data` must either be a single dict or an iterable matching the number of tasks. "
-                f"Got {len(agent_data_list)} agent configs for {len(self.tasks)} tasks."
-            )
+        # Build agent_data lookup (task_id -> agent_data)
+        agent_data_lookup = self._build_agent_data_lookup(queue, agent_data)
 
         # Clear reports from previous run() calls to prevent accumulation
         self.reports = []
 
-        # Callbacks at the start of the run
-        for cb in self.callbacks:
-            cb.on_run_start(self)
+        # Auto-register queue as callback if it's a BenchmarkCallback (e.g., AdaptiveTaskQueue)
+        queue_as_callback: Optional[BenchmarkCallback] = None
+        if isinstance(queue, BenchmarkCallback) and queue not in self.callbacks:
+            queue_as_callback = queue
+            self.callbacks.append(queue_as_callback)
 
-        for task_idx, (task, agent_data) in enumerate(zip(self.tasks, agent_data_list)):
-            # Callbacks at the start of each task
-            for cb in self.callbacks:
-                cb.on_task_start(self, task)
+        try:
+            # Callbacks at the start of the run
+            self._invoke_callbacks("on_run_start", self)
 
-            for repeat_idx in range(self.n_task_repeats):
-                for cb in self.callbacks:
-                    cb.on_task_repeat_start(self, task, repeat_idx)
+            # Execute based on max_workers
+            if self.max_workers == 1:
+                self._run_sequential(queue, agent_data_lookup)
+            else:
+                self._run_parallel(queue, agent_data_lookup, self.max_workers)
 
-                # Initialize status and error tracking
-                execution_status = TaskExecutionStatus.SUCCESS
-                error_info: Optional[Dict[str, Any]] = None
-                final_answers: Any = None
-                eval_results: Any = None
-                execution_traces: Dict[str, Any] = {}
-                execution_configs: Dict[str, Any] = {}
+            # Callbacks at the end of the run
+            self._invoke_callbacks("on_run_end", self, self.reports)
+        finally:
+            # Remove queue from callbacks if we added it
+            if queue_as_callback is not None:
+                self.callbacks.remove(queue_as_callback)
 
-                try:
-                    # 1. Setup
-                    environment = self.setup_environment(agent_data, task)
-                    user = self.setup_user(agent_data, environment, task)
-                    if user is None and self.max_invocations > 1:
-                        # Warn if multi-turn is enabled but no user to drive interaction
-                        warnings.warn(
-                            f"max_invocations={self.max_invocations} > 1 but no user simulator provided. "
-                            f"Falling back to single-turn execution for task {task.id}."
-                        )
-                    agents_to_run, agents_dict = self.setup_agents(agent_data, environment, task, user)
-                    evaluators = self.setup_evaluators(environment, task, agents_to_run, user)
-
-                    # Auto-register components returned from setup methods
-                    # Environment
-                    if environment is not None and isinstance(environment, TraceableMixin):
-                        self.register("environment", "env", environment)
-
-                    # User
-                    if user is not None and isinstance(user, TraceableMixin):
-                        self.register("user", "user", user)
-
-                    # Agents (use their names from agents_dict)
-                    for agent_name, agent in agents_dict.items():
-                        if isinstance(agent, TraceableMixin):
-                            self.register("agents", agent_name, agent)
-
-                except Exception as e:
-                    # Setup failed - record error and optionally re-raise
-                    execution_status = TaskExecutionStatus.SETUP_FAILED
-                    error_info = {
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "traceback": "".join(__import__("traceback").format_exception(type(e), e, e.__traceback__)),
-                    }
-
-                    # Create a minimal report for this failed setup
-                    report = {
-                        "task_id": str(task.id),
-                        "repeat_idx": repeat_idx,
-                        "status": execution_status.value,
-                        "error": error_info,
-                        "traces": {},
-                        "config": {},
-                        "eval": None,
-                    }
-                    self.reports.append(report)
-
-                    for cb in self.callbacks:
-                        cb.on_task_repeat_end(self, report)
-
-                    # Clear registry before potentially re-raising
-                    self.clear_registry()
-
-                    if self.fail_on_setup_error:
-                        raise
-
-                    # Continue to next task repetition
-                    continue
-
-                # 2. Execute agent system with optional user interaction loop
-                try:
-                    final_answers = self.execution_loop(agents_to_run, task, environment, user)
-                except AgentError as e:
-                    # Agent violated contract at boundary (agent's fault)
-                    execution_status = TaskExecutionStatus.AGENT_ERROR
-                    error_info = {
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "component": e.component,
-                        "details": e.details,
-                        "traceback": "".join(__import__("traceback").format_exception(type(e), e, e.__traceback__)),
-                    }
-
-                    if self.fail_on_task_error:
-                        # Clear registry before re-raising
-                        self.clear_registry()
-                        raise
-
-                    # Continue with trace collection even if task failed
-                    final_answers = None
-                except EnvironmentError as e:
-                    # Environment/tool infrastructure failed (not agent's fault)
-                    execution_status = TaskExecutionStatus.ENVIRONMENT_ERROR
-                    error_info = {
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "component": e.component,
-                        "details": e.details,
-                        "traceback": "".join(__import__("traceback").format_exception(type(e), e, e.__traceback__)),
-                    }
-
-                    if self.fail_on_task_error:
-                        # Clear registry before re-raising
-                        self.clear_registry()
-                        raise
-
-                    # Continue with trace collection even if task failed
-                    final_answers = None
-                except UserError as e:
-                    # User simulator failed (not agent's fault)
-                    execution_status = TaskExecutionStatus.USER_ERROR
-                    error_info = {
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "component": e.component,
-                        "details": e.details,
-                        "traceback": "".join(__import__("traceback").format_exception(type(e), e, e.__traceback__)),
-                    }
-
-                    if self.fail_on_task_error:
-                        # Clear registry before re-raising
-                        self.clear_registry()
-                        raise
-
-                    # Continue with trace collection even if task failed
-                    final_answers = None
-                except Exception as e:
-                    # Unclassified error (e.g., agent framework internal failure)
-                    execution_status = TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR
-                    error_info = {
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "traceback": "".join(__import__("traceback").format_exception(type(e), e, e.__traceback__)),
-                    }
-
-                    if self.fail_on_task_error:
-                        # Clear registry before re-raising
-                        self.clear_registry()
-                        raise
-
-                    # Continue with trace collection even if task failed
-                    final_answers = None
-
-                # # Callbacks before evaluation
-                # for cb in self.callbacks:
-                #     cb.on_before_evaluation(self, task, agent_output)
-
-                # 3. Collect traces and configs (always attempt this)
-                try:
-                    execution_configs = self.collect_all_configs()
-                    execution_traces = self.collect_all_traces()
-                except Exception as e:
-                    # If trace/config collection fails, record it but continue
-                    execution_configs = {
-                        "error": f"Failed to collect configs: {e}",
-                        "error_type": type(e).__name__,
-                    }
-                    execution_traces = {
-                        "error": f"Failed to collect traces: {e}",
-                        "error_type": type(e).__name__,
-                    }
-
-                # 4. Evaluate (skip if task execution failed, unless we want partial evaluation)
-                if execution_status == TaskExecutionStatus.SUCCESS:
-                    try:
-                        eval_results = self.evaluate(evaluators, agents_dict, final_answers, execution_traces)
-                    except Exception as e:
-                        execution_status = TaskExecutionStatus.EVALUATION_FAILED
-                        error_info = {
-                            "error_type": type(e).__name__,
-                            "error_message": str(e),
-                            "traceback": "".join(__import__("traceback").format_exception(type(e), e, e.__traceback__)),
-                        }
-
-                        if self.fail_on_evaluation_error:
-                            # Clear registry before re-raising
-                            self.clear_registry()
-                            raise
-
-                        # Set eval_results to None on failure
-                        eval_results = None
-                else:
-                    # Task execution failed, so skip evaluation
-                    eval_results = None
-
-                # 5. Store results with status and error info
-                report = {
-                    "task_id": str(task.id),
-                    "repeat_idx": repeat_idx,
-                    "status": execution_status.value,
-                    "traces": execution_traces,
-                    "config": execution_configs,
-                    "eval": eval_results,
-                }
-
-                # Add error info if present
-                if error_info is not None:
-                    report["error"] = error_info
-
-                self.reports.append(report)
-
-                for cb in self.callbacks:
-                    cb.on_task_repeat_end(self, report)
-
-                # Clear registry after task repetition completes
-                self.clear_registry()
-
-            # Callbacks at the end of each task
-            # Pass the last report for this task to the callback
-            task_reports = [r for r in self.reports if r["task_id"] == str(task.id)]
-            last_report = task_reports[-1] if task_reports else {}
-            for cb in self.callbacks:
-                cb.on_task_end(self, task, last_report)
-
-        # Callbacks at the end of the run
-        for cb in self.callbacks:
-            cb.on_run_end(self, self.reports)
         return self.reports
+
+    def _build_agent_data_lookup(
+        self, tasks: BaseTaskQueue, agent_data: Dict[str, Any] | Iterable[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Build a mapping from task_id to agent_data configuration.
+
+        Args:
+            tasks: The task queue containing all tasks.
+            agent_data: Agent configuration(s) to map to tasks.
+
+        Returns:
+            Dict mapping task_id (string) to agent_data configuration.
+
+        Raises:
+            ValueError: If agent_data is a list but doesn't match the number of tasks.
+        """
+        if isinstance(agent_data, dict):
+            # Single config - replicate for all tasks
+            return {str(task.id): cast(Dict[str, Any], agent_data) for task in tasks}
+
+        # List of configs - pair by position
+        agent_data_list = list(agent_data)
+        if len(agent_data_list) != len(tasks):
+            raise ValueError(
+                f"`agent_data` must either be a single dict or an iterable matching the number of tasks. "
+                f"Got {len(agent_data_list)} agent configs for {len(tasks)} tasks."
+            )
+
+        return {str(task.id): agent_data_list[i] for i, task in enumerate(tasks)}
 
     def get_failed_tasks(
         self,
         status_filter: Optional[Union[TaskExecutionStatus, List[TaskExecutionStatus]]] = None,
         reports: Optional[List[Dict[str, Any]]] = None,
-    ) -> TaskCollection:
+    ) -> SequentialTaskQueue:
         """Get tasks that failed during benchmark execution.
 
         This method retrieves failed tasks based on their execution status, useful for
@@ -1356,7 +1520,7 @@ class Benchmark(ABC):
                 run() call. This allows analyzing externally stored or modified reports.
 
         Returns:
-            TaskCollection containing the failed tasks. Empty if no failures match the filter.
+            SequentialTaskQueue containing the failed tasks. Empty if no failures match the filter.
 
         Raises:
             RuntimeError: If reports is None and run() has not been executed yet.
@@ -1364,8 +1528,8 @@ class Benchmark(ABC):
         How to use:
             ```python
             # Run benchmark
-            benchmark = MyBenchmark(agent_data=config)
-            reports = benchmark.run(tasks=tasks)
+            benchmark = MyBenchmark()
+            reports = benchmark.run(tasks=tasks, agent_data=config)
 
             # Get all failed tasks (from internal state)
             failed = benchmark.get_failed_tasks()
@@ -1411,6 +1575,7 @@ class Benchmark(ABC):
                 TaskExecutionStatus.AGENT_ERROR.value,
                 TaskExecutionStatus.ENVIRONMENT_ERROR.value,
                 TaskExecutionStatus.USER_ERROR.value,
+                TaskExecutionStatus.TASK_TIMEOUT.value,
                 TaskExecutionStatus.UNKNOWN_EXECUTION_ERROR.value,
                 TaskExecutionStatus.EVALUATION_FAILED.value,
                 TaskExecutionStatus.SETUP_FAILED.value,
@@ -1428,6 +1593,6 @@ class Benchmark(ABC):
             if report["status"] in filter_values:
                 failed_task_ids.add(report["task_id"])
 
-        # Build TaskCollection from original tasks that failed
+        # Build queue from original tasks that failed
         failed_tasks = [task for task in self.tasks if str(task.id) in failed_task_ids]
-        return TaskCollection(failed_tasks)
+        return SequentialTaskQueue(failed_tasks)

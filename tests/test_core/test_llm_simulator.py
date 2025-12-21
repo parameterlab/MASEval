@@ -3,8 +3,6 @@
 These tests verify that LLMSimulator retry logic and tracing work correctly.
 """
 
-from typing import cast
-
 import pytest
 from maseval.core.simulator import (
     ToolLLMSimulator,
@@ -69,7 +67,7 @@ class TestLLMSimulator:
             simulator(actual_inputs={"param": "test"})
 
         # Verify exception details
-        err = cast(ToolSimulatorError, exc_info.value)
+        err = exc_info.value
         assert err.attempts == 3
         assert err.last_error is not None
         assert len(err.logs) == 3  # All 3 attempts in exception logs
@@ -94,7 +92,7 @@ class TestLLMSimulator:
             simulator(actual_inputs={"param": "test"})
 
         # Should stop after 2 attempts, not continue to 10
-        err = cast(ToolSimulatorError, exc_info.value)
+        err = exc_info.value
         assert len(simulator.logs) == 2
         assert err.attempts == 2
 

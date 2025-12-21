@@ -737,7 +737,6 @@ def run_benchmark(
     # Get benchmark class and instantiate
     BenchmarkClass = get_benchmark_class(framework)
     benchmark = BenchmarkClass(
-        agent_data=agent_config,
         callbacks=[logger],
         n_task_repeats=n_task_repeats,
         fail_on_setup_error=True,
@@ -747,7 +746,7 @@ def run_benchmark(
 
     # Run benchmark
     print(f"\nRunning {framework} benchmark on {domain} domain...")
-    results = benchmark.run(tasks=tasks)
+    results = benchmark.run(tasks=tasks, agent_data=agent_config)
 
     # Compute summary metrics
     summary = compute_benchmark_metrics(results)
