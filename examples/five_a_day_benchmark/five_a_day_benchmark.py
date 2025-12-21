@@ -934,13 +934,12 @@ if __name__ == "__main__":
     )
 
     benchmark = FiveADayBenchmark(
-        agent_data=agent_configs,
         callbacks=[logger],
         fail_on_setup_error=True,
         fail_on_task_error=True,
         fail_on_evaluation_error=True,
     )
-    results = benchmark.run(tasks=tasks)
+    results = benchmark.run(tasks=tasks, agent_data=agent_configs)
 
     print("\n--- Benchmark Complete ---")
     print(f"Total tasks: {len(tasks)}")
