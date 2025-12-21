@@ -27,24 +27,23 @@ VALID_DOMAINS = ("travel", "mortgage", "software")
 
 # AWS Multi-Agent Collaboration Scenarios benchmark data
 # Source: https://github.com/aws-samples/multiagent-collab-scenario-benchmark
-URLS = {
-    "data": {
-        "software": {
-            "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/software/agents.json",
-            "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/software/scenarios_30.json",
-        },
-        "travel": {
-            "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/travel/agents.json",
-            "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/travel/scenarios_30.json",
-        },
-        "mortgage": {
-            "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/mortgage/agents.json",
-            "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/mortgage/scenarios_30.json",
-        },
+DATA_URLS: Dict[str, Dict[str, str]] = {
+    "software": {
+        "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/software/agents.json",
+        "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/software/scenarios_30.json",
     },
-    "evaluation": {
-        "prompt_templates": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/src/prompt_templates.py",
+    "travel": {
+        "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/travel/agents.json",
+        "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/travel/scenarios_30.json",
     },
+    "mortgage": {
+        "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/mortgage/agents.json",
+        "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/mortgage/scenarios_30.json",
+    },
+}
+
+EVALUATION_URLS: Dict[str, str] = {
+    "prompt_templates": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/src/prompt_templates.py",
 }
 
 
@@ -90,16 +89,16 @@ def download_original_data(
     data_dir = Path(data_dir) if data_dir else DEFAULT_DATA_DIR
     original_dir = data_dir / "original"
 
-    domains = [domain] if domain else list(URLS["data"].keys())
+    domains = [domain] if domain else list(DATA_URLS.keys())
 
     for d in domains:
-        if d not in URLS["data"]:
+        if d not in DATA_URLS:
             raise ValueError(f"Unknown domain: {d}")
 
         domain_dir = original_dir / d
         domain_dir.mkdir(parents=True, exist_ok=True)
 
-        for name, url in URLS["data"][d].items():
+        for name, url in DATA_URLS[d].items():
             content = download_json(url)
             out_path = domain_dir / f"{name}.json"
             with out_path.open("w") as f:
@@ -132,7 +131,7 @@ def download_prompt_templates(
     templates_dir = data_dir.parent / "prompt_templates"
     templates_dir.mkdir(parents=True, exist_ok=True)
 
-    url = URLS["evaluation"]["prompt_templates"]
+    url = EVALUATION_URLS["prompt_templates"]
     text = download_file(url)
 
     # Parse Python file to extract prompt constants
@@ -239,12 +238,15 @@ def _dedupe_tools_by_name(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return deduped
 
 
-def _create_tools_list(agents_obj: object) -> List[Dict[str, Any]]:
+def _create_tools_list(agents_obj: Union[Dict[str, Any], List[Any]]) -> List[Dict[str, Any]]:
     """Extract and deduplicate tools from agents data."""
     tools: List[Dict[str, Any]] = []
 
-    if isinstance(agents_obj, dict) and isinstance(agents_obj.get("agents"), list):
-        agents_list = agents_obj["agents"]
+    agents_list: List[Any]
+    if isinstance(agents_obj, dict):
+        agents_list = agents_obj.get("agents", [])
+        if not isinstance(agents_list, list):
+            return tools
     elif isinstance(agents_obj, list):
         agents_list = agents_obj
     else:
@@ -260,7 +262,7 @@ def _create_tools_list(agents_obj: object) -> List[Dict[str, Any]]:
     return _dedupe_tools_by_name(tools)
 
 
-def _create_agents_list(agents_obj: object) -> Dict[str, Any]:
+def _create_agents_list(agents_obj: Union[Dict[str, Any], List[Any]]) -> Dict[str, Any]:
     """Create agents config with tool names only (not full tool dicts)."""
 
     def _process_agent(agent: Dict[str, Any]) -> Dict[str, Any]:
@@ -269,8 +271,11 @@ def _create_agents_list(agents_obj: object) -> Dict[str, Any]:
         a_copy["tools"] = tool_names
         return a_copy
 
-    if isinstance(agents_obj, dict) and isinstance(agents_obj.get("agents"), list):
-        processed = [_process_agent(a) for a in agents_obj["agents"] if isinstance(a, dict)]
+    if isinstance(agents_obj, dict):
+        agents_list = agents_obj.get("agents")
+        if not isinstance(agents_list, list):
+            return {}
+        processed = [_process_agent(a) for a in agents_list if isinstance(a, dict)]
         out: Dict[str, Any] = {"agents": processed}
         if "primary_agent_id" in agents_obj:
             out["primary_agent_id"] = agents_obj["primary_agent_id"]
@@ -281,12 +286,15 @@ def _create_agents_list(agents_obj: object) -> Dict[str, Any]:
     return {}
 
 
-def _create_tasks_list(scenarios_obj: object, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _create_tasks_list(scenarios_obj: Union[Dict[str, Any], List[Any]], tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Convert scenarios to task format with sequential IDs."""
     tasks: List[Dict[str, Any]] = []
 
-    if isinstance(scenarios_obj, dict) and isinstance(scenarios_obj.get("scenarios"), list):
-        scenarios_list = scenarios_obj["scenarios"]
+    scenarios_list: List[Any]
+    if isinstance(scenarios_obj, dict):
+        scenarios_list = scenarios_obj.get("scenarios", [])
+        if not isinstance(scenarios_list, list):
+            return tasks
     elif isinstance(scenarios_obj, list):
         scenarios_list = scenarios_obj
     else:

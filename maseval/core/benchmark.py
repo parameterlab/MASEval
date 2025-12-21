@@ -1445,10 +1445,10 @@ class Benchmark(ABC):
         self.reports = []
 
         # Auto-register queue as callback if it's a BenchmarkCallback (e.g., AdaptiveTaskQueue)
-        queue_was_added_as_callback = False
+        queue_as_callback: Optional[BenchmarkCallback] = None
         if isinstance(queue, BenchmarkCallback) and queue not in self.callbacks:
-            self.callbacks.append(queue)
-            queue_was_added_as_callback = True
+            queue_as_callback = queue
+            self.callbacks.append(queue_as_callback)
 
         try:
             # Callbacks at the start of the run
@@ -1464,8 +1464,8 @@ class Benchmark(ABC):
             self._invoke_callbacks("on_run_end", self, self.reports)
         finally:
             # Remove queue from callbacks if we added it
-            if queue_was_added_as_callback:
-                self.callbacks.remove(queue)
+            if queue_as_callback is not None:
+                self.callbacks.remove(queue_as_callback)
 
         return self.reports
 

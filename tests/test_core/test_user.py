@@ -217,7 +217,7 @@ class TestUserStopToken:
             early_stopping_condition="goals are met",
             max_turns=5,
         )
-        user.simulator.return_value = "Thanks! </stop>"
+        user.simulator.return_value = "Thanks! </stop>"  # type: ignore[union-attr]  # mock
 
         user.simulate_response("Here's your answer")
 
@@ -234,7 +234,7 @@ class TestUserStopToken:
             early_stopping_condition="goals are met",
             max_turns=5,
         )
-        user.simulator.return_value = "Perfect, thanks! </stop>"
+        user.simulator.return_value = "Perfect, thanks! </stop>"  # type: ignore[union-attr]  # mock
 
         response = user.simulate_response("Booking confirmed!")
 
@@ -252,7 +252,7 @@ class TestUserStopToken:
             early_stopping_condition="goals are met",
             max_turns=5,
         )
-        user.simulator.return_value = "Done </stop>"
+        user.simulator.return_value = "Done </stop>"  # type: ignore[union-attr]  # mock
 
         user.simulate_response("Result")
 
@@ -269,7 +269,7 @@ class TestUserStopToken:
             early_stopping_condition="goals are met",
             max_turns=5,
         )
-        user.simulator.return_value = "Thanks! </stop>"  # lowercase
+        user.simulator.return_value = "Thanks! </stop>"  # type: ignore[union-attr]  # mock (lowercase)
 
         user.simulate_response("Answer")
 
@@ -286,7 +286,7 @@ class TestUserStopToken:
             early_stopping_condition="goals are met",
             max_turns=5,
         )
-        user.simulator.return_value = "</stop>"
+        user.simulator.return_value = "</stop>"  # type: ignore[union-attr]  # mock
 
         response = user.simulate_response("Done!")
 
@@ -304,7 +304,7 @@ class TestUserStopToken:
             early_stopping_condition="goals are met",
             max_turns=5,
         )
-        user.simulator.return_value = "Thank you, all is clear </stop>"
+        user.simulator.return_value = "Thank you, all is clear </stop>"  # type: ignore[union-attr]  # mock
 
         initial_turn_count = user._turn_count
         user.simulate_response("Here is your result")
@@ -352,19 +352,19 @@ class TestUserInitialQuery:
         from conftest import DummyUser
 
         user = DummyUser(name="test", model=dummy_model)
-        user.simulator.return_value = "I want to book a hotel"
+        user.simulator.return_value = "I want to book a hotel"  # type: ignore[union-attr]  # mock
 
         query = user.get_initial_query()
 
         assert query == "I want to book a hotel"
-        user.simulator.assert_called_once()
+        user.simulator.assert_called_once()  # type: ignore[union-attr]  # mock
 
     def test_get_initial_query_adds_to_messages(self, dummy_model):
         """Generated query is added to message history."""
         from conftest import DummyUser
 
         user = DummyUser(name="test", model=dummy_model)
-        user.simulator.return_value = "Help me please"
+        user.simulator.return_value = "Help me please"  # type: ignore[union-attr]  # mock
 
         user.get_initial_query()
 
@@ -390,7 +390,7 @@ class TestUserInitialQuery:
         from conftest import DummyUser
 
         user = DummyUser(name="test", model=dummy_model, max_turns=3)
-        user.simulator.return_value = "Initial query"
+        user.simulator.return_value = "Initial query"  # type: ignore[union-attr]  # mock
 
         user.get_initial_query()
 
@@ -424,7 +424,7 @@ class TestUserMessageHistory:
         from conftest import DummyUser
 
         user = DummyUser(name="test", model=dummy_model, max_turns=3)
-        user.simulator.return_value = "User reply"
+        user.simulator.return_value = "User reply"  # type: ignore[union-attr]  # mock
 
         user.simulate_response("Agent says hello")
 
@@ -438,7 +438,7 @@ class TestUserMessageHistory:
         from conftest import DummyUser
 
         user = DummyUser(name="test", model=dummy_model, max_turns=3)
-        user.simulator.return_value = "Thanks for the help"
+        user.simulator.return_value = "Thanks for the help"  # type: ignore[union-attr]  # mock
 
         user.simulate_response("Here's your answer")
 
@@ -455,7 +455,7 @@ class TestUserMessageHistory:
             initial_query="I need a flight",
             max_turns=3,
         )
-        user.simulator.side_effect = ["Monday works", "Yes, book it"]
+        user.simulator.side_effect = ["Monday works", "Yes, book it"]  # type: ignore[union-attr]  # mock
 
         # Two agent-user exchanges
         user.simulate_response("When do you want to travel?")
@@ -481,7 +481,7 @@ class TestUserMessageHistory:
             initial_query="Hello",
             max_turns=2,
         )
-        user.simulator.return_value = "Got it"
+        user.simulator.return_value = "Got it"  # type: ignore[union-attr]  # mock
 
         user.simulate_response("Agent response")
 

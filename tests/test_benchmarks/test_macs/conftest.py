@@ -144,7 +144,7 @@ class ConcreteMACSBenchmark(MACSBenchmark):
 
         return adapter
 
-    def setup_agents(
+    def setup_agents(  # ty: ignore[invalid-method-override]
         self,
         agent_data: Dict[str, Any],
         environment: MACSEnvironment,

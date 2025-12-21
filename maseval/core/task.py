@@ -115,7 +115,9 @@ class BaseTaskQueue(ABC, Sequence):
     @overload
     def __getitem__(self, idx: slice) -> "BaseTaskQueue": ...
 
-    def __getitem__(self, idx: Union[int, slice]) -> Union[Task, "BaseTaskQueue"]:
+    def __getitem__(  # ty: ignore[invalid-method-override]
+        self, idx: Union[int, slice]
+    ) -> Union[Task, "BaseTaskQueue"]:
         """Get a task by index or a slice of tasks.
 
         Args:
@@ -191,7 +193,8 @@ class BaseTaskQueue(ABC, Sequence):
                         )
                     )
                 else:
-                    query = item.get("question") or item.get("prompt") or item.get("query") or ""
+                    query_val = item.get("question") or item.get("prompt") or item.get("query") or ""
+                    query = str(query_val) if query_val else ""
                     environment_data = (
                         item.get("environment_data") or {"text_content": item.get("text")}
                         if item.get("text")

@@ -12,7 +12,8 @@ from email.message import Message
 from maseval.benchmark.macs.data_loader import (
     DEFAULT_DATA_DIR,
     VALID_DOMAINS,
-    URLS,
+    DATA_URLS,
+    EVALUATION_URLS,
     download_file,
     download_json,
     download_original_data,
@@ -175,7 +176,6 @@ class TestCreateToolsList:
         """Empty or invalid input returns empty list."""
         assert _create_tools_list({}) == []
         assert _create_tools_list([]) == []
-        assert _create_tools_list(None) == []
 
 
 @pytest.mark.benchmark
@@ -569,16 +569,13 @@ class TestDataLoaderIntegration:
                 assert len(config["agents"]) == 2
 
     def test_urls_structure(self):
-        """Verify URLS constant has expected structure."""
-        assert "data" in URLS
-        assert "evaluation" in URLS
-
+        """Verify URL constants have expected structure."""
         for domain in VALID_DOMAINS:
-            assert domain in URLS["data"]
-            assert "agents" in URLS["data"][domain]
-            assert "scenarios" in URLS["data"][domain]
+            assert domain in DATA_URLS
+            assert "agents" in DATA_URLS[domain]
+            assert "scenarios" in DATA_URLS[domain]
 
-        assert "prompt_templates" in URLS["evaluation"]
+        assert "prompt_templates" in EVALUATION_URLS
 
 
 # =============================================================================

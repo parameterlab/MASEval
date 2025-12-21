@@ -147,7 +147,7 @@ class TestExecutionLoopWithUser:
         task = Task(query="Task query", environment_data={})
         user = DummyUser(name="test", model=dummy_model, max_turns=5)
         # No initial_query, so messages is empty
-        user.simulator.return_value = "LLM generated initial query"
+        user.simulator.return_value = "LLM generated initial query"  # type: ignore[union-attr]  # mock
 
         benchmark = ExecutionLoopBenchmark(return_user=user)
 
@@ -172,7 +172,7 @@ class TestExecutionLoopWithUser:
             max_turns=5,
         )
         # User responds with different messages each turn
-        user.simulator.side_effect = ["Turn 1 response", "Turn 2 response", "Turn 3 response"]
+        user.simulator.side_effect = ["Turn 1 response", "Turn 2 response", "Turn 3 response"]  # type: ignore[union-attr]  # mock
 
         benchmark = ExecutionLoopBenchmark(
             return_user=user,
@@ -204,7 +204,7 @@ class TestExecutionLoopWithUser:
             initial_query="Start",  # Counts as turn 1
             max_turns=3,  # User done after 3 user messages
         )
-        user.simulator.side_effect = ["Response 1", "Response 2", "Response 3"]
+        user.simulator.side_effect = ["Response 1", "Response 2", "Response 3"]  # type: ignore[union-attr]  # mock
 
         benchmark = ExecutionLoopBenchmark(
             return_user=user,
@@ -234,7 +234,7 @@ class TestExecutionLoopWithUser:
             early_stopping_condition="goals are met",
         )
         # User stops on second response
-        user.simulator.side_effect = ["Continue please", "Thanks! </stop>"]
+        user.simulator.side_effect = ["Continue please", "Thanks! </stop>"]  # type: ignore[union-attr]  # mock
 
         benchmark = ExecutionLoopBenchmark(
             return_user=user,
@@ -260,7 +260,7 @@ class TestExecutionLoopWithUser:
             initial_query="Help me",
             max_turns=2,  # Allow initial + one response
         )
-        user.simulator.return_value = "Thanks"
+        user.simulator.return_value = "Thanks"  # type: ignore[union-attr]  # mock
 
         benchmark = ExecutionLoopBenchmark(return_user=user)
 
@@ -288,7 +288,7 @@ class TestExecutionLoopWithUser:
             max_turns=4,  # Allow 4 turns total
         )
         # User responses for turn 2, 3, 4
-        user.simulator.side_effect = ["User reply 1", "User reply 2", "User reply 3"]
+        user.simulator.side_effect = ["User reply 1", "User reply 2", "User reply 3"]  # type: ignore[union-attr]  # mock
 
         benchmark = ExecutionLoopBenchmark(
             return_user=user,
@@ -372,7 +372,7 @@ class TestBenchmarkRunWithUser:
             initial_query="User query",
             max_turns=1,
         )
-        user.simulator.return_value = "Done"
+        user.simulator.return_value = "Done"  # type: ignore[union-attr]  # mock
 
         benchmark = ExecutionLoopBenchmark(return_user=user)
 
@@ -394,7 +394,7 @@ class TestBenchmarkRunWithUser:
             initial_query="Hello",  # Turn 1
             max_turns=3,  # Allow 3 user messages total
         )
-        user.simulator.side_effect = ["Reply 1", "Reply 2"]
+        user.simulator.side_effect = ["Reply 1", "Reply 2"]  # type: ignore[union-attr]  # mock
 
         benchmark = ExecutionLoopBenchmark(
             return_user=user,

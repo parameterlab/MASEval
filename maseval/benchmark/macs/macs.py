@@ -798,10 +798,10 @@ class MACSBenchmark(Benchmark):
             model_factory=tool_model_factory,
         )
 
-    def setup_user(
+    def setup_user(  # ty: ignore[invalid-method-override]
         self,
         agent_data: Dict[str, Any],
-        environment: MACSEnvironment,  # type: ignore[override]
+        environment: MACSEnvironment,
         task: Task,
     ) -> MACSUser:
         """Create MACS user simulator.
@@ -834,10 +834,10 @@ class MACSBenchmark(Benchmark):
         )
 
     @abstractmethod
-    def setup_agents(
+    def setup_agents(  # ty: ignore[invalid-method-override]
         self,
         agent_data: Dict[str, Any],
-        environment: MACSEnvironment,  # type: ignore[override]
+        environment: MACSEnvironment,
         task: Task,
         user: Optional[User],
     ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
@@ -854,9 +854,9 @@ class MACSBenchmark(Benchmark):
         """
         pass
 
-    def setup_evaluators(
+    def setup_evaluators(  # ty: ignore[invalid-method-override]
         self,
-        environment: MACSEnvironment,  # type: ignore[override]
+        environment: MACSEnvironment,
         task: Task,
         agents: Sequence[AgentAdapter],
         user: Optional[User],
@@ -886,11 +886,11 @@ class MACSBenchmark(Benchmark):
             ),
         ]
 
-    def run_agents(
+    def run_agents(  # ty: ignore[invalid-method-override]
         self,
         agents: Sequence[AgentAdapter],
         task: Task,
-        environment: MACSEnvironment,  # type: ignore[override]
+        environment: MACSEnvironment,
         query: str = "",
     ) -> Any:
         """Execute agents and return final answer."""
@@ -926,7 +926,9 @@ class MACSBenchmark(Benchmark):
         user_result = results[0] if results else {"gsr": 0.0, "partial_gsr": 0.0, "report": []}
         system_result = results[1] if len(results) > 1 else {"gsr": 0.0, "partial_gsr": 0.0, "report": []}
 
-        combined_report = user_result.get("report", []) + system_result.get("report", [])
+        user_report: List[Dict[str, Any]] = user_result.get("report", [])  # type: ignore[assignment]
+        system_report: List[Dict[str, Any]] = system_result.get("report", [])  # type: ignore[assignment]
+        combined_report = user_report + system_report
 
         # Compute overall metrics per AWS paper
         overall_gsr = 1.0 if (user_result.get("gsr", 0.0) == 1.0 and system_result.get("gsr", 0.0) == 1.0) else 0.0

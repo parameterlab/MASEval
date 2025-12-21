@@ -115,7 +115,7 @@ class TestBaseTaskQueue:
     def test_from_list_type_error(self):
         """from_list should raise TypeError for invalid items."""
         with pytest.raises(TypeError, match="expects Task or dict"):
-            SequentialTaskQueue.from_list(["not a task"])
+            SequentialTaskQueue.from_list(["not a task"])  # type: ignore[arg-type]  # intentional
 
     def test_from_json_file(self, tmp_path):
         """from_json_file should load tasks from JSON file."""

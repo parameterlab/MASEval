@@ -183,7 +183,7 @@ class TestRunAgents:
             def get_model_adapter(self, model_id: str, **kwargs):
                 return self._model_factory(model_id)
 
-            def setup_agents(
+            def setup_agents(  # ty: ignore[invalid-method-override]
                 self,
                 agent_data: Dict[str, Any],
                 environment: MACSEnvironment,
