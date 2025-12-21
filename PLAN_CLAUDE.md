@@ -4,6 +4,50 @@ This document provides a detailed technical plan for porting the **Tau 2 benchma
 
 ---
 
+## 0. Target Version
+
+**This plan targets tau2-bench v0.2.0** (commit `f8de30c`, 2025-10-06).
+
+### Why v0.2.0?
+
+| Factor           | v0.2.0                              | HEAD (main)                    |
+| ---------------- | ----------------------------------- | ------------------------------ |
+| **Domain tools** | ✓ Complete                          | ✓ Identical (no changes)       |
+| **Core tasks**   | 50/114/114 (airline/retail/telecom) | Same "base" split              |
+| **Dependencies** | Simpler (no gymnasium)              | +gymnasium for RL training     |
+| **Stability**    | Formal release                      | Includes experimental features |
+
+### What HEAD Adds (Not Needed)
+
+- **Gymnasium interface** — RL training wrapper (not needed for benchmarking)
+- **Extended telecom tasks** — 2000+ additional tasks for train/test splits
+- **Task split files** — `split_tasks.json` files (we implement equivalent functionality)
+- **A2A protocol experiments** — Experimental agent-to-agent features
+
+### Improvements We Incorporate Anyway
+
+The evaluator termination logic was improved in HEAD to be more explicit:
+
+```python
+# v0.2.0: Reject specific bad reasons
+if termination_reason in {TOO_MANY_ERRORS, MAX_STEPS}: return 0.0
+
+# HEAD: Explicitly require good reasons (more defensive)
+if termination_reason not in {AGENT_STOP, USER_STOP}: return 0.0
+```
+
+We adopt the HEAD approach in our implementation for better robustness. MASEval might already implement these itself.
+
+### Data Source
+
+Domain data will be downloaded from the v0.2.0 tag:
+
+```
+https://github.com/sierra-research/tau2-bench/tree/v0.2.0/data/tau2/domains/
+```
+
+---
+
 ## 1. Strategy Confirmation
 
 ### Chosen Approach: Full Re-implementation (Porting)
@@ -130,12 +174,14 @@ The reference agent will:
 
 **Responsibility**: Download, parse, and provide access to tau2-bench domain data.
 
-**Source Files to Adapt From**:
+**Source Files to Adapt From** (from v0.2.0):
 
 - `data/tau2/domains/{airline,retail,telecom}/tasks.json` → Task definitions
 - `data/tau2/domains/{airline,retail,telecom}/db.json` → Environment state/data
 - `data/tau2/domains/{airline,retail,telecom}/policy.md` → Policy constraints
-- `data/tau2/domains/{airline,retail,telecom}/split_tasks.json` → Task splits (base/hard)
+
+Note: `split_tasks.json` files were added post-v0.2.0. We implement task splitting
+ourselves based on task IDs (airline=50, retail=114, telecom=114 for "base" split).
 
 ```python
 # --- Interface Specification ---
@@ -146,17 +192,21 @@ TASK_SPLITS: Tuple[str, ...] = ("base", "hard", "all")
 def download_domain_data(
     data_dir: Optional[Path] = None,
     domain: Optional[str] = None,  # None = all domains
+    version: str = "v0.2.0",  # Pin to stable release
     verbose: int = 1,
 ) -> Path:
     """
     Download domain data from tau2-bench GitHub repository.
 
-    Downloads: tasks.json, db.json, policy.md, split_tasks.json
+    Downloads: tasks.json, db.json, policy.md
     To: data_dir/original/{domain}/
+
+    Args:
+        version: Git tag/ref to download from (default: v0.2.0)
 
     Returns: Path to original data directory
 
-    # Adapted from: https://github.com/sierra-research/tau2-bench/tree/main/data/tau2/domains
+    # Adapted from: https://github.com/sierra-research/tau2-bench/tree/v0.2.0/data/tau2/domains
     """
 
 def load_tasks(
@@ -690,6 +740,7 @@ Tau 2 Benchmark - [Component Name]
 This module implements [description] for the tau2-bench benchmark.
 
 Original benchmark: https://github.com/sierra-research/tau2-bench
+Version: v0.2.0 (commit f8de30c, 2025-10-06)
 Copyright (c) 2025 Sierra Research (MIT License)
 
 Adapted components:
@@ -719,6 +770,8 @@ def _evaluate_environment(self, traces: Dict[str, Any]) -> Dict[str, Any]:
 
 Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 
+**Base Version: tau2-bench v0.2.0** (commit `f8de30c`, 2025-10-06)
+
 | MASEval Component                     | tau2-bench Source                        | Adaptation Notes              |
 | ------------------------------------- | ---------------------------------------- | ----------------------------- |
 | `Tau2GenericTool`                     | `src/tau2/domains/*/tools.py`            | Added TraceableMixin          |
@@ -727,7 +780,8 @@ Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 | `Tau2Evaluator._evaluate_environment` | `src/tau2/evaluator/evaluator_env.py`    | Same logic, MASEval interface |
 | `Tau2Evaluator._evaluate_actions`     | `src/tau2/evaluator/evaluator_action.py` | Same logic, MASEval interface |
 | `compute_pass_at_k`                   | `src/tau2/metrics/`                      | Native implementation         |
-| Domain data loading                   | `data/tau2/domains/`                     | Downloaded at runtime         |
+| Domain data loading                   | `data/tau2/domains/` @ v0.2.0            | Downloaded at runtime         |
+| Evaluator termination logic           | HEAD improvement                         | Adopted from post-v0.2.0      |
 
 ---
 
@@ -1037,10 +1091,11 @@ docs/benchmark/tau2.md
 
 3. **Reproducibility** (CRITICAL)
 
-   - **Deterministic evaluators** (env, action): Exact DB state hash match with upstream
-   - **LLM-based evaluators** (communicate, NL): Within ±3% of upstream
+   - **Deterministic evaluators** (env, action): Exact DB state hash match with upstream v0.2.0
+   - **LLM-based evaluators** (communicate, NL): Within ±3% of upstream v0.2.0
    - Contract tests verify tool sequences produce identical state changes
-   - Reference agent produces baseline results matching upstream
+   - Reference agent produces baseline results matching tau2-bench v0.2.0
+   - Task counts match v0.2.0: airline=50, retail=114, telecom=114
 
 4. **Documentation**
    - API reference in docs
@@ -1092,8 +1147,8 @@ class Tau2ReferenceAgent(AgentAdapter):
 The reference agent enables running:
 
 ```bash
-# Validation script
-python scripts/validate_tau2_upstream.py --domain airline --tasks 10
-# Compares: MASEval(ReferenceAgent) vs tau2-bench(LLMAgent)
+# Validation script (against v0.2.0)
+python scripts/validate_tau2_upstream.py --domain airline --tasks 10 --upstream-version v0.2.0
+# Compares: MASEval(ReferenceAgent) vs tau2-bench@v0.2.0(LLMAgent)
 # Asserts: Pass@1 difference < 3%
 ```
