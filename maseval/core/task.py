@@ -56,7 +56,11 @@ class Task:
         environment_data: A dictionary of data needed to set up the environment for the task.
         evaluation_data: A dictionary of data needed to evaluate the agent's performance on the task.
         metadata: A dictionary for any additional metadata about the task.
-        protocol: Execution protocol controlling timeout, retries, priority, etc.
+        protocol: Execution protocol controlling timeout, retries, priority, and other runtime
+            parameters. It provides fine-grained control over how MASEval runs the task. The
+            protocol serves purely as a communication channel between the task instance and
+            MASEval's execution engine; it does not impose any intrinsic semantics on the task
+            content itself.
     """
 
     query: str
