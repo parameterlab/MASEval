@@ -3,7 +3,6 @@
 These tests verify that LLMSimulator retry logic and tracing work correctly.
 """
 
-
 import pytest
 from maseval.core.simulator import (
     ToolLLMSimulator,
