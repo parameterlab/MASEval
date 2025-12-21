@@ -2,6 +2,12 @@
 
 This document provides a detailed technical plan for porting the **Tau 2 benchmark** into MASEval, following the re-implementation strategy recommended in `IMPLEMENTATION_OPTIONS_GEMINI.md` and `IMPLEMENTATION_OPTIONS_CLAUDE.md`.
 
+## Tau 2 Information
+
+GitHub Repository: https://github.com/sierra-research/tau2-bench
+Arxiv Paper: https://arxiv.org/pdf/2506.07982
+Local Clone: /Users/cornelius/Repositories/tau2-bench
+
 ---
 
 ## 0. Target Version
