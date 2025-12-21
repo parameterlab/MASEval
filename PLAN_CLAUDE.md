@@ -12,29 +12,31 @@ Both analysis documents converge on **Strategy 3: Full Re-implementation** as th
 
 1. **Aligns with MASEval's architecture** — Uses native `Benchmark`, `Environment`, `Evaluator`, `User` abstractions
 2. **Eliminates unnecessary dependencies** — Removes FastAPI, gymnasium, Redis, etc. (but may need Pydantic for data models)
-3. **Enables system benchmarking** — MASEval evaluates agent *systems*, not just models
+3. **Enables system benchmarking** — MASEval evaluates agent _systems_, not just models
 4. **Follows established precedent** — Similar to MACS benchmark, but with important differences (see below)
 
 ### Critical Difference from MACS
 
 > **IMPORTANT**: Unlike MACS, tau2-bench tools have **REAL implementations with actual business logic**, not LLM simulations. The tools modify actual database state, and evaluation verifies the correctness of that state.
 
-| Aspect | MACS Benchmark | Tau2 Benchmark |
-|--------|---------------|----------------|
-| **Tools** | LLM-simulated responses | Real implementations that modify DB |
-| **Evaluation** | LLM-as-judge on assertions | Deterministic DB state verification |
-| **Reproducibility** | ±2-3% tolerance (LLM variance) | Exact state matching required |
-| **Tool Porting** | Not needed (generic simulation) | Must port domain-specific logic |
+| Aspect              | MACS Benchmark                  | Tau2 Benchmark                      |
+| ------------------- | ------------------------------- | ----------------------------------- |
+| **Tools**           | LLM-simulated responses         | Real implementations that modify DB |
+| **Evaluation**      | LLM-as-judge on assertions      | Deterministic DB state verification |
+| **Reproducibility** | ±2-3% tolerance (LLM variance)  | Exact state matching required       |
+| **Tool Porting**    | Not needed (generic simulation) | Must port domain-specific logic     |
 
 ### Rationale Summary
 
-| Factor | Re-implementation Advantage |
-|--------|----------------------------|
-| **Dependencies** | Removes ~20 unnecessary packages (keeps Pydantic for models) |
-| **Architectural fit** | Native MASEval patterns |
-| **Flexibility** | Can extend evaluation criteria |
-| **Maintenance** | Tool logic + domain data needs syncing |
-| **Reproducibility** | Validatable with contract tests (exact state matching) |
+| Factor                | Re-implementation Advantage                                  |
+| --------------------- | ------------------------------------------------------------ |
+| **Dependencies**      | Removes ~20 unnecessary packages (keeps Pydantic for models) |
+| **Architectural fit** | Native MASEval patterns                                      |
+| **Flexibility**       | Can extend evaluation criteria                               |
+| **Maintenance**       | Tool logic + domain data needs syncing                       |
+| **Reproducibility**   | Validatable with contract tests (exact state matching)       |
+
+Important: Existing code should be used as much as possible inline with this strategy. There is no value in reinventing the wheel unless we have to.
 
 ---
 
@@ -43,17 +45,20 @@ Both analysis documents converge on **Strategy 3: Full Re-implementation** as th
 ### The Fundamental Inversion
 
 **tau2-bench design**: Fixes the Agent implementation to evaluate different Models.
+
 ```
 tau2-bench: Agent(fixed) × Model(variable) → Score
 ```
 
 **MASEval design**: Fixes the Environment/Tasks to evaluate different Agent Systems.
+
 ```
 MASEval: Environment(fixed) × AgentSystem(variable) → Score
 ```
 
 This inversion is **critical** to the design. The benchmark must:
-1. Provide abstract interfaces that accept *any* agent implementation
+
+1. Provide abstract interfaces that accept _any_ agent implementation
 2. Include a **Reference Agent** that replicates tau2-bench's original behavior for reproducibility validation
 
 ### High-Level Component Diagram
@@ -112,6 +117,7 @@ class Tau2ReferenceAgent:
 ```
 
 The reference agent will:
+
 1. Use the same prompts as tau2-bench's `LLMAgent`
 2. Follow the same tool-calling patterns
 3. Be used exclusively in validation/contract tests
@@ -125,6 +131,7 @@ The reference agent will:
 **Responsibility**: Download, parse, and provide access to tau2-bench domain data.
 
 **Source Files to Adapt From**:
+
 - `data/tau2/domains/{airline,retail,telecom}/tasks.json` → Task definitions
 - `data/tau2/domains/{airline,retail,telecom}/db.json` → Environment state/data
 - `data/tau2/domains/{airline,retail,telecom}/policy.md` → Policy constraints
@@ -214,6 +221,7 @@ def configure_model_ids(
 > **CRITICAL**: Unlike MACS, these are NOT LLM-simulated. They contain real Python code that modifies database state. We must PORT this logic, not simulate it.
 
 **Source Files to Port**:
+
 - `src/tau2/domains/retail/tools.py` → `domains/retail/tools.py`
 - `src/tau2/domains/airline/tools.py` → `domains/airline/tools.py`
 - `src/tau2/domains/telecom/tools.py` → `domains/telecom/tools.py`
@@ -435,6 +443,7 @@ class Tau2User(User):
 ```
 
 **Key Differences from MACS**:
+
 1. Higher default max turns (10 vs 5)
 2. Different stop token format
 3. Separate `user_instructions` and `task_goal` fields
@@ -710,15 +719,15 @@ def _evaluate_environment(self, traces: Dict[str, Any]) -> Dict[str, Any]:
 
 Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 
-| MASEval Component | tau2-bench Source | Adaptation Notes |
-|-------------------|-------------------|------------------|
-| `Tau2GenericTool` | `src/tau2/domains/*/tools.py` | Added TraceableMixin |
-| `Tau2Environment` | `src/tau2/environment/` | Uses MASEval Environment base |
-| `Tau2User` | `src/tau2/user/user.py` | Uses MASEval User base |
-| `Tau2Evaluator._evaluate_environment` | `src/tau2/evaluator/evaluator_env.py` | Same logic, MASEval interface |
-| `Tau2Evaluator._evaluate_actions` | `src/tau2/evaluator/evaluator_action.py` | Same logic, MASEval interface |
-| `compute_pass_at_k` | `src/tau2/metrics/` | Native implementation |
-| Domain data loading | `data/tau2/domains/` | Downloaded at runtime |
+| MASEval Component                     | tau2-bench Source                        | Adaptation Notes              |
+| ------------------------------------- | ---------------------------------------- | ----------------------------- |
+| `Tau2GenericTool`                     | `src/tau2/domains/*/tools.py`            | Added TraceableMixin          |
+| `Tau2Environment`                     | `src/tau2/environment/`                  | Uses MASEval Environment base |
+| `Tau2User`                            | `src/tau2/user/user.py`                  | Uses MASEval User base        |
+| `Tau2Evaluator._evaluate_environment` | `src/tau2/evaluator/evaluator_env.py`    | Same logic, MASEval interface |
+| `Tau2Evaluator._evaluate_actions`     | `src/tau2/evaluator/evaluator_action.py` | Same logic, MASEval interface |
+| `compute_pass_at_k`                   | `src/tau2/metrics/`                      | Native implementation         |
+| Domain data loading                   | `data/tau2/domains/`                     | Downloaded at runtime         |
 
 ---
 
@@ -729,11 +738,13 @@ Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 **Risk**: Tool implementations must produce **exact same database state** as upstream. Any divergence causes evaluation to fail.
 
 **Why This Is Critical**:
+
 - Evaluation checks actual DB state, not LLM-judged assertions
 - A single incorrect field value = task failure
 - Different Pydantic versions could serialize differently
 
 **Mitigation**:
+
 1. **Contract tests** that compare DB state hash after tool sequences
 2. Port tool logic **exactly** from upstream (minimize "improvements")
 3. Use same Pydantic version as upstream or ensure serialization compatibility
@@ -742,11 +753,13 @@ Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 ### 5.2 Pydantic Version Compatibility
 
 **Risk**: tau2-bench uses Pydantic for data models. Version mismatches could cause:
+
 - Different serialization behavior
 - Different validation behavior
 - Hash mismatches in state verification
 
 **Mitigation**:
+
 1. Check upstream Pydantic version requirement
 2. Either match version or implement compatibility layer
 3. Test serialization round-trips against upstream
@@ -756,11 +769,13 @@ Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 **Risk**: Each domain has 10-30+ tools with complex business logic that must be ported accurately.
 
 **Scope**:
+
 - `retail/tools.py` — Order management, refunds, exchanges
 - `airline/tools.py` — Booking, cancellation, seat changes
 - `telecom/tools.py` — Plan changes, billing, support
 
 **Mitigation**:
+
 1. Port one domain at a time (start with `retail` as Gemini suggests)
 2. Write unit tests for each tool against upstream expected outputs
 3. Contract test: run tool sequence, compare final state
@@ -770,11 +785,13 @@ Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 **Risk**: tau2-bench has prompts embedded in multiple locations.
 
 **Locations to Check**:
+
 - `src/tau2/user/user.py` — User simulation prompts
 - `src/tau2/agent/agent.py` — Agent system prompts (for reference agent)
 - `src/tau2/evaluator/*` — NL evaluation prompts
 
 **Mitigation**:
+
 1. Extract all prompts to `prompt_templates/` directory
 2. Document prompt sources in provenance
 3. Allow runtime prompt customization via templates
@@ -784,12 +801,14 @@ Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 **Risk**: Multiple evaluation types with complex interaction.
 
 **tau2-bench Evaluation Types**:
+
 - `EnvironmentEvaluator` — Database state checks (DETERMINISTIC)
 - `ActionEvaluator` — Tool usage validation (DETERMINISTIC)
 - `CommunicateEvaluator` — Communication quality (may use LLM)
 - `NLAssertionsEvaluator` — Natural language goal checking (uses LLM)
 
 **Mitigation**:
+
 1. Implement evaluators incrementally (env → action → communicate → NL)
 2. Contract tests for each evaluator type
 3. Start with `evaluation_types=["env", "action"]` for MVP (deterministic first)
@@ -799,6 +818,7 @@ Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 **Risk**: User simulation state must persist correctly across turns.
 
 **Mitigation**:
+
 1. Use MASEval's `User` base class (proven in MACS)
 2. `Tau2User` manages conversation history
 3. Stop token detection for natural termination
@@ -812,6 +832,7 @@ Maintain in `maseval/benchmark/tau2/PROVENANCE.md`:
 **Goal**: Download and load tau2 domain data.
 
 **Deliverables**:
+
 ```
 maseval/benchmark/tau2/
 ├── __init__.py
@@ -832,6 +853,7 @@ maseval/benchmark/tau2/
 > **Why Retail First?** Gemini's plan suggests retail is simplest. Starting with one domain allows validating the entire architecture before scaling.
 
 **Deliverables**:
+
 ```
 maseval/benchmark/tau2/
 ├── domains/
@@ -845,6 +867,7 @@ maseval/benchmark/tau2/
 ```
 
 **Validation**:
+
 - Unit tests for each retail tool
 - **Contract test**: Run tool sequence, compare DB hash with upstream
 
@@ -855,6 +878,7 @@ maseval/benchmark/tau2/
 **Goal**: Complete benchmark flow with user simulation.
 
 **Deliverables**:
+
 ```
 maseval/benchmark/tau2/
 ├── user.py           # Tau2User with multi-turn support
@@ -874,6 +898,7 @@ maseval/benchmark/tau2/
 **Goal**: Port airline and telecom domains.
 
 **Deliverables**:
+
 ```
 maseval/benchmark/tau2/domains/
 ├── airline/
@@ -891,6 +916,7 @@ maseval/benchmark/tau2/domains/
 **Goal**: Demonstrate usage with smolagents and langgraph.
 
 **Deliverables**:
+
 ```
 examples/tau2_benchmark/
 ├── tau2_smolagents.py
@@ -907,6 +933,7 @@ examples/tau2_benchmark/
 **Goal**: Ensure reproducibility against upstream, complete documentation.
 
 **Deliverables**:
+
 ```
 tests/test_benchmarks/test_tau2/
 ├── conftest.py
@@ -928,6 +955,7 @@ PROVENANCE.md
 ```
 
 **Validation**:
+
 - Deterministic evaluators: **Exact** state hash match
 - LLM-based evaluators: Within ±3% tolerance
 
@@ -996,16 +1024,19 @@ docs/benchmark/tau2.md
 ## 8. Success Criteria
 
 1. **Functional Completeness**
+
    - All three domains (airline, retail, telecom) supported
    - Pass^k metrics computed correctly
    - Multi-turn interaction works as expected
 
 2. **Architectural Alignment**
+
    - Follows MASEval `Environment`, `Evaluator`, `Benchmark` patterns
    - Minimal additional dependencies (Pydantic for models)
    - Full callback/tracing integration
 
 3. **Reproducibility** (CRITICAL)
+
    - **Deterministic evaluators** (env, action): Exact DB state hash match with upstream
    - **LLM-based evaluators** (communicate, NL): Within ±3% of upstream
    - Contract tests verify tool sequences produce identical state changes
@@ -1059,6 +1090,7 @@ class Tau2ReferenceAgent(AgentAdapter):
 ```
 
 The reference agent enables running:
+
 ```bash
 # Validation script
 python scripts/validate_tau2_upstream.py --domain airline --tasks 10

@@ -5,6 +5,8 @@
 **Strategy:** Full Re-implementation (Porting).
 **Rationale:** This approach ensures deep integration with MASEval's tracing and callback systems, removes heavy upstream dependencies (Gymnasium), and aligns with the existing `MACS` benchmark architecture. It offers the best user experience ("batteries included") while maintaining the "Core vs. Interface" separation principle.
 
+Important: Existing code should be used as much as possible inline with this strategy. There is no value in reinventing the wheel unless we have to.
+
 ## 2. Architectural Blueprint
 
 We will invert the control flow. Instead of the `tau2` harness driving the agent, `MASEval` will drive the agent, and the `Tau2` components will serve as the Environment and Evaluator.
@@ -107,15 +109,15 @@ To respect the MIT license and aid future maintenance:
 4.  **Data Loading:** Implement `data_loader.py` with GitHub downloader.
 5.  **Metrics:** Implement `metrics.py` for Pass@k aggregation.
 6.  **Contract Test:**
-    *   Load a retail task.
-    *   Run a hardcoded sequence of tool calls known to succeed.
-    *   Verify the DB hash and Evaluator output match upstream.
+    - Load a retail task.
+    - Run a hardcoded sequence of tool calls known to succeed.
+    - Verify the DB hash and Evaluator output match upstream.
 7.  **Reference Agent:** Port the upstream agent and run end-to-end validation.
 
 ## 5. Risk Assessment & Mitigation
 
-| Risk | Impact | Mitigation |
-| :--- | :--- | :--- |
-| **Logic Divergence** | High | Use a "Contract Test" (Step 6) to verify that a sequence of tool calls produces the *exact* same DB state hash as upstream. |
-| **Dependencies** | Medium | Match upstream Pydantic validation logic carefully during porting. |
+| Risk                     | Impact | Mitigation                                                                                                                  |
+| :----------------------- | :----- | :-------------------------------------------------------------------------------------------------------------------------- |
+| **Logic Divergence**     | High   | Use a "Contract Test" (Step 6) to verify that a sequence of tool calls produces the _exact_ same DB state hash as upstream. |
+| **Dependencies**         | Medium | Match upstream Pydantic validation logic carefully during porting.                                                          |
 | **Prompt Inconsistency** | Medium | Centralize all prompts in `prompt_templates/` to ensure we are using the exact same instructions as the original benchmark. |
