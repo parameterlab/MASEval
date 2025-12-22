@@ -2,8 +2,8 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from maseval import Task, AgentAdapter
-from maseval.benchmark.tau2 import Tau2Benchmark, Tau2Environment, Tau2User
+from maseval import Task
+from maseval.benchmark.tau2 import Tau2Benchmark, Tau2User
 
 
 class DummyTau2Benchmark(Tau2Benchmark):
@@ -34,9 +34,12 @@ def task():
 def test_setup_environment(benchmark, task):
     """Test environment setup."""
     with patch("maseval.benchmark.tau2.tau2.Tau2Environment") as mock_env_cls:
-        env = benchmark.setup_environment({}, task)
+        benchmark.setup_environment({}, task)
 
-        mock_env_cls.assert_called_once_with(task_data=task.environment_data, data_dir=None)
+        mock_env_cls.assert_called_once_with(
+            task_data=task.environment_data,
+            data_dir=None
+        )
 
 
 @pytest.mark.benchmark

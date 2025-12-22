@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Sequence
 import json
 import os
 import inspect
@@ -6,15 +6,16 @@ import time
 from datetime import datetime
 
 from maseval.core.user import User
-from maseval.core.simulator import UserLLMSimulator, UserSimulatorError
+from maseval.core.simulator import LLMSimulator, UserSimulatorError
 from maseval.core.model import ModelAdapter
-from maseval.core.history import MessageHistory
 
 
-class AgenticUserLLMSimulator(UserLLMSimulator):
+class AgenticUserLLMSimulator(LLMSimulator):
     """
     A simulator that uses an LLM to act as an agentic user (capable of using tools).
     """
+
+    _component_name = "user_simulator"
 
     def __init__(
         self,
@@ -28,6 +29,13 @@ class AgenticUserLLMSimulator(UserLLMSimulator):
         early_stopping_condition: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
     ):
+        # Validate early stopping configuration
+        if (stop_token is None) != (early_stopping_condition is None):
+            raise ValueError(
+                "stop_token and early_stopping_condition must both be set or both be None. "
+                f"Got stop_token={stop_token!r}, early_stopping_condition={early_stopping_condition!r}"
+            )
+
         if template is None:
             template_path = os.path.join(os.path.dirname(__file__), "utils", "templates", "agentic_user_llm_simulator_template.txt")
             with open(template_path, "r") as f:
@@ -35,32 +43,46 @@ class AgenticUserLLMSimulator(UserLLMSimulator):
 
         super().__init__(
             model=model,
-            user_profile=user_profile,
-            scenario=scenario,
             template=template,
             max_try=max_try,
             generation_params=generation_params,
-            stop_token=stop_token,
-            early_stopping_condition=early_stopping_condition,
         )
+        self.user_profile = user_profile
+        self.scenario = scenario
+        self.stop_token = stop_token
+        self.early_stopping_condition = early_stopping_condition
         self.tools = tools or []
+
+    def _create_error(
+        self,
+        message: str,
+        attempts: int,
+        last_error: Optional[str],
+        logs: List[Dict[str, Any]],
+    ) -> UserSimulatorError:
+        """Create UserSimulatorError for user simulation failures."""
+        return UserSimulatorError(
+            message=message,
+            attempts=attempts,
+            last_error=last_error,
+            logs=logs,
+            component="user_simulator",
+        )
 
     def __call__(
         self,
         conversation_history: List[Dict[str, str]],
         generation_params: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[str, List[Dict[str, Any]]]:
+    ) -> Tuple[str, List[Dict[str, Any]]]:  # type: ignore[override]
         """
         Generates a simulated user response with potential tool calls.
 
         Returns:
             Tuple[str, List[Dict[str, Any]]]: (text_response, list_of_tool_calls)
         """
-        # We override __call__ to change the return type signature
-        # logic is mostly same but _parse_output returns tuple
-        return super(UserLLMSimulator, self).__call__(generation_params=generation_params, conversation_history=conversation_history)  # type: ignore
+        return super().__call__(generation_params=generation_params, conversation_history=conversation_history)
 
-    def _parse_output(self, output: str) -> Tuple[str, List[Dict[str, Any]]]:
+    def _parse_output(self, output: str) -> Tuple[str, List[Dict[str, Any]]]:  # type: ignore[override]
         """
         Parses the raw JSON output from the model.
         """
@@ -85,10 +107,6 @@ class AgenticUserLLMSimulator(UserLLMSimulator):
         """
         Fills the prompt template with the message history, user profile, and tools.
         """
-        # Call parent to get basic filling (but parent doesn't handle tools)
-        # Actually parent _fill_prompt_template logic is simple string replacement.
-        # We need to inject tool instructions.
-
         conversation_history = kwargs.get("conversation_history", [])
         assert self.template is not None, "Template must be set"
         prompt = self.template
@@ -185,12 +203,12 @@ class AgenticUser(User):
                 if param_name == "self":
                     continue
                 param_type = "string"  # Default
-                if param.annotation != inspect.Parameter.empty:
-                    if param.annotation == int:
+                if param.annotation is not inspect.Parameter.empty:
+                    if param.annotation is int:
                         param_type = "integer"
-                    elif param.annotation == float:
+                    elif param.annotation is float:
                         param_type = "number"
-                    elif param.annotation == bool:
+                    elif param.annotation is bool:
                         param_type = "boolean"
 
                 inputs[param_name] = {"type": param_type, "description": f"Parameter {param_name}"}

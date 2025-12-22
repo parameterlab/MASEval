@@ -1,8 +1,7 @@
 """Integration tests for Tau2 Benchmark."""
 
 import pytest
-from unittest.mock import MagicMock, patch
-from typing import List, Dict
+from unittest.mock import MagicMock
 
 from maseval import AgentAdapter, Task, ModelAdapter
 from maseval.benchmark.tau2 import Tau2Benchmark, Tau2Evaluator
@@ -71,11 +70,10 @@ def test_tau2_dry_run():
     mock_evaluator.filter_traces.return_value = {"termination_reason": "agent_stop"}
 
     # Patch setup_environment
-    benchmark.setup_environment = MagicMock(return_value=env_mock)
+    benchmark.setup_environment = MagicMock(return_value=env_mock)  # type: ignore[assignment]
 
     # Patch setup_evaluators to return our mock
-    benchmark.setup_evaluators = MagicMock(return_value=[mock_evaluator])
-
+    benchmark.setup_evaluators = MagicMock(return_value=[mock_evaluator])  # type: ignore[assignment]
     results = benchmark.run([task])
 
     # Debug info if failed

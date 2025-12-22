@@ -275,7 +275,7 @@ class Tau2Benchmark(Benchmark):
         agent_data: Dict[str, Any],
         environment: Tau2Environment,  # type: ignore[override]
         task: Task,
-    ) -> Tau2User:
+    ) -> Optional[User]:
         """Create Tau2 user simulator.
 
         Creates a Tau2User with scenario from the task.
@@ -338,7 +338,7 @@ class Tau2Benchmark(Benchmark):
         environment: Tau2Environment,  # type: ignore[override]
         task: Task,
         user: Optional[User],
-    ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
+    ) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
         """Create agents for this task. Must be implemented by subclass.
 
         Args:
