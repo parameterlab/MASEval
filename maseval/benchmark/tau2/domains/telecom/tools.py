@@ -169,7 +169,8 @@ class TelecomTools(ToolKitBase[TelecomDB]):
                 period_end=next_month.replace(
                     month=next_month.month + 1 if next_month.month < 12 else 1,
                     year=next_month.year if next_month.month < 12 else next_month.year + 1,
-                ) - timedelta(days=1),
+                )
+                - timedelta(days=1),
                 issue_date=next_month,
                 total_due=0,
                 due_date=next_month + timedelta(days=14),
@@ -557,9 +558,7 @@ class TelecomTools(ToolKitBase[TelecomDB]):
         target_line.data_used_gb = data_used_gb
         return f"Data usage set to {data_used_gb} GB for line {line_id}"
 
-    def suspend_line_for_overdue_bill(
-        self, customer_id: str, line_id: str, new_bill_id: str, contract_ended: bool
-    ) -> str:
+    def suspend_line_for_overdue_bill(self, customer_id: str, line_id: str, new_bill_id: str, contract_ended: bool) -> str:
         """Suspends a line for an unpaid bill (internal method for setting up scenarios)."""
         if self.db is None:
             raise ValueError("Database not initialized")

@@ -409,9 +409,7 @@ class Tau2Evaluator(Evaluator):
         for msg in messages:
             content = msg.get("content", "")
             if isinstance(content, list):
-                content = " ".join(
-                    item.get("text", "") if isinstance(item, dict) else str(item) for item in content
-                )
+                content = " ".join(item.get("text", "") if isinstance(item, dict) else str(item) for item in content)
             all_content += " " + content
 
         all_content = all_content.lower()

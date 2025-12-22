@@ -38,41 +38,27 @@ def mock_tool():
 @pytest.mark.core
 def test_agentic_user_tool_usage(mock_tool):
     """Test that AgenticUser can execute a tool loop."""
-    
+
     # Mock model responses:
     # 1. Thought + Tool Call
     # 2. Final response (after tool execution)
-    
-    response_1 = json.dumps({
-        "text": "I need to check something.",
-        "tool_calls": [
-            {"name": "mock_tool", "arguments": {"arg": "val"}}
-        ]
-    })
-    
-    response_2 = json.dumps({
-        "text": "The tool worked.",
-        "tool_calls": []
-    })
-    
+
+    response_1 = json.dumps({"text": "I need to check something.", "tool_calls": [{"name": "mock_tool", "arguments": {"arg": "val"}}]})
+
+    response_2 = json.dumps({"text": "The tool worked.", "tool_calls": []})
+
     model = MockModelAdapter([response_1, response_2])
-    
-    user = DummyAgenticUser(
-        name="AgenticTester",
-        model=model,
-        user_profile={},
-        scenario="Testing tools",
-        tools={"mock_tool": mock_tool}
-    )
-    
+
+    user = DummyAgenticUser(name="AgenticTester", model=model, user_profile={}, scenario="Testing tools", tools={"mock_tool": mock_tool})
+
     # Simulate response
     final_response = user.simulate_response("Please check.")
-    
+
     # Verification
     assert final_response == "The tool worked."
     assert mock_tool.called
     assert mock_tool.call_args[1] == {"arg": "val"}
-    
+
     # Check history
     # The shared history should only contain the final response
     assert len(user.messages) == 2
@@ -82,27 +68,17 @@ def test_agentic_user_tool_usage(mock_tool):
 @pytest.mark.core
 def test_agentic_user_max_steps(mock_tool):
     """Test that AgenticUser respects max_internal_steps."""
-    
+
     # Always return tool call
-    response = json.dumps({
-        "text": "Looping...",
-        "tool_calls": [
-            {"name": "mock_tool", "arguments": {}}
-        ]
-    })
-    
+    response = json.dumps({"text": "Looping...", "tool_calls": [{"name": "mock_tool", "arguments": {}}]})
+
     model = MockModelAdapter([response])
-    
+
     user = DummyAgenticUser(
-        name="Looper",
-        model=model,
-        user_profile={},
-        scenario="Infinite loop",
-        tools={"mock_tool": mock_tool},
-        max_internal_steps=3
+        name="Looper", model=model, user_profile={}, scenario="Infinite loop", tools={"mock_tool": mock_tool}, max_internal_steps=3
     )
-    
+
     final_response = user.simulate_response("Go.")
-    
+
     assert "I need to stop" in final_response
     assert mock_tool.call_count == 3

@@ -14,9 +14,9 @@ def mock_model():
 def test_extract_user_profile():
     """Test extracting persona and profile from scenario."""
     scenario = "Persona: Angry Customer\n\nTask: Return item."
-    
+
     profile = Tau2User._extract_user_profile(scenario)
-    
+
     assert profile["persona"] == "Angry Customer"
     assert profile["full_scenario"] == scenario
 
@@ -25,9 +25,9 @@ def test_extract_user_profile():
 def test_extract_user_profile_no_persona():
     """Test extracting profile when no persona is present."""
     scenario = "Just a task."
-    
+
     profile = Tau2User._extract_user_profile(scenario)
-    
+
     assert "persona" not in profile
     assert profile["full_scenario"] == scenario
 
@@ -35,12 +35,8 @@ def test_extract_user_profile_no_persona():
 @pytest.mark.benchmark
 def test_get_tool_raises(mock_model):
     """Test that base Tau2User raises NotImplementedError for get_tool."""
-    user = Tau2User(
-        model=mock_model,
-        scenario="test",
-        initial_query="hi"
-    )
-    
+    user = Tau2User(model=mock_model, scenario="test", initial_query="hi")
+
     with pytest.raises(NotImplementedError):
         user.get_tool()
 
@@ -49,12 +45,7 @@ def test_get_tool_raises(mock_model):
 def test_init_passes_tools(mock_model):
     """Test that tools are correctly passed to parent AgenticUser."""
     tools = {"test_tool": lambda x: x}
-    
-    user = Tau2User(
-        model=mock_model,
-        scenario="test",
-        initial_query="hi",
-        tools=tools
-    )
-    
+
+    user = Tau2User(model=mock_model, scenario="test", initial_query="hi", tools=tools)
+
     assert user.tools == tools

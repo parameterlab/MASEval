@@ -125,9 +125,7 @@ class Tau2User(AgenticUser):
         Raises:
             NotImplementedError: Always, as this must be implemented by subclass.
         """
-        raise NotImplementedError(
-            "Tau2User.get_tool() must be overridden by framework-specific subclass."
-        )
+        raise NotImplementedError("Tau2User.get_tool() must be overridden by framework-specific subclass.")
 
     @staticmethod
     def _extract_user_profile(scenario: str) -> Dict[str, Any]:
@@ -200,10 +198,10 @@ class Tau2Benchmark(Benchmark):
 
             def get_model_adapter(self, model_id, **kwargs):
                 return MyModelAdapter(model_id)
-        
+
         tasks = load_tasks("retail")
         configure_model_ids(tasks, user_model_id="gpt-4o")
-        
+
         benchmark = MyTau2Benchmark(agent_data={})
         benchmark.run(tasks)
     """
@@ -319,7 +317,7 @@ class Tau2Benchmark(Benchmark):
             scenario = f"Persona: {persona}\n\n{scenario}"
 
         user_model_id = self._get_user_model_id(task)
-        
+
         # Get user tools from environment
         user_tools = environment.create_user_tools()
 

@@ -2,12 +2,7 @@
 
 import pytest
 from maseval.benchmark.tau2.domains.base import ToolType
-from maseval.benchmark.tau2.domains.telecom.user_models import (
-    SimStatus,
-    NetworkStatus,
-    SignalStrength,
-    NetworkModePreference
-)
+from maseval.benchmark.tau2.domains.telecom.user_models import SimStatus, NetworkStatus, SignalStrength, NetworkModePreference
 
 
 # =============================================================================
@@ -103,7 +98,7 @@ class TestTelecomUserWriteTools:
         telecom_user_toolkit.use_tool("toggle_airplane_mode", enable=True)
         assert telecom_user_toolkit.db.user_db.device.airplane_mode is True
         assert telecom_user_toolkit.db.user_db.device.network_status == NetworkStatus.NO_SERVICE
-        
+
         # Disable
         telecom_user_toolkit.use_tool("toggle_airplane_mode", enable=False)
         assert telecom_user_toolkit.db.user_db.device.airplane_mode is False
@@ -115,7 +110,7 @@ class TestTelecomUserWriteTools:
         """toggle_data changes state."""
         telecom_user_toolkit.use_tool("toggle_data", enable=False)
         assert telecom_user_toolkit.db.user_db.device.mobile_data_enabled is False
-        
+
         telecom_user_toolkit.use_tool("toggle_data", enable=True)
         assert telecom_user_toolkit.db.user_db.device.mobile_data_enabled is True
 
@@ -123,7 +118,7 @@ class TestTelecomUserWriteTools:
         """set_network_mode_preference changes state."""
         pref = NetworkModePreference.FOUR_G_ONLY.value
         result = telecom_user_toolkit.use_tool("set_network_mode_preference", preference=pref)
-        
+
         assert telecom_user_toolkit.db.user_db.device.network_mode_preference == NetworkModePreference.FOUR_G_ONLY
         assert "set to" in result
 
@@ -137,8 +132,8 @@ class TestTelecomUserWriteTools:
         # Set reset_at_reboot = True
         telecom_user_toolkit.db.user_db.device.apn_settings.reset_at_reboot = True
         telecom_user_toolkit.db.user_db.device.apn_settings.apn = "custom_apn"
-        
+
         telecom_user_toolkit.use_tool("reboot_device")
-        
+
         # Should have reset to default
         assert telecom_user_toolkit.db.user_db.device.apn_settings.apn == "internet"

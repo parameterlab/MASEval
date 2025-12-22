@@ -166,7 +166,7 @@ class MockPhoneAttributes(BaseModel):
     is_on: bool = Field(True, description="Whether the device is powered on")
     airplane_mode: bool = Field(False, description="Whether airplane mode is enabled")
     battery_level: int = Field(100, description="Battery level percentage (0-100)")
-    
+
     # SIM & Network
     sim_status: SimStatus = Field(SimStatus.ACTIVE, description="Status of the SIM card")
     sim_pin: str = Field("1234", description="SIM PIN code")
@@ -174,20 +174,18 @@ class MockPhoneAttributes(BaseModel):
     sim_attempts_remaining: int = Field(3, description="Remaining SIM PIN attempts")
     network_status: NetworkStatus = Field(NetworkStatus.CONNECTED, description="Network connection status")
     network_technology: NetworkTechnology = Field(NetworkTechnology.FOUR_G, description="Current network technology")
-    network_mode_preference: NetworkModePreference = Field(
-        NetworkModePreference.FOUR_G_5G_PREFERRED, description="Preferred network mode"
-    )
-    
+    network_mode_preference: NetworkModePreference = Field(NetworkModePreference.FOUR_G_5G_PREFERRED, description="Preferred network mode")
+
     # Data & Roaming
     mobile_data_enabled: bool = Field(True, description="Whether mobile data is enabled")
     roaming_enabled: bool = Field(False, description="Whether data roaming is enabled")
     data_saver_mode: bool = Field(False, description="Whether data saver mode is on")
-    
+
     # WiFi & Calling
     wifi_enabled: bool = Field(True, description="Whether Wi-Fi is enabled")
     wifi_connected: bool = Field(True, description="Whether connected to a Wi-Fi network")
     wifi_calling_enabled: bool = Field(False, description="Whether Wi-Fi calling is enabled")
-    
+
     # Configuration
     apn_settings: APNSettings = Field(
         default_factory=lambda: APNSettings(name=APNNames.INTERNET.value, apn="internet"),
@@ -195,10 +193,10 @@ class MockPhoneAttributes(BaseModel):
     )
     vpn_status: bool = Field(False, description="Whether VPN is connected")
     vpn_details: Optional[VpnDetails] = Field(None, description="Active VPN connection details")
-    
+
     # Applications
     installed_apps: Dict[str, AppStatus] = Field(default_factory=dict, description="Installed applications")
-    
+
     # Hardware
     has_sim_card: bool = Field(True, description="Whether a physical SIM card is inserted")
 
@@ -210,10 +208,10 @@ class MockPhoneAttributes(BaseModel):
 
 class PaymentRequest(BaseModel):
     """A payment request received by the user."""
-    
+
     class Config:
         extra = "forbid"
-        
+
     bill_id: str = Field(description="ID of the bill to pay")
     amount_due: float = Field(description="Amount to pay")
     paid: bool = Field(False, description="Whether the payment has been made")
@@ -233,12 +231,9 @@ class UserSurroundings(BaseModel):
         description="Network technologies available in current location",
     )
     wifi_networks_available: List[str] = Field(
-        default_factory=lambda: ["Home_WiFi", "Starbucks_WiFi"], 
-        description="List of available Wi-Fi networks"
+        default_factory=lambda: ["Home_WiFi", "Starbucks_WiFi"], description="List of available Wi-Fi networks"
     )
-    payment_requests: List[PaymentRequest] = Field(
-        default_factory=list, description="Pending payment requests"
-    )
+    payment_requests: List[PaymentRequest] = Field(default_factory=list, description="Pending payment requests")
 
 
 class TelecomUserDB(BaseModel):
@@ -249,9 +244,10 @@ class TelecomUserDB(BaseModel):
 
     device: MockPhoneAttributes = Field(default_factory=MockPhoneAttributes, description="User's phone state")
     surroundings: UserSurroundings = Field(default_factory=UserSurroundings, description="User's environment state")
-    
+
     def get_hash(self) -> str:
         """Get deterministic hash of user DB."""
         # This will be called by parent DB's get_hash if included there
         from maseval.benchmark.tau2.utils import get_pydantic_hash
+
         return get_pydantic_hash(self)

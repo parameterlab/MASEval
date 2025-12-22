@@ -653,9 +653,7 @@ class RetailTools(ToolKitBase[RetailDB]):
             payment_method.balance = round(payment_method.balance, 2)
 
         # If refund is made to a gift card, update the balance
-        old_payment_method = self._get_payment_method(
-            order.user_id, order.payment_history[0].payment_method_id
-        )
+        old_payment_method = self._get_payment_method(order.user_id, order.payment_history[0].payment_method_id)
         if isinstance(old_payment_method, GiftCard):
             old_payment_method.balance += amount
             old_payment_method.balance = round(old_payment_method.balance, 2)
@@ -740,10 +738,7 @@ class RetailTools(ToolKitBase[RetailDB]):
         user = self._get_user(order.user_id)
         payment_method = self._get_payment_method(user.user_id, payment_method_id)
 
-        if (
-            not isinstance(payment_method, GiftCard)
-            and payment_method_id != order.payment_history[0].payment_method_id
-        ):
+        if not isinstance(payment_method, GiftCard) and payment_method_id != order.payment_history[0].payment_method_id:
             raise ValueError("Payment method should be the original payment method")
 
         # Check if the items to be returned exist

@@ -314,9 +314,7 @@ class AirlineTools(ToolKitBase[AirlineDB]):
         return self._search_direct_flight(date=date, origin=origin, destination=destination)
 
     @is_tool(ToolType.READ)
-    def search_onestop_flight(
-        self, origin: str, destination: str, date: str
-    ) -> List[List[DirectFlight]]:
+    def search_onestop_flight(self, origin: str, destination: str, date: str) -> List[List[DirectFlight]]:
         """Search for one-stop flights between two cities on a specific date.
 
         Args:
@@ -330,11 +328,7 @@ class AirlineTools(ToolKitBase[AirlineDB]):
         results: List[List[DirectFlight]] = []
         for result1 in self._search_direct_flight(date=date, origin=origin, destination=None):
             result1.date = date
-            date2 = (
-                f"2024-05-{int(date[-2:]) + 1}"
-                if "+1" in result1.scheduled_arrival_time_est
-                else date
-            )
+            date2 = f"2024-05-{int(date[-2:]) + 1}" if "+1" in result1.scheduled_arrival_time_est else date
             for result2 in self._search_direct_flight(
                 date=date2,
                 origin=result1.destination,
@@ -485,13 +479,9 @@ class AirlineTools(ToolKitBase[AirlineDB]):
                 if user_payment_method.amount < amount:
                     raise ValueError(f"Not enough balance in payment method {payment_id}")
 
-        total_payment = sum(
-            (pm.amount if isinstance(pm, Payment) else pm["amount"]) for pm in payment_methods
-        )
+        total_payment = sum((pm.amount if isinstance(pm, Payment) else pm["amount"]) for pm in payment_methods)
         if total_payment != total_price:
-            raise ValueError(
-                f"Payment amount does not add up, total price is {total_price}, but paid {total_payment}"
-            )
+            raise ValueError(f"Payment amount does not add up, total price is {total_price}, but paid {total_payment}")
 
         # Deduct payment
         for payment_method in payment_methods:
@@ -651,9 +641,7 @@ class AirlineTools(ToolKitBase[AirlineDB]):
                 (
                     rf
                     for rf in reservation.flights
-                    if rf.flight_number == flight_info.flight_number
-                    and rf.date == flight_info.date
-                    and cabin == reservation.cabin
+                    if rf.flight_number == flight_info.flight_number and rf.date == flight_info.date and cabin == reservation.cabin
                 ),
                 None,
             )
@@ -703,9 +691,7 @@ class AirlineTools(ToolKitBase[AirlineDB]):
         return reservation
 
     @is_tool(ToolType.WRITE)
-    def update_reservation_passengers(
-        self, reservation_id: str, passengers: List[Union[Passenger, dict]]
-    ) -> Reservation:
+    def update_reservation_passengers(self, reservation_id: str, passengers: List[Union[Passenger, dict]]) -> Reservation:
         """Update the passenger information of a reservation.
 
         Args:

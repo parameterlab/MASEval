@@ -37,6 +37,7 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         if self.db and self.db.user_db is None:
             # Initialize user DB if not present
             from maseval.benchmark.tau2.domains.telecom.user_models import TelecomUserDB
+
             self.db.user_db = TelecomUserDB()
 
     @property
@@ -140,7 +141,7 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         # Simple logic: better signal/tech = better speed
         if self._surroundings.signal_strength == SignalStrength.NONE:
             return "Speed test failed: No signal."
-        
+
         if self._surroundings.signal_strength == SignalStrength.POOR:
             return "Download: 0.5 Mbps, Upload: 0.1 Mbps (Very Slow)"
         elif self._surroundings.signal_strength == SignalStrength.FAIR:
@@ -166,7 +167,7 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         """
         self._device.airplane_mode = enable
         state = "enabled" if enable else "disabled"
-        
+
         # Side effects
         if enable:
             self._device.network_status = NetworkStatus.NO_SERVICE
@@ -176,9 +177,9 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
             # Reconnect logic would be complex, simplified here:
             if self._device.sim_status == SimStatus.ACTIVE:
                 self._device.network_status = NetworkStatus.CONNECTED
-            
+
             if self._surroundings.wifi_networks_available and self._device.wifi_enabled:
-                 self._device.wifi_connected = True
+                self._device.wifi_connected = True
 
         return f"Airplane mode {state}"
 
@@ -206,13 +207,13 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         """
         if not self._device.has_sim_card:
             return "No physical SIM card to reseat."
-        
+
         # Simulation of reseating
         if self._device.sim_status != SimStatus.MISSING:
             # If it was locked or active, it might reset or stay same
             # Simplified: just say done
             pass
-            
+
         return "SIM card reseated. Please wait for network registration."
 
     # =========================================================================
@@ -398,14 +399,10 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
             Success message
         """
         if not self._device.mobile_data_enabled and not self._device.wifi_connected:
-             return "Cannot connect to VPN: No internet connection."
+            return "Cannot connect to VPN: No internet connection."
 
         self._device.vpn_status = True
-        self._device.vpn_details = VpnDetails(
-            server_address=server_address,
-            protocol=protocol,
-            server_performance=PerformanceLevel.GOOD
-        )
+        self._device.vpn_details = VpnDetails(server_address=server_address, protocol=protocol, server_performance=PerformanceLevel.GOOD)
         return f"Connected to VPN at {server_address}"
 
     @is_tool(ToolType.WRITE)
@@ -417,7 +414,7 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         """
         if not self._device.vpn_status:
             return "VPN is not connected."
-            
+
         self._device.vpn_status = False
         self._device.vpn_details = None
         return "VPN disconnected."
@@ -447,13 +444,9 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         """
         if app_name not in self._device.installed_apps:
             raise ValueError(f"App '{app_name}' not installed.")
-        
+
         app = self._device.installed_apps[app_name]
-        return {
-            "is_running": app.is_running,
-            "data_usage_mb": app.data_usage_mb,
-            "permissions": app.permissions.model_dump()
-        }
+        return {"is_running": app.is_running, "data_usage_mb": app.data_usage_mb, "permissions": app.permissions.model_dump()}
 
     @is_tool(ToolType.READ)
     def check_app_permissions(self, app_name: str) -> Dict[str, bool]:
@@ -467,7 +460,7 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         """
         if app_name not in self._device.installed_apps:
             raise ValueError(f"App '{app_name}' not installed.")
-            
+
         return self._device.installed_apps[app_name].permissions.model_dump()
 
     @is_tool(ToolType.WRITE)
@@ -484,11 +477,11 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         """
         if app_name not in self._device.installed_apps:
             raise ValueError(f"App '{app_name}' not installed.")
-            
+
         perms = self._device.installed_apps[app_name].permissions
         if not hasattr(perms, permission):
             raise ValueError(f"Unknown permission '{permission}'.")
-            
+
         setattr(perms, permission, grant)
         action = "granted" if grant else "revoked"
         return f"Permission '{permission}' {action} for {app_name}."
@@ -506,11 +499,11 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         """
         if not self._device.mobile_data_enabled:
             return False
-            
+
         # Check APN
         if not self._device.apn_settings.mmsc_url:
             return False
-            
+
         return True
 
     # =========================================================================
@@ -526,8 +519,8 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         """
         # Reset ephemeral state
         if self._device.apn_settings.reset_at_reboot:
-             self._device.apn_settings = APNSettings(name=APNNames.INTERNET.value, apn="internet")
-        
+            self._device.apn_settings = APNSettings(name=APNNames.INTERNET.value, apn="internet")
+
         return "Device rebooted successfully."
 
     # =========================================================================
@@ -562,14 +555,14 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         for req in self._surroundings.payment_requests:
             if req.bill_id == bill_id:
                 if req.paid:
-                     return "Bill already paid."
+                    return "Bill already paid."
                 if abs(req.amount_due - amount) > 0.01:
                     return f"Incorrect amount. Expected {req.amount_due}, got {amount}."
-                
+
                 req.paid = True
                 found = True
                 break
-        
+
         if not found:
             # Check if bill exists in main DB and pay it there directly?
             # Or is this tool only for responding to requests received on device?
@@ -577,18 +570,19 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
             # But the user tools typically simulate user ACTIONS on the device.
             # The actual payment processing would update the main DB.
             # We can update the main DB bill status here since we have access to self.db
-            
+
             # Find bill in main DB
             bill = None
             for b in self.db.bills:
                 if b.bill_id == bill_id:
                     bill = b
                     break
-            
+
             if not bill:
-                 return f"Bill {bill_id} not found."
-            
+                return f"Bill {bill_id} not found."
+
             from maseval.benchmark.tau2.domains.telecom.models import BillStatus
+
             bill.status = BillStatus.PAID
             return f"Payment of {amount} for bill {bill_id} successful."
 

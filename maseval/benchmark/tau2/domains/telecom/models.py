@@ -82,12 +82,8 @@ class Device(BaseModel):
     imei: Optional[str] = Field(None, description="International Mobile Equipment Identity number")
     is_esim_capable: bool = Field(description="Whether the device supports eSIM technology")
     activated: bool = Field(False, description="Whether the device has been activated on the network")
-    activation_date: Optional[datetime.datetime] = Field(
-        None, description="Date and time when the device was activated"
-    )
-    last_esim_transfer_date: Optional[datetime.datetime] = Field(
-        None, description="Last date an eSIM profile was transferred to this device"
-    )
+    activation_date: Optional[datetime.datetime] = Field(None, description="Date and time when the device was activated")
+    last_esim_transfer_date: Optional[datetime.datetime] = Field(None, description="Last date an eSIM profile was transferred to this device")
 
 
 # =============================================================================
@@ -120,12 +116,8 @@ class Line(BaseModel):
     roaming_enabled: bool = Field(False, description="Whether international roaming is enabled for this line")
     contract_end_date: Optional[datetime.date] = Field(None, description="End date of the current contract")
     last_plan_change_date: Optional[datetime.date] = Field(None, description="Date of the most recent plan change")
-    last_sim_replacement_date: Optional[datetime.date] = Field(
-        None, description="Date of the most recent SIM card replacement"
-    )
-    suspension_start_date: Optional[datetime.date] = Field(
-        None, description="Start date of the current suspension period"
-    )
+    last_sim_replacement_date: Optional[datetime.date] = Field(None, description="Date of the most recent SIM card replacement")
+    suspension_start_date: Optional[datetime.date] = Field(None, description="Start date of the current suspension period")
 
 
 # =============================================================================
@@ -142,9 +134,7 @@ class LineItem(BaseModel):
     description: str = Field(description="Descriptive text for the line item")
     amount: float = Field(description="Monetary amount in USD (positive for charges, negative for credits)")
     date: datetime.date = Field(description="Date the line item was applied")
-    item_type: str = Field(
-        description="Category of the line item (e.g., Plan Charge, Overage, Fee, Credit, Payment)"
-    )
+    item_type: str = Field(description="Category of the line item (e.g., Plan Charge, Overage, Fee, Credit, Payment)")
 
 
 class BillStatus(str, Enum):
@@ -220,12 +210,8 @@ class Customer(BaseModel):
     email: str = Field(description="Customer's email address")
     phone_number: str = Field(description="Customer's primary contact phone number")
     address: Address = Field(description="Customer's billing address")
-    account_status: AccountStatus = Field(
-        AccountStatus.PENDING_VERIFICATION, description="Current status of the customer account"
-    )
-    payment_methods: List[PaymentMethod] = Field(
-        default_factory=list, description="Stored payment methods for this customer"
-    )
+    account_status: AccountStatus = Field(AccountStatus.PENDING_VERIFICATION, description="Current status of the customer account")
+    payment_methods: List[PaymentMethod] = Field(default_factory=list, description="Stored payment methods for this customer")
     line_ids: List[str] = Field(default_factory=list, description="Phone/data lines owned by this customer")
     bill_ids: List[str] = Field(default_factory=list, description="Bills associated with this customer")
     created_at: datetime.datetime = Field(
@@ -235,6 +221,4 @@ class Customer(BaseModel):
     last_extension_date: Optional[datetime.date] = Field(
         None, description="Date of the most recent payment extension (used for quarterly limit check)"
     )
-    goodwill_credit_used_this_year: float = Field(
-        0.0, description="Amount of goodwill credit used in the current calendar year"
-    )
+    goodwill_credit_used_this_year: float = Field(0.0, description="Amount of goodwill credit used in the current calendar year")

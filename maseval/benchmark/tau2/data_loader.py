@@ -293,10 +293,7 @@ def load_tasks(
     tasks_path = data_dir / domain / "tasks.json"
 
     if not tasks_path.exists():
-        raise FileNotFoundError(
-            f"Tasks file not found: {tasks_path}. "
-            f"Run ensure_data_exists(domain='{domain}') first."
-        )
+        raise FileNotFoundError(f"Tasks file not found: {tasks_path}. Run ensure_data_exists(domain='{domain}') first.")
 
     with tasks_path.open() as f:
         raw_tasks: List[Dict[str, Any]] = json.load(f)

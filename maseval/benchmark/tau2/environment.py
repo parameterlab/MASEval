@@ -99,7 +99,7 @@ class Tau2Environment(Environment):
     def toolkit(self) -> ToolKitBase:
         """Get the domain toolkit."""
         return self.state["toolkit"]
-    
+
     @property
     def user_toolkit(self) -> Optional[ToolKitBase]:
         """Get the domain user toolkit (if available)."""
@@ -139,7 +139,7 @@ class Tau2Environment(Environment):
         # Create toolkit
         toolkit_class = DOMAIN_TOOLKIT_CLASSES[self._domain]
         toolkit = toolkit_class(db)
-        
+
         # Create user toolkit if available
         user_toolkit = None
         if self._domain in DOMAIN_USER_TOOLKIT_CLASSES:
@@ -190,10 +190,10 @@ class Tau2Environment(Environment):
             Dict mapping tool names to callable methods
         """
         return self.toolkit.tools
-    
+
     def create_user_tools(self) -> Dict[str, Callable]:
         """Create user tools from the domain user toolkit.
-        
+
         Returns:
             Dict mapping tool names to callable methods
         """

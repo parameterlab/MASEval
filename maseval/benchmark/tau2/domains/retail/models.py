@@ -23,9 +23,7 @@ class Variant(BaseModel):
     """Represents a specific variant of a product with its options, availability and price."""
 
     item_id: str = Field(description="Unique identifier for the variant")
-    options: Dict[str, str] = Field(
-        description="Dictionary of option names to values (e.g. {'color': 'blue', 'size': 'large'})"
-    )
+    options: Dict[str, str] = Field(description="Dictionary of option names to values (e.g. {'color': 'blue', 'size': 'large'})")
     available: bool = Field(description="Whether this variant is currently in stock")
     price: float = Field(description="Price of this variant")
 
@@ -105,9 +103,7 @@ class User(BaseModel):
     name: UserName = Field(description="User's full name")
     address: UserAddress = Field(description="User's primary address")
     email: str = Field(description="User's email address")
-    payment_methods: Dict[str, PaymentMethod] = Field(
-        description="Dictionary of payment methods indexed by payment method ID"
-    )
+    payment_methods: Dict[str, PaymentMethod] = Field(description="Dictionary of payment methods indexed by payment method ID")
     orders: List[str] = Field(description="List of order IDs associated with this user")
 
 
@@ -173,13 +169,7 @@ class Order(BaseModel):
     )
     exchange_items: Optional[List[str]] = Field(description="Items to be exchanged", default=None)
     exchange_new_items: Optional[List[str]] = Field(description="Items exchanged for", default=None)
-    exchange_payment_method_id: Optional[str] = Field(
-        description="Payment method ID for the exchange", default=None
-    )
-    exchange_price_difference: Optional[float] = Field(
-        description="Price difference for the exchange", default=None
-    )
+    exchange_payment_method_id: Optional[str] = Field(description="Payment method ID for the exchange", default=None)
+    exchange_price_difference: Optional[float] = Field(description="Price difference for the exchange", default=None)
     return_items: Optional[List[str]] = Field(description="Items to be returned", default=None)
-    return_payment_method_id: Optional[str] = Field(
-        description="Payment method ID for the return", default=None
-    )
+    return_payment_method_id: Optional[str] = Field(description="Payment method ID for the return", default=None)

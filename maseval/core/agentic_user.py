@@ -29,12 +29,10 @@ class AgenticUserLLMSimulator(UserLLMSimulator):
         tools: Optional[List[Dict[str, Any]]] = None,
     ):
         if template is None:
-            template_path = os.path.join(
-                os.path.dirname(__file__), "utils", "templates", "agentic_user_llm_simulator_template.txt"
-            )
+            template_path = os.path.join(os.path.dirname(__file__), "utils", "templates", "agentic_user_llm_simulator_template.txt")
             with open(template_path, "r") as f:
                 template = f.read()
-        
+
         super().__init__(
             model=model,
             user_profile=user_profile,
@@ -60,10 +58,7 @@ class AgenticUserLLMSimulator(UserLLMSimulator):
         """
         # We override __call__ to change the return type signature
         # logic is mostly same but _parse_output returns tuple
-        return super(UserLLMSimulator, self).__call__(
-            generation_params=generation_params, 
-            conversation_history=conversation_history
-        ) # type: ignore
+        return super(UserLLMSimulator, self).__call__(generation_params=generation_params, conversation_history=conversation_history)  # type: ignore
 
     def _parse_output(self, output: str) -> Tuple[str, List[Dict[str, Any]]]:
         """
@@ -78,9 +73,9 @@ class AgenticUserLLMSimulator(UserLLMSimulator):
         try:
             output_data = json.loads(text_stripped)
         except json.JSONDecodeError:
-             # If strictly requiring JSON, raise. Or fallback to text only.
-             # For agentic user, we expect JSON.
-             raise
+            # If strictly requiring JSON, raise. Or fallback to text only.
+            # For agentic user, we expect JSON.
+            raise
 
         text = output_data.get("text", "")
         tool_calls = output_data.get("tool_calls", [])
@@ -93,7 +88,7 @@ class AgenticUserLLMSimulator(UserLLMSimulator):
         # Call parent to get basic filling (but parent doesn't handle tools)
         # Actually parent _fill_prompt_template logic is simple string replacement.
         # We need to inject tool instructions.
-        
+
         conversation_history = kwargs.get("conversation_history", [])
         assert self.template is not None, "Template must be set"
         prompt = self.template
@@ -118,12 +113,12 @@ class AgenticUserLLMSimulator(UserLLMSimulator):
             tool_instructions = "\n### TOOLS\nYou have access to the following tools to interact with your environment:\n"
             for tool in self.tools:
                 tool_instructions += f"- {tool['name']}: {tool.get('description', '')}\n"
-                if 'inputs' in tool:
+                if "inputs" in tool:
                     tool_instructions += f"  Inputs: {json.dumps(tool['inputs'])}\n"
-            
+
             tool_instructions += (
                 "\nTo use a tool, include a `tool_calls` field in your JSON response with a list of tool invocations.\n"
-                "Example: {\"text\": \"I'll check the signal.\", \"tool_calls\": [{\"name\": \"check_status\", \"arguments\": {}}]}\n"
+                'Example: {"text": "I\'ll check the signal.", "tool_calls": [{"name": "check_status", "arguments": {}}]}\n'
             )
 
         replacements = {
@@ -149,7 +144,7 @@ class AgenticUser(User):
         scenario: str,
         tools: Optional[Dict[str, Callable]] = None,
         max_internal_steps: int = 5,
-        **kwargs
+        **kwargs,
     ):
         """
         Args:
@@ -159,13 +154,13 @@ class AgenticUser(User):
         """
         self.tools = tools or {}
         self.max_internal_steps = max_internal_steps
-        
+
         # We initialize the parent, but we will replace the simulator
         super().__init__(name=name, model=model, user_profile=user_profile, scenario=scenario, **kwargs)
-        
+
         # Generate tool definitions
         tool_definitions = self._generate_tool_definitions() if self.tools else None
-        
+
         # Replace the standard simulator with AgenticUserLLMSimulator
         self.simulator = AgenticUserLLMSimulator(
             model=self.model,
@@ -184,7 +179,7 @@ class AgenticUser(User):
         for name, func in self.tools.items():
             sig = inspect.signature(func)
             doc = func.__doc__ or ""
-            
+
             inputs = {}
             for param_name, param in sig.parameters.items():
                 if param_name == "self":
@@ -197,17 +192,10 @@ class AgenticUser(User):
                         param_type = "number"
                     elif param.annotation == bool:
                         param_type = "boolean"
-                
-                inputs[param_name] = {
-                    "type": param_type,
-                    "description": f"Parameter {param_name}"
-                }
-            
-            definitions.append({
-                "name": name,
-                "description": doc.strip(),
-                "inputs": inputs
-            })
+
+                inputs[param_name] = {"type": param_type, "description": f"Parameter {param_name}"}
+
+            definitions.append({"name": name, "description": doc.strip(), "inputs": inputs})
         return definitions
 
     def simulate_response(self, question: str) -> str:
@@ -217,54 +205,45 @@ class AgenticUser(User):
 
         # Start with the current shared history
         self.messages.add_message("assistant", question)
-        
+
         # Internal history for the ReAct loop (scratchpad)
         # We start with a copy of the shared conversation history
         internal_history = list(self.messages.to_list())
-        
+
         start_time = time.time()
-        log_entry: Dict[str, Any] = {
-            "timestamp": datetime.now().isoformat(),
-            "question": question,
-            "status": "success",
-            "internal_steps": []
-        }
+        log_entry: Dict[str, Any] = {"timestamp": datetime.now().isoformat(), "question": question, "status": "success", "internal_steps": []}
 
         final_response = ""
         steps = 0
-        
+
         try:
             while steps < self.max_internal_steps:
                 steps += 1
-                
+
                 # Call simulator
                 # Note: AgenticUserLLMSimulator returns (text, tool_calls)
                 text, tool_calls = self.simulator(conversation_history=internal_history)
-                
+
                 # Log the step
-                step_log = {
-                    "step": steps,
-                    "thought": text,
-                    "tool_calls": tool_calls
-                }
-                
+                step_log = {"step": steps, "thought": text, "tool_calls": tool_calls}
+
                 if not tool_calls:
                     # No tools called, this is the final response
                     final_response = text
                     log_entry["internal_steps"].append(step_log)
                     break
-                
+
                 # Tools called - execute them
                 # Append the thought to internal history
                 # We use 'user' role for thoughts as it's the user speaking to themselves/environment
                 internal_history.append({"role": "user", "content": text})
-                
+
                 tool_outputs = []
                 for call in tool_calls:
                     name = call.get("name")
                     args = call.get("arguments", {})
                     result_str = ""
-                    
+
                     if name in self.tools:
                         try:
                             result = self.tools[name](**args)
@@ -276,24 +255,21 @@ class AgenticUser(User):
                     else:
                         result_str = f"Error: Tool '{name}' not found"
                         status = "error"
-                        
-                    tool_outputs.append({
-                        "name": name,
-                        "arguments": args,
-                        "result": result_str,
-                        "status": status
-                    })
-                    
+
+                    tool_outputs.append({"name": name, "arguments": args, "result": result_str, "status": status})
+
                     # Append observation to internal history
                     # Format: Tool Output [name]: result
-                    internal_history.append({
-                        "role": "user", # Using user role for simplicity, or we could use 'system'
-                        "content": f"Tool Output [{name}]: {result_str}"
-                    })
-                
+                    internal_history.append(
+                        {
+                            "role": "user",  # Using user role for simplicity, or we could use 'system'
+                            "content": f"Tool Output [{name}]: {result_str}",
+                        }
+                    )
+
                 step_log["tool_outputs"] = tool_outputs
                 log_entry["internal_steps"].append(step_log)
-                
+
             if not final_response and steps >= self.max_internal_steps:
                 # Forced termination of loop
                 final_response = "I need to stop checking things now."
@@ -316,5 +292,5 @@ class AgenticUser(User):
         # Update the shared history with the final text only
         self.messages.add_message("user", clean_response)
         self.increment_turn()
-        
+
         return clean_response

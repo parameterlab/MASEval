@@ -124,36 +124,24 @@ class FlightDateStatusOnTime(BaseModel):
     """Flight is on time."""
 
     status: Literal["on time"] = Field(description="Indicates flight is on time")
-    estimated_departure_time_est: str = Field(
-        description="Estimated departure time in EST in the format YYYY-MM-DDTHH:MM:SS"
-    )
-    estimated_arrival_time_est: str = Field(
-        description="Estimated arrival time in EST in the format YYYY-MM-DDTHH:MM:SS"
-    )
+    estimated_departure_time_est: str = Field(description="Estimated departure time in EST in the format YYYY-MM-DDTHH:MM:SS")
+    estimated_arrival_time_est: str = Field(description="Estimated arrival time in EST in the format YYYY-MM-DDTHH:MM:SS")
 
 
 class FlightDateStatusFlying(BaseModel):
     """Flight is currently in the air."""
 
     status: Literal["flying"] = Field(description="Indicates flight is in flight")
-    actual_departure_time_est: str = Field(
-        description="Actual departure time in EST in the format YYYY-MM-DDTHH:MM:SS"
-    )
-    estimated_arrival_time_est: str = Field(
-        description="Estimated arrival time in EST in the format YYYY-MM-DDTHH:MM:SS"
-    )
+    actual_departure_time_est: str = Field(description="Actual departure time in EST in the format YYYY-MM-DDTHH:MM:SS")
+    estimated_arrival_time_est: str = Field(description="Estimated arrival time in EST in the format YYYY-MM-DDTHH:MM:SS")
 
 
 class FlightDateStatusLanded(BaseModel):
     """Flight has landed."""
 
     status: Literal["landed"] = Field(description="Indicates flight has landed")
-    actual_departure_time_est: str = Field(
-        description="Actual departure time in EST in the format YYYY-MM-DDTHH:MM:SS"
-    )
-    actual_arrival_time_est: str = Field(
-        description="Actual arrival time in EST in the format YYYY-MM-DDTHH:MM:SS"
-    )
+    actual_departure_time_est: str = Field(description="Actual departure time in EST in the format YYYY-MM-DDTHH:MM:SS")
+    actual_arrival_time_est: str = Field(description="Actual arrival time in EST in the format YYYY-MM-DDTHH:MM:SS")
 
 
 class FlightDateStatusCancelled(BaseModel):
@@ -166,12 +154,8 @@ class FlightDateStatusDelayed(BaseModel):
     """Flight is delayed."""
 
     status: Literal["delayed"] = Field(description="Indicates flight was delayed")
-    estimated_departure_time_est: str = Field(
-        description="Estimated departure time in EST in the format YYYY-MM-DDTHH:MM:SS"
-    )
-    estimated_arrival_time_est: str = Field(
-        description="Estimated arrival time in EST in the format YYYY-MM-DDTHH:MM:SS"
-    )
+    estimated_departure_time_est: str = Field(description="Estimated departure time in EST in the format YYYY-MM-DDTHH:MM:SS")
+    estimated_arrival_time_est: str = Field(description="Estimated arrival time in EST in the format YYYY-MM-DDTHH:MM:SS")
 
 
 FlightDateStatus = Union[
@@ -200,12 +184,8 @@ class FlightBase(BaseModel):
 class Flight(FlightBase):
     """Complete flight information with schedule and date-specific status."""
 
-    scheduled_departure_time_est: str = Field(
-        description="Scheduled departure time in EST in the format HH:MM:SS"
-    )
-    scheduled_arrival_time_est: str = Field(
-        description="Scheduled arrival time in EST in the format HH:MM:SS"
-    )
+    scheduled_departure_time_est: str = Field(description="Scheduled departure time in EST in the format HH:MM:SS")
+    scheduled_arrival_time_est: str = Field(description="Scheduled arrival time in EST in the format HH:MM:SS")
     dates: Dict[str, FlightDateStatus] = Field(description="Flight status by date (YYYY-MM-DD)")
 
 
@@ -213,12 +193,8 @@ class DirectFlight(FlightBase):
     """Direct flight search result."""
 
     status: Literal["available"] = Field(description="Indicates flight is available for booking")
-    scheduled_departure_time_est: str = Field(
-        description="Scheduled departure time in EST in the format HH:MM:SS"
-    )
-    scheduled_arrival_time_est: str = Field(
-        description="Scheduled arrival time in EST in the format HH:MM:SS"
-    )
+    scheduled_departure_time_est: str = Field(description="Scheduled departure time in EST in the format HH:MM:SS")
+    scheduled_arrival_time_est: str = Field(description="Scheduled arrival time in EST in the format HH:MM:SS")
     date: Optional[str] = Field(description="Flight date in YYYY-MM-DD format", default=None)
     available_seats: Dict[CabinClass, int] = Field(description="Available seats by class")
     prices: Dict[CabinClass, int] = Field(description="Current prices by class")
