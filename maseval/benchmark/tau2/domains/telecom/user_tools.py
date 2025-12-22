@@ -9,14 +9,13 @@ Copyright (c) 2025 Sierra Research (MIT License)
 Adapted from: src/tau2/domains/telecom/user_tools.py
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 from maseval.benchmark.tau2.domains.base import ToolKitBase, ToolType, is_tool
 from maseval.benchmark.tau2.domains.telecom.db import TelecomDB
 from maseval.benchmark.tau2.domains.telecom.user_models import (
     APNNames,
     APNSettings,
-    AppPermissions,
     NetworkModePreference,
     NetworkStatus,
     PerformanceLevel,

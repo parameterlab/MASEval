@@ -36,10 +36,7 @@ def test_setup_environment(benchmark, task):
     with patch("maseval.benchmark.tau2.tau2.Tau2Environment") as mock_env_cls:
         benchmark.setup_environment({}, task)
 
-        mock_env_cls.assert_called_once_with(
-            task_data=task.environment_data,
-            data_dir=None
-        )
+        mock_env_cls.assert_called_once_with(task_data=task.environment_data, data_dir=None)
 
 
 @pytest.mark.benchmark

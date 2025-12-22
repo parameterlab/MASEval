@@ -2,10 +2,9 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from typing import Any, Dict
 
 from maseval import Task
-from maseval.benchmark.tau2.evaluator import Tau2Evaluator, RewardType
+from maseval.benchmark.tau2.evaluator import Tau2Evaluator
 
 
 # =============================================================================

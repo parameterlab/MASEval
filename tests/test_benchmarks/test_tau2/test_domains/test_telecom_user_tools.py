@@ -1,8 +1,7 @@
 """Unit tests for Tau2 telecom user tools."""
 
 import pytest
-from maseval.benchmark.tau2.domains.base import ToolType
-from maseval.benchmark.tau2.domains.telecom.user_models import SimStatus, NetworkStatus, SignalStrength, NetworkModePreference
+from maseval.benchmark.tau2.domains.telecom.user_models import SimStatus, NetworkStatus, NetworkModePreference
 
 
 # =============================================================================
