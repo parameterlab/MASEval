@@ -63,8 +63,7 @@ class Tau2Evaluator(Evaluator):
     - Action assertions (correct tool usage)
     - Communication assertions (appropriate responses)
 
-    Unlike MACS evaluator, this uses DETERMINISTIC evaluation based on
-    actual database state comparison.
+    Uses DETERMINISTIC evaluation based on actual database state comparison.
 
     Adapted from: tau2-bench src/tau2/evaluator/
     """

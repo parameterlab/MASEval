@@ -34,6 +34,8 @@ from .models import (
 )
 from .db import TelecomDB
 from .tools import TelecomTools
+from .user_tools import TelecomUserTools
+from .user_models import TelecomUserDB
 
 __all__ = [
     # Models
@@ -52,6 +54,8 @@ __all__ = [
     "Plan",
     # Database
     "TelecomDB",
+    "TelecomUserDB",
     # Tools
     "TelecomTools",
+    "TelecomUserTools",
 ]

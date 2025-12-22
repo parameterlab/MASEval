@@ -109,6 +109,15 @@ def telecom_toolkit(telecom_db):
     return TelecomTools(telecom_db)
 
 
+@pytest.fixture
+def telecom_user_toolkit(telecom_db):
+    """Create a telecom user toolkit with database."""
+    from maseval.benchmark.tau2.domains.telecom import TelecomUserTools
+    
+    # Ensure user_db is initialized (handled by toolkit init, but good to be explicit)
+    return TelecomUserTools(telecom_db)
+
+
 # =============================================================================
 # Environment Fixtures
 # =============================================================================

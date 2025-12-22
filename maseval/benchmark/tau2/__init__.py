@@ -15,12 +15,6 @@ Domains:
     - retail: E-commerce order management (114 base tasks)
     - telecom: Telecom customer service (114 base tasks)
 
-Key Differences from MACS:
-    - Real tool implementations (not LLM-simulated)
-    - Deterministic evaluation (database state comparison)
-    - Multiple evaluation types (env, action, communicate)
-    - Pass@k metrics recommended over single-run metrics
-
 Usage:
     from maseval.benchmark.tau2 import (
         Tau2Benchmark, Tau2Environment, Tau2Evaluator, Tau2User,

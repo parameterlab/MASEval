@@ -10,11 +10,6 @@ Copyright (c) 2025 Sierra Research (MIT License)
 Reference Paper: "Tau-Bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains"
 https://arxiv.org/abs/2406.12045
 
-Key differences from MACS:
-1. Real tool implementations - tools execute actual business logic
-2. Deterministic evaluation - database state comparison, not LLM judges
-3. Three domains - airline, retail, telecom
-
 Usage:
     from maseval.benchmark.tau2 import (
         Tau2Benchmark, Tau2Environment, Tau2Evaluator, Tau2User,
@@ -49,9 +44,10 @@ Usage:
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Callable
 
 from maseval import AgentAdapter, Benchmark, Evaluator, ModelAdapter, Task, User
+from maseval.core.agentic_user import AgenticUser
 
 from maseval.benchmark.tau2.environment import Tau2Environment
 from maseval.benchmark.tau2.evaluator import Tau2Evaluator
@@ -62,13 +58,14 @@ from maseval.benchmark.tau2.evaluator import Tau2Evaluator
 # =============================================================================
 
 
-class Tau2User(User):
+class Tau2User(AgenticUser):
     """Tau2-specific user simulator with customer service personas.
 
-    Extends the base User class with tau2-specific behavior:
+    Extends the AgenticUser class with tau2-specific behavior:
     - Customer personas from user_scenario
     - Domain-aware responses (airline, retail, telecom)
     - Multi-turn interaction support
+    - Tool usage capabilities
 
     Note: This is a base class. Framework-specific subclasses should override
     get_tool() to return a compatible tool.
@@ -88,6 +85,7 @@ class Tau2User(User):
         max_turns: int = DEFAULT_MAX_TURNS,
         stop_token: str = DEFAULT_STOP_TOKEN,
         early_stopping_condition: str = DEFAULT_EARLY_STOPPING_CONDITION,
+        tools: Optional[Dict[str, Callable]] = None,
     ):
         """Initialize Tau2 user simulator.
 
@@ -100,6 +98,7 @@ class Tau2User(User):
             max_turns: Maximum conversation turns
             stop_token: Token indicating user satisfaction
             early_stopping_condition: Description of when to emit stop token
+            tools: Optional dictionary of tools available to the user
         """
         # Extract user profile from scenario
         user_profile = self._extract_user_profile(scenario)
@@ -114,6 +113,7 @@ class Tau2User(User):
             max_turns=max_turns,
             stop_token=stop_token,
             early_stopping_condition=early_stopping_condition,
+            tools=tools,
         )
 
     def get_tool(self) -> Any:
@@ -186,16 +186,26 @@ class Tau2Benchmark(Benchmark):
     - setup_agents() for their agent framework
     - get_model_adapter() to provide model adapters
 
-    Unlike MACS:
-    - No tool_model_id needed (tools are real, not LLM-simulated)
-    - Evaluation is deterministic (database hash comparison)
-    - Pass@k metrics recommended over single-run GSR
-
     Model IDs for components are read from task data:
     - task.user_data["model_id"] for user simulator
     - task.evaluation_data["model_id"] for NL assertion evaluator (optional)
 
     Use configure_model_ids() to set these values after loading tasks.
+
+    Example:
+        class MyTau2Benchmark(Tau2Benchmark):
+            def setup_agents(self, agent_data, environment, task, user):
+                # Setup your agents here
+                ...
+
+            def get_model_adapter(self, model_id, **kwargs):
+                return MyModelAdapter(model_id)
+        
+        tasks = load_tasks("retail")
+        configure_model_ids(tasks, user_model_id="gpt-4o")
+        
+        benchmark = MyTau2Benchmark(agent_data={})
+        benchmark.run(tasks)
     """
 
     def __init__(
@@ -309,6 +319,9 @@ class Tau2Benchmark(Benchmark):
             scenario = f"Persona: {persona}\n\n{scenario}"
 
         user_model_id = self._get_user_model_id(task)
+        
+        # Get user tools from environment
+        user_tools = environment.create_user_tools()
 
         return Tau2User(
             model=self.get_model_adapter(
@@ -317,6 +330,7 @@ class Tau2Benchmark(Benchmark):
             ),
             scenario=scenario,
             initial_query=task.query,
+            tools=user_tools,
         )
 
     @abstractmethod

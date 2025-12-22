@@ -22,7 +22,7 @@ from maseval.benchmark.tau2.data_loader import DEFAULT_DATA_DIR, load_domain_con
 from maseval.benchmark.tau2.domains import VALID_DOMAINS, DB, ToolKitBase
 from maseval.benchmark.tau2.domains.retail import RetailDB, RetailTools
 from maseval.benchmark.tau2.domains.airline import AirlineDB, AirlineTools
-from maseval.benchmark.tau2.domains.telecom import TelecomDB, TelecomTools
+from maseval.benchmark.tau2.domains.telecom import TelecomDB, TelecomTools, TelecomUserTools
 from maseval.benchmark.tau2.utils import update_pydantic_model_with_dict
 
 
@@ -39,12 +39,16 @@ DOMAIN_TOOLKIT_CLASSES: Dict[str, Type[ToolKitBase]] = {
     "telecom": TelecomTools,
 }
 
+DOMAIN_USER_TOOLKIT_CLASSES: Dict[str, Type[ToolKitBase]] = {
+    "telecom": TelecomUserTools,
+}
+
 
 class Tau2Environment(Environment):
     """Environment for tau2 domains (airline, retail, telecom).
 
-    Unlike MACSEnvironment, this manages REAL database state that tools
-    actually modify. Provides methods for state verification.
+    This environment manages REAL database state that tools actually modify.
+    Provides methods for state verification.
 
     Key Features:
     - Real tool implementations that modify database state
@@ -95,6 +99,11 @@ class Tau2Environment(Environment):
     def toolkit(self) -> ToolKitBase:
         """Get the domain toolkit."""
         return self.state["toolkit"]
+    
+    @property
+    def user_toolkit(self) -> Optional[ToolKitBase]:
+        """Get the domain user toolkit (if available)."""
+        return self.state.get("user_toolkit")
 
     @property
     def policy(self) -> str:
@@ -130,6 +139,12 @@ class Tau2Environment(Environment):
         # Create toolkit
         toolkit_class = DOMAIN_TOOLKIT_CLASSES[self._domain]
         toolkit = toolkit_class(db)
+        
+        # Create user toolkit if available
+        user_toolkit = None
+        if self._domain in DOMAIN_USER_TOOLKIT_CLASSES:
+            user_toolkit_class = DOMAIN_USER_TOOLKIT_CLASSES[self._domain]
+            user_toolkit = user_toolkit_class(db)
 
         # Store initial hash for comparison
         initial_db_hash = db.get_hash()
@@ -137,6 +152,7 @@ class Tau2Environment(Environment):
         return {
             "db": db,
             "toolkit": toolkit,
+            "user_toolkit": user_toolkit,
             "policy": config["policy"],
             "initial_db_hash": initial_db_hash,
         }
@@ -168,13 +184,22 @@ class Tau2Environment(Environment):
     def create_tools(self) -> Dict[str, Callable]:  # type: ignore[override]
         """Create tools from the domain toolkit.
 
-        Unlike MACSEnvironment (LLM-simulated tools), these are real
-        Python methods that modify database state.
+        These are real Python methods that modify database state.
 
         Returns:
             Dict mapping tool names to callable methods
         """
         return self.toolkit.tools
+    
+    def create_user_tools(self) -> Dict[str, Callable]:
+        """Create user tools from the domain user toolkit.
+        
+        Returns:
+            Dict mapping tool names to callable methods
+        """
+        if self.user_toolkit:
+            return self.user_toolkit.tools
+        return {}
 
     def get_db_hash(self) -> str:
         """Get hash of current database state.
@@ -209,6 +234,23 @@ class Tau2Environment(Environment):
             ValueError: If tool not found
         """
         return self.toolkit.use_tool(tool_name, **kwargs)
+
+    def make_user_tool_call(self, tool_name: str, **kwargs: Any) -> Any:
+        """Execute a user tool call.
+
+        Args:
+            tool_name: Name of the tool
+            **kwargs: Tool arguments
+
+        Returns:
+            Tool result
+
+        Raises:
+            ValueError: If tool not found or user toolkit not available
+        """
+        if not self.user_toolkit:
+            raise ValueError(f"No user toolkit available for domain {self._domain}")
+        return self.user_toolkit.use_tool(tool_name, **kwargs)
 
     def gather_traces(self) -> Dict[str, Any]:
         """Gather execution traces including database state changes.
@@ -246,6 +288,8 @@ class Tau2Environment(Environment):
                 "db_stats": self.db.get_statistics(),
             }
         )
+        if self.user_toolkit:
+            config["user_toolkit_stats"] = self.user_toolkit.get_statistics()
         return config
 
 

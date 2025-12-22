@@ -12,12 +12,13 @@ Note: Unlike retail/airline, telecom uses Lists instead of Dicts for entities.
 This matches the upstream tau2-bench structure.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import Field
 
 from maseval.benchmark.tau2.domains.base import DB
 from maseval.benchmark.tau2.domains.telecom.models import Bill, Customer, Device, Line, Plan
+from maseval.benchmark.tau2.domains.telecom.user_models import TelecomUserDB
 
 
 class TelecomDB(DB):
@@ -33,6 +34,10 @@ class TelecomDB(DB):
     lines: List[Line] = Field(default_factory=list, description="All lines in the system")
     bills: List[Bill] = Field(default_factory=list, description="All bills in the system")
     devices: List[Device] = Field(default_factory=list, description="All devices in the system")
+    
+    # User-side state (device and surroundings)
+    # Optional because it's only used when user simulation is active
+    user_db: Optional[TelecomUserDB] = Field(None, description="User device and environment state")
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics about the telecom database.
@@ -46,8 +51,8 @@ class TelecomDB(DB):
         num_bills = len(self.bills)
         num_devices = len(self.devices)
         num_payment_methods = sum(len(customer.payment_methods) for customer in self.customers)
-
-        return {
+        
+        stats = {
             "num_plans": num_plans,
             "num_customers": num_customers,
             "num_lines": num_lines,
@@ -55,3 +60,12 @@ class TelecomDB(DB):
             "num_devices": num_devices,
             "num_payment_methods": num_payment_methods,
         }
+        
+        if self.user_db:
+            stats["user_db"] = {
+                "device_on": self.user_db.device.is_on,
+                "network_status": self.user_db.device.network_status.value,
+                "sim_status": self.user_db.device.sim_status.value,
+            }
+            
+        return stats
