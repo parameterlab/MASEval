@@ -16,7 +16,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, Generic, Optional, TypeVar, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from maseval.benchmark.tau2.utils import get_pydantic_hash, load_file, update_pydantic_model_with_dict
 
@@ -34,10 +34,7 @@ class DB(BaseModel):
     Adapted from: tau2-bench src/tau2/environment/db.py
     """
 
-    class Config:
-        """Pydantic configuration."""
-
-        extra = "forbid"  # Reject unknown fields
+    model_config = ConfigDict(extra="forbid")  # Reject unknown fields
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "DB":

@@ -13,7 +13,7 @@ import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # Default start date used in tau2-bench
@@ -28,8 +28,7 @@ DEFAULT_START_DATE = datetime.date(2025, 1, 1)
 class Address(BaseModel):
     """Physical address."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     street: str = Field(description="Street address including house/apartment number")
     city: str = Field(description="City name")
@@ -45,8 +44,7 @@ class Address(BaseModel):
 class Plan(BaseModel):
     """Service plan with data limits and pricing."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     plan_id: str = Field(description="Unique identifier for the plan")
     name: str = Field(description="Display name of the plan")
@@ -73,8 +71,7 @@ class DeviceType(str, Enum):
 class Device(BaseModel):
     """Device that can be associated with a line."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     device_id: str = Field(description="Unique identifier for the device")
     device_type: DeviceType = Field(description="Type/category of the device")
@@ -103,8 +100,7 @@ class LineStatus(str, Enum):
 class Line(BaseModel):
     """Phone/data line associated with a customer."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     line_id: str = Field(description="Unique identifier for the line")
     phone_number: str = Field(description="Phone number associated with the line")
@@ -128,8 +124,7 @@ class Line(BaseModel):
 class LineItem(BaseModel):
     """Individual charge or credit on a bill."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     description: str = Field(description="Descriptive text for the line item")
     amount: float = Field(description="Monetary amount in USD (positive for charges, negative for credits)")
@@ -151,8 +146,7 @@ class BillStatus(str, Enum):
 class Bill(BaseModel):
     """Customer bill for a billing period."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     bill_id: str = Field(description="Unique identifier for the bill")
     customer_id: str = Field(description="ID of the customer this bill belongs to")
@@ -190,8 +184,7 @@ class PaymentMethodType(str, Enum):
 class PaymentMethod(BaseModel):
     """Stored payment method for a customer."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     method_type: PaymentMethodType = Field(description="Type of payment method")
     account_number_last_4: str = Field(description="Last 4 digits of the account number")
@@ -201,8 +194,7 @@ class PaymentMethod(BaseModel):
 class Customer(BaseModel):
     """Customer account with lines, bills, and payment methods."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     customer_id: str = Field(description="Unique identifier for the customer")
     full_name: str = Field(description="Customer's full name")

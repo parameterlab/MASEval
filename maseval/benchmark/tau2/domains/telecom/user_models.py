@@ -12,7 +12,7 @@ Adapted from: src/tau2/domains/telecom/user_data_model.py
 from enum import Enum
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # =============================================================================
@@ -92,8 +92,7 @@ class APNNames(str, Enum):
 class APNSettings(BaseModel):
     """Access Point Name (APN) settings."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(description="Name of the APN")
     apn: str = Field(description="APN address")
@@ -119,8 +118,7 @@ class APNSettings(BaseModel):
 class VpnDetails(BaseModel):
     """VPN connection details."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     server_address: str = Field(description="VPN server address")
     protocol: str = Field(description="VPN protocol (e.g., IKEv2, OpenVPN)")
@@ -130,8 +128,7 @@ class VpnDetails(BaseModel):
 class AppPermissions(BaseModel):
     """Permissions granted to an application."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     sms: bool = Field(False, description="Access to SMS")
     storage: bool = Field(False, description="Access to storage")
@@ -142,8 +139,7 @@ class AppPermissions(BaseModel):
 class AppStatus(BaseModel):
     """Status and configuration of an installed application."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     app_name: str = Field(description="Name of the application")
     permissions: AppPermissions = Field(default_factory=AppPermissions, description="Permissions granted to the app")
@@ -159,8 +155,7 @@ class AppStatus(BaseModel):
 class MockPhoneAttributes(BaseModel):
     """State of the user's simulated phone device."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     # Power & System
     is_on: bool = Field(True, description="Whether the device is powered on")
@@ -221,8 +216,7 @@ class MockPhoneAttributes(BaseModel):
 class PaymentRequest(BaseModel):
     """A payment request received by the user."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     bill_id: str = Field(description="ID of the bill to pay")
     amount_due: float = Field(description="Amount to pay")
@@ -232,8 +226,7 @@ class PaymentRequest(BaseModel):
 class UserSurroundings(BaseModel):
     """The user's physical environment/context."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     is_abroad: bool = Field(False, description="Whether the user is currently abroad")
     roaming_allowed_in_location: bool = Field(True, description="Whether roaming is supported in current location")
@@ -251,8 +244,7 @@ class UserSurroundings(BaseModel):
 class TelecomUserDB(BaseModel):
     """Database for user-side telecom state."""
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     device: MockPhoneAttributes = Field(default_factory=MockPhoneAttributes, description="User's phone state")
     surroundings: UserSurroundings = Field(default_factory=UserSurroundings, description="User's environment state")
