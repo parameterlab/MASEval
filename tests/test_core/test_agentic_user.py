@@ -110,14 +110,8 @@ def test_agentic_user_tool_error(mock_tool):
     # Make tool raise an error
     mock_tool.side_effect = ValueError("Tool failed!")
 
-    response_1 = json.dumps({
-        "text": "Let me use the tool.",
-        "tool_calls": [{"name": "mock_tool", "arguments": {}}]
-    })
-    response_2 = json.dumps({
-        "text": "I see there was an error.",
-        "tool_calls": []
-    })
+    response_1 = json.dumps({"text": "Let me use the tool.", "tool_calls": [{"name": "mock_tool", "arguments": {}}]})
+    response_2 = json.dumps({"text": "I see there was an error.", "tool_calls": []})
 
     model = MockModelAdapter([response_1, response_2])
 
@@ -140,10 +134,7 @@ def test_agentic_user_tool_error(mock_tool):
 def test_agentic_user_stop_token():
     """Test that AgenticUser can emit stop tokens."""
     # Response with stop token (no tool calls and contains satisfaction indicator)
-    response = json.dumps({
-        "text": "I am satisfied with the response. <STOP>",
-        "tool_calls": []
-    })
+    response = json.dumps({"text": "I am satisfied with the response. <STOP>", "tool_calls": []})
     model = MockModelAdapter([response])
 
     user = DummyAgenticUser(
@@ -186,13 +177,15 @@ def test_agentic_user_parse_error():
 @pytest.mark.core
 def test_agentic_user_multiple_tool_calls(mock_tool):
     """Test that AgenticUser can execute multiple tool calls."""
-    response_1 = json.dumps({
-        "text": "I need to call multiple tools.",
-        "tool_calls": [
-            {"name": "mock_tool", "arguments": {"arg": "val1"}},
-            {"name": "mock_tool", "arguments": {"arg": "val2"}},
-        ]
-    })
+    response_1 = json.dumps(
+        {
+            "text": "I need to call multiple tools.",
+            "tool_calls": [
+                {"name": "mock_tool", "arguments": {"arg": "val1"}},
+                {"name": "mock_tool", "arguments": {"arg": "val2"}},
+            ],
+        }
+    )
     response_2 = json.dumps({"text": "Both tools executed.", "tool_calls": []})
 
     model = MockModelAdapter([response_1, response_2])
@@ -214,14 +207,8 @@ def test_agentic_user_multiple_tool_calls(mock_tool):
 @pytest.mark.core
 def test_agentic_user_unknown_tool():
     """Test that AgenticUser handles unknown tool names."""
-    response_1 = json.dumps({
-        "text": "Let me use an unknown tool.",
-        "tool_calls": [{"name": "nonexistent_tool", "arguments": {}}]
-    })
-    response_2 = json.dumps({
-        "text": "That tool didn't work.",
-        "tool_calls": []
-    })
+    response_1 = json.dumps({"text": "Let me use an unknown tool.", "tool_calls": [{"name": "nonexistent_tool", "arguments": {}}]})
+    response_2 = json.dumps({"text": "That tool didn't work.", "tool_calls": []})
 
     model = MockModelAdapter([response_1, response_2])
 
@@ -242,10 +229,7 @@ def test_agentic_user_unknown_tool():
 @pytest.mark.core
 def test_agentic_user_gather_traces(mock_tool):
     """Test that AgenticUser can gather traces."""
-    response_1 = json.dumps({
-        "text": "Using tool.",
-        "tool_calls": [{"name": "mock_tool", "arguments": {"key": "value"}}]
-    })
+    response_1 = json.dumps({"text": "Using tool.", "tool_calls": [{"name": "mock_tool", "arguments": {"key": "value"}}]})
     response_2 = json.dumps({"text": "Done.", "tool_calls": []})
 
     model = MockModelAdapter([response_1, response_2])

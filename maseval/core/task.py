@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, overload
 from uuid import UUID, uuid4
 from collections.abc import Sequence
 from typing import Iterable, List, Union, Iterator, Optional
@@ -50,7 +50,13 @@ class TaskCollection(Sequence):
     def __len__(self) -> int:
         return len(self._tasks)
 
-    def __getitem__(self, idx):
+    @overload
+    def __getitem__(self, idx: int) -> "Task": ...
+
+    @overload
+    def __getitem__(self, idx: slice) -> "TaskCollection": ...
+
+    def __getitem__(self, idx: Union[int, slice]) -> Union["Task", "TaskCollection"]:  # type: ignore[override]
         # Return a Task for int index, or a new TaskCollection for slices (pythonic behaviour)
         if isinstance(idx, slice):
             return TaskCollection(self._tasks[idx])

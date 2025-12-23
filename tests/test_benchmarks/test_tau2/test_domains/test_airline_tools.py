@@ -7,7 +7,6 @@ write operations (booking, cancellation, updates), and helper methods.
 import pytest
 
 from maseval.benchmark.tau2.domains.base import ToolType
-from maseval.benchmark.tau2.domains.airline.models import FlightInfo, Passenger, Payment
 
 
 # =============================================================================
@@ -240,8 +239,8 @@ class TestAirlineCancelReservation:
         if not active_reservation:
             pytest.skip("No active reservations to cancel")
 
-        original_payment_count = len(active_reservation.payment_history)
-        result = airline_toolkit.use_tool("cancel_reservation", reservation_id=active_reservation.reservation_id)
+        original_payment_count = len(active_reservation.payment_history)  # type: ignore[union-attr]
+        result = airline_toolkit.use_tool("cancel_reservation", reservation_id=active_reservation.reservation_id)  # type: ignore[union-attr]
 
         assert result.status == "cancelled"
         assert len(result.payment_history) > original_payment_count  # Refund added
@@ -303,13 +302,13 @@ class TestAirlineUpdateBaggages:
         if not reservation or not user:
             pytest.skip("No suitable reservation for baggage update")
 
-        payment_id = list(user.payment_methods.keys())[0]
-        new_total = reservation.total_baggages + 1
-        new_nonfree = reservation.nonfree_baggages + 1
+        payment_id = list(user.payment_methods.keys())[0]  # type: ignore[union-attr]
+        new_total = reservation.total_baggages + 1  # type: ignore[union-attr]
+        new_nonfree = reservation.nonfree_baggages + 1  # type: ignore[union-attr]
 
         result = airline_toolkit.use_tool(
             "update_reservation_baggages",
-            reservation_id=reservation.reservation_id,
+            reservation_id=reservation.reservation_id,  # type: ignore[union-attr]
             total_baggages=new_total,
             nonfree_baggages=new_nonfree,
             payment_id=payment_id,
@@ -343,15 +342,16 @@ class TestAirlineUpdateFlights:
         if not reservation or not user:
             pytest.skip("No suitable reservation for flight update")
 
-        payment_id = list(user.payment_methods.keys())[0]
+        payment_id = list(user.payment_methods.keys())[0]  # type: ignore[union-attr]
         current_flights = [
-            {"flight_number": f.flight_number, "date": f.date} for f in reservation.flights
+            {"flight_number": f.flight_number, "date": f.date}
+            for f in reservation.flights  # type: ignore[union-attr]
         ]
 
         result = airline_toolkit.use_tool(
             "update_reservation_flights",
-            reservation_id=reservation.reservation_id,
-            cabin=reservation.cabin,
+            reservation_id=reservation.reservation_id,  # type: ignore[union-attr]
+            cabin=reservation.cabin,  # type: ignore[union-attr]
             flights=current_flights,
             payment_id=payment_id,
         )
@@ -382,16 +382,18 @@ class TestAirlineUpdatePassengers:
 
         # Create updated passenger list (same count, different names)
         updated_passengers = []
-        for p in reservation.passengers:
-            updated_passengers.append({
-                "first_name": p.first_name,
-                "last_name": "UpdatedName",
-                "dob": p.dob,
-            })
+        for p in reservation.passengers:  # type: ignore[union-attr]
+            updated_passengers.append(
+                {
+                    "first_name": p.first_name,
+                    "last_name": "UpdatedName",
+                    "dob": p.dob,
+                }
+            )
 
         result = airline_toolkit.use_tool(
             "update_reservation_passengers",
-            reservation_id=reservation.reservation_id,
+            reservation_id=reservation.reservation_id,  # type: ignore[union-attr]
             passengers=updated_passengers,
         )
 
@@ -412,11 +414,11 @@ class TestAirlineUpdatePassengers:
         # Try to update with different number of passengers
         wrong_count_passengers = [{"first_name": "Test", "last_name": "User", "dob": "1990-01-01"}]
 
-        if len(reservation.passengers) != 1:
+        if len(reservation.passengers) != 1:  # type: ignore[union-attr]
             with pytest.raises(ValueError, match="does not match"):
                 airline_toolkit.use_tool(
                     "update_reservation_passengers",
-                    reservation_id=reservation.reservation_id,
+                    reservation_id=reservation.reservation_id,  # type: ignore[union-attr]
                     passengers=wrong_count_passengers,
                 )
 

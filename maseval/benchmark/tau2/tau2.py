@@ -270,10 +270,10 @@ class Tau2Benchmark(Benchmark):
             data_dir=self._data_dir,
         )
 
-    def setup_user(
+    def setup_user(  # type: ignore[override]
         self,
         agent_data: Dict[str, Any],
-        environment: Tau2Environment,  # type: ignore[override]
+        environment: Tau2Environment,
         task: Task,
     ) -> Optional[User]:
         """Create Tau2 user simulator.
@@ -332,10 +332,10 @@ class Tau2Benchmark(Benchmark):
         )
 
     @abstractmethod
-    def setup_agents(
+    def setup_agents(  # type: ignore[override]
         self,
         agent_data: Dict[str, Any],
-        environment: Tau2Environment,  # type: ignore[override]
+        environment: Tau2Environment,
         task: Task,
         user: Optional[User],
     ) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
@@ -352,9 +352,9 @@ class Tau2Benchmark(Benchmark):
         """
         pass
 
-    def setup_evaluators(
+    def setup_evaluators(  # type: ignore[override]
         self,
-        environment: Tau2Environment,  # type: ignore[override]
+        environment: Tau2Environment,
         task: Task,
         agents: Sequence[AgentAdapter],
         user: Optional[User],
@@ -381,11 +381,11 @@ class Tau2Benchmark(Benchmark):
             )
         ]
 
-    def run_agents(
+    def run_agents(  # type: ignore[override]
         self,
         agents: Sequence[AgentAdapter],
         task: Task,
-        environment: Tau2Environment,  # type: ignore[override]
+        environment: Tau2Environment,
         query: str = "",
     ) -> Any:
         """Execute agents and return final answer.

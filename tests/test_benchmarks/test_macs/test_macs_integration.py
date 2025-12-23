@@ -141,7 +141,7 @@ class TestDataLoadingIntegration:
 
         # Get tools for agent from config
         agent_spec = agent_config["agents"][0]
-        agent_tools = env.get_tools_for_agent(agent_spec)
+        agent_tools = env.get_tools_for_agent(agent_spec)  # type: ignore[arg-type]
 
         assert "action1" in agent_tools
 

@@ -465,7 +465,7 @@ class TestRetailModifyItems:
         if not pending_order:
             pytest.skip("No pending orders with items")
 
-        user = retail_toolkit.db.users.get(pending_order.user_id)
+        user = retail_toolkit.db.users.get(pending_order.user_id)  # type: ignore[union-attr]
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
@@ -475,7 +475,7 @@ class TestRetailModifyItems:
         with pytest.raises(ValueError):
             retail_toolkit.use_tool(
                 "modify_pending_order_items",
-                order_id=pending_order.order_id,
+                order_id=pending_order.order_id,  # type: ignore[union-attr]
                 item_ids=["NONEXISTENT"],
                 new_item_ids=["ALSO_NONEXISTENT"],
                 payment_method_id=payment_id,
@@ -492,17 +492,17 @@ class TestRetailModifyItems:
         if not non_pending_order:
             pytest.skip("No suitable non-pending orders")
 
-        user = retail_toolkit.db.users.get(non_pending_order.user_id)
+        user = retail_toolkit.db.users.get(non_pending_order.user_id)  # type: ignore[union-attr]
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
         payment_id = list(user.payment_methods.keys())[0]
-        item_id = non_pending_order.items[0].item_id
+        item_id = non_pending_order.items[0].item_id  # type: ignore[union-attr]
 
         with pytest.raises(ValueError, match="Non-pending"):
             retail_toolkit.use_tool(
                 "modify_pending_order_items",
-                order_id=non_pending_order.order_id,
+                order_id=non_pending_order.order_id,  # type: ignore[union-attr]
                 item_ids=[item_id],
                 new_item_ids=[item_id],
                 payment_method_id=payment_id,
@@ -532,7 +532,7 @@ class TestRetailModifyPayment:
         with pytest.raises(ValueError, match="not found"):
             retail_toolkit.use_tool(
                 "modify_pending_order_payment",
-                order_id=pending_order.order_id,
+                order_id=pending_order.order_id,  # type: ignore[union-attr]
                 payment_method_id="nonexistent_payment",
             )
 
@@ -547,7 +547,7 @@ class TestRetailModifyPayment:
         if not non_pending_order:
             pytest.skip("No non-pending orders")
 
-        user = retail_toolkit.db.users.get(non_pending_order.user_id)
+        user = retail_toolkit.db.users.get(non_pending_order.user_id)  # type: ignore[union-attr]
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
@@ -556,7 +556,7 @@ class TestRetailModifyPayment:
         with pytest.raises(ValueError, match="Non-pending"):
             retail_toolkit.use_tool(
                 "modify_pending_order_payment",
-                order_id=non_pending_order.order_id,
+                order_id=non_pending_order.order_id,  # type: ignore[union-attr]
                 payment_method_id=payment_id,
             )
 
@@ -581,17 +581,17 @@ class TestRetailExchangeItems:
         if not non_delivered_order:
             pytest.skip("No non-delivered orders with items")
 
-        user = retail_toolkit.db.users.get(non_delivered_order.user_id)
+        user = retail_toolkit.db.users.get(non_delivered_order.user_id)  # type: ignore[union-attr]
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
         payment_id = list(user.payment_methods.keys())[0]
-        item_id = non_delivered_order.items[0].item_id
+        item_id = non_delivered_order.items[0].item_id  # type: ignore[union-attr]
 
         with pytest.raises(ValueError, match="Non-delivered"):
             retail_toolkit.use_tool(
                 "exchange_delivered_order_items",
-                order_id=non_delivered_order.order_id,
+                order_id=non_delivered_order.order_id,  # type: ignore[union-attr]
                 item_ids=[item_id],
                 new_item_ids=[item_id],
                 payment_method_id=payment_id,
@@ -608,17 +608,17 @@ class TestRetailExchangeItems:
         if not delivered_order:
             pytest.skip("No delivered orders with items")
 
-        user = retail_toolkit.db.users.get(delivered_order.user_id)
+        user = retail_toolkit.db.users.get(delivered_order.user_id)  # type: ignore[union-attr]
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
         payment_id = list(user.payment_methods.keys())[0]
-        item_id = delivered_order.items[0].item_id
+        item_id = delivered_order.items[0].item_id  # type: ignore[union-attr]
 
         with pytest.raises(ValueError, match="match"):
             retail_toolkit.use_tool(
                 "exchange_delivered_order_items",
-                order_id=delivered_order.order_id,
+                order_id=delivered_order.order_id,  # type: ignore[union-attr]
                 item_ids=[item_id],
                 new_item_ids=[item_id, item_id],  # Wrong count
                 payment_method_id=payment_id,
@@ -645,17 +645,17 @@ class TestRetailReturnItems:
         if not non_delivered_order:
             pytest.skip("No non-delivered orders with items")
 
-        user = retail_toolkit.db.users.get(non_delivered_order.user_id)
+        user = retail_toolkit.db.users.get(non_delivered_order.user_id)  # type: ignore[union-attr]
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
         payment_id = list(user.payment_methods.keys())[0]
-        item_id = non_delivered_order.items[0].item_id
+        item_id = non_delivered_order.items[0].item_id  # type: ignore[union-attr]
 
         with pytest.raises(ValueError, match="Non-delivered"):
             retail_toolkit.use_tool(
                 "return_delivered_order_items",
-                order_id=non_delivered_order.order_id,
+                order_id=non_delivered_order.order_id,  # type: ignore[union-attr]
                 item_ids=[item_id],
                 payment_method_id=payment_id,
             )
@@ -671,21 +671,21 @@ class TestRetailReturnItems:
         if not delivered_order:
             pytest.skip("No delivered orders with items")
 
-        user = retail_toolkit.db.users.get(delivered_order.user_id)
+        user = retail_toolkit.db.users.get(delivered_order.user_id)  # type: ignore[union-attr]
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
         # Use original payment method
-        if delivered_order.payment_history:
-            payment_id = delivered_order.payment_history[0].payment_method_id
+        if delivered_order.payment_history:  # type: ignore[union-attr]
+            payment_id = delivered_order.payment_history[0].payment_method_id  # type: ignore[union-attr]
         else:
             payment_id = list(user.payment_methods.keys())[0]
 
-        item_id = delivered_order.items[0].item_id
+        item_id = delivered_order.items[0].item_id  # type: ignore[union-attr]
 
         result = retail_toolkit.use_tool(
             "return_delivered_order_items",
-            order_id=delivered_order.order_id,
+            order_id=delivered_order.order_id,  # type: ignore[union-attr]
             item_ids=[item_id],
             payment_method_id=payment_id,
         )

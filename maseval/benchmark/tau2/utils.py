@@ -165,7 +165,7 @@ def load_file(path: Union[str, Path]) -> Any:
             return json.load(f)
     elif suffix == ".toml":
         try:
-            import tomllib
+            import tomllib  # type: ignore[import-not-found]
         except ImportError:
             import tomli as tomllib  # type: ignore
         with path.open("rb") as f:
@@ -202,7 +202,7 @@ def dump_file(path: Union[str, Path], data: Any, **kwargs: Any) -> None:
             json.dump(data, f, indent=2, **kwargs)
     elif suffix == ".toml":
         try:
-            import tomli_w
+            import tomli_w  # type: ignore[import-not-found]
         except ImportError:
             raise ImportError("tomli_w is required to write TOML files: pip install tomli_w")
         with path.open("wb") as f:

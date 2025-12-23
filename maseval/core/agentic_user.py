@@ -258,8 +258,8 @@ class AgenticUser(User):
 
                 tool_outputs = []
                 for call in tool_calls:
-                    name = call.get("name")
-                    args = call.get("arguments", {})
+                    name = call.get("name")  # type: ignore[union-attr]
+                    args = call.get("arguments", {})  # type: ignore[union-attr]
                     result_str = ""
 
                     if name in self.tools:

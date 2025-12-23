@@ -119,7 +119,7 @@ def create_agent_for_framework(framework: str, mock_llm: MockLLM):
             return {"messages": messages + [AIMessage(content=response)]}
 
         # Build graph
-        graph = StateGraph(State)
+        graph = StateGraph(State)  # type: ignore[arg-type]
         graph.add_node("agent", agent_node)
         graph.set_entry_point("agent")
         graph.add_edge("agent", END)

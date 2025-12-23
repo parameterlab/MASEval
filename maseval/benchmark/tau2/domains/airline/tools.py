@@ -180,12 +180,12 @@ class AirlineTools(ToolKitBase[AirlineDB]):
         payment_method = user.payment_methods[payment_id]
         if payment_method.source == "certificate":
             raise ValueError("Certificate cannot be used to update reservation")
-        elif payment_method.source == "gift_card" and payment_method.amount < total_price:
+        elif payment_method.source == "gift_card" and payment_method.amount < total_price:  # type: ignore[union-attr]
             raise ValueError("Gift card balance is not enough")
 
         # Deduct payment
         if payment_method.source == "gift_card":
-            payment_method.amount -= total_price
+            payment_method.amount -= total_price  # type: ignore[union-attr]
 
         payment = None
         # Create payment if total price is not 0
@@ -476,7 +476,7 @@ class AirlineTools(ToolKitBase[AirlineDB]):
 
             user_payment_method = user.payment_methods[payment_id]
             if user_payment_method.source in {"gift_card", "certificate"}:
-                if user_payment_method.amount < amount:
+                if user_payment_method.amount < amount:  # type: ignore[union-attr]
                     raise ValueError(f"Not enough balance in payment method {payment_id}")
 
         total_payment = sum((pm.amount if isinstance(pm, Payment) else pm["amount"]) for pm in payment_methods)
@@ -490,7 +490,7 @@ class AirlineTools(ToolKitBase[AirlineDB]):
             amount = payment_method.amount
             user_payment_method = user.payment_methods[payment_id]
             if user_payment_method.source == "gift_card":
-                user_payment_method.amount -= amount
+                user_payment_method.amount -= amount  # type: ignore[union-attr]
             elif user_payment_method.source == "certificate":
                 user.payment_methods.pop(payment_id)
 

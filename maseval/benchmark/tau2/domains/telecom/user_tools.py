@@ -572,7 +572,7 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
 
             # Find bill in main DB
             bill = None
-            for b in self.db.bills:
+            for b in self.db.bills:  # type: ignore[union-attr]
                 if b.bill_id == bill_id:
                     bill = b
                     break

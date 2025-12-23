@@ -270,7 +270,7 @@ class TestTelecomLineManagement:
         result = telecom_toolkit.use_tool(
             "suspend_line",
             customer_id=customer_id,
-            line_id=active_line.line_id,
+            line_id=active_line.line_id,  # type: ignore[union-attr]
             reason="Customer requested suspension",
         )
 
@@ -299,7 +299,7 @@ class TestTelecomLineManagement:
             telecom_toolkit.use_tool(
                 "suspend_line",
                 customer_id=customer_id,
-                line_id=suspended_line.line_id,
+                line_id=suspended_line.line_id,  # type: ignore[union-attr]
                 reason="Test",
             )
 
@@ -324,7 +324,7 @@ class TestTelecomLineManagement:
         result = telecom_toolkit.use_tool(
             "resume_line",
             customer_id=customer_id,
-            line_id=suspended_line.line_id,
+            line_id=suspended_line.line_id,  # type: ignore[union-attr]
         )
 
         assert result is not None
@@ -621,7 +621,7 @@ class TestTelecomLineActivation:
             telecom_toolkit.use_tool(
                 "resume_line",
                 customer_id=customer_id,
-                line_id=active_line.line_id,
+                line_id=active_line.line_id,  # type: ignore[union-attr]
             )
 
 
