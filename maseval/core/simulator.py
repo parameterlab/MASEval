@@ -552,3 +552,136 @@ class UserLLMSimulator(LLMSimulator):
         for k, v in replacements.items():
             prompt = prompt.replace("{{" + k + "}}", str(v))
         return prompt
+
+
+class AgenticUserLLMSimulator(LLMSimulator):
+    """A simulator that uses an LLM to act as an agentic user (capable of using tools)."""
+
+    _component_name = "user_simulator"
+
+    def __init__(
+        self,
+        model: ModelAdapter,
+        user_profile: Dict[str, str],
+        scenario: str,
+        template: Optional[str] = None,
+        max_try: int = 3,
+        generation_params: Optional[Dict[str, Any]] = None,
+        stop_token: Optional[str] = None,
+        early_stopping_condition: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ):
+        # Validate early stopping configuration
+        if (stop_token is None) != (early_stopping_condition is None):
+            raise ValueError(
+                "stop_token and early_stopping_condition must both be set or both be None. "
+                f"Got stop_token={stop_token!r}, early_stopping_condition={early_stopping_condition!r}"
+            )
+
+        if template is None:
+            template_path = os.path.join(os.path.dirname(__file__), "utils", "templates", "agentic_user_llm_simulator_template.txt")
+            with open(template_path, "r") as f:
+                template = f.read()
+
+        super().__init__(
+            model=model,
+            template=template,
+            max_try=max_try,
+            generation_params=generation_params,
+        )
+        self.user_profile = user_profile
+        self.scenario = scenario
+        self.stop_token = stop_token
+        self.early_stopping_condition = early_stopping_condition
+        self.tools = tools or []
+
+    def _create_error(
+        self,
+        message: str,
+        attempts: int,
+        last_error: Optional[str],
+        logs: List[Dict[str, Any]],
+    ) -> "UserSimulatorError":
+        """Create UserSimulatorError for user simulation failures."""
+        return UserSimulatorError(
+            message=message,
+            attempts=attempts,
+            last_error=last_error,
+            logs=logs,
+            component="user_simulator",
+        )
+
+    def __call__(
+        self,
+        conversation_history: List[Dict[str, str]],
+        generation_params: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[str, List[Dict[str, Any]]]:  # type: ignore[override]
+        """Generate a simulated user response with potential tool calls.
+
+        Returns:
+            Tuple[str, List[Dict[str, Any]]]: (text_response, list_of_tool_calls)
+        """
+        return super().__call__(generation_params=generation_params, conversation_history=conversation_history)
+
+    def _parse_output(self, output: str) -> Tuple[str, List[Dict[str, Any]]]:  # type: ignore[override]
+        """Parse the raw JSON output from the model."""
+        text_stripped = output.strip()
+        if text_stripped.strip().startswith("```") and text_stripped.strip().endswith("```"):
+            text_stripped = text_stripped.strip()[3:-3].strip()
+            if text_stripped.startswith("json"):
+                text_stripped = text_stripped[4:].strip()
+
+        try:
+            output_data = json.loads(text_stripped)
+        except json.JSONDecodeError:
+            # For agentic user, we expect JSON
+            raise
+
+        text = output_data.get("text", "")
+        tool_calls = output_data.get("tool_calls", [])
+        return text, tool_calls
+
+    def _fill_prompt_template(self, **kwargs) -> str:
+        """Fill the prompt template with the message history, user profile, and tools."""
+        conversation_history = kwargs.get("conversation_history", [])
+        assert self.template is not None, "Template must be set"
+        prompt = self.template
+
+        # Format history into a string
+        formatted_history = ""
+        for message in conversation_history:
+            formatted_history += f"{message['role']}: {message['content']}\n"
+
+        # Build early stopping instructions
+        early_stopping_instructions = ""
+        if self.stop_token and self.early_stopping_condition:
+            early_stopping_instructions = (
+                f"\n### EARLY STOPPING\n"
+                f"If the following condition is satisfied: {self.early_stopping_condition}\n"
+                f"Then end your response with the token `{self.stop_token}` to signal that the conversation should end.\n"
+            )
+
+        # Build tool instructions
+        tool_instructions = ""
+        if self.tools:
+            tool_instructions = "\n### TOOLS\nYou have access to the following tools to interact with your environment:\n"
+            for tool in self.tools:
+                tool_instructions += f"- {tool['name']}: {tool.get('description', '')}\n"
+                if "inputs" in tool:
+                    tool_instructions += f"  Inputs: {json.dumps(tool['inputs'])}\n"
+
+            tool_instructions += (
+                "\nTo use a tool, include a `tool_calls` field in your JSON response with a list of tool invocations.\n"
+                'Example: {"text": "I\'ll check the signal.", "tool_calls": [{"name": "check_status", "arguments": {}}]}\n'
+            )
+
+        replacements = {
+            "user_profile": json.dumps(self.user_profile, indent=2),
+            "scenario": self.scenario,
+            "conversation_history": formatted_history,
+            "early_stopping_instructions": early_stopping_instructions,
+            "tool_instructions": tool_instructions,
+        }
+        for k, v in replacements.items():
+            prompt = prompt.replace("{{" + k + "}}", str(v))
+        return prompt

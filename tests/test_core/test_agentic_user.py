@@ -3,7 +3,7 @@
 import pytest
 import json
 from unittest.mock import MagicMock
-from maseval.core.agentic_user import AgenticUser
+from maseval.core.user import AgenticUser
 from maseval.core.model import ModelAdapter
 
 

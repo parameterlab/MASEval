@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Callable
 
 from maseval import AgentAdapter, Benchmark, Evaluator, ModelAdapter, Task, User
-from maseval.core.agentic_user import AgenticUser
+from maseval.core.user import AgenticUser
 
 from maseval.benchmark.tau2.environment import Tau2Environment
 from maseval.benchmark.tau2.evaluator import Tau2Evaluator
