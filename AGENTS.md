@@ -55,6 +55,61 @@ uv run pytest -m smolagents -v
 uv run pytest -m interface -v
 ```
 
+## Typing
+
+### Type Checker
+
+The project uses the `ty` type checker.
+
+```bash
+# Check types across the project
+uv run ty check
+
+# View documentation
+uv run ty --help
+```
+
+Documentation: [https://docs.astral.sh/ty/](https://docs.astral.sh/ty/)
+
+### Philosophy & Priorities
+
+**Types exist to help users and catch bugs—not to satisfy theoretical purity.**
+
+This library uses type hinting to:
+
+- Provide better IDE autocomplete and error detection
+- Document expected types clearly
+- Catch real errors before runtime
+
+However, **pragmatism over pedantry**: if a typing pattern improves usability and robustness, use it—even if it technically violates some typing rule.
+
+**Example:** `MACSBenchmark` narrows its environment type to `MACSEnvironment` (instead of generic `Environment`). This violates strict subtyping rules but provides users with:
+
+- Precise autocomplete for MACS-specific methods
+- Clear documentation that MACS requires its own environment
+- Better error messages during development
+- Prevents mixing incompatible components (e.g., `Tau2Environment` cannot be passed to `MACSBenchmark`)
+
+Unless there's a graceful alternative that preserves usability, choose the pattern that helps users most.
+
+**Guiding principle:** Orient yourself on existing patterns in the codebase. Consistency matters more than theoretical correctness.
+
+### Syntax Rules
+
+- **Unions:** Use `A | B` notation (not `Union[A, B]`)
+- **Optional:** Prefer `Optional[X]` over `X | None` for explicitness
+- **Collections:** Use `List[...]`, `Dict[..., ...]`, `Sequence[...]` instead of `list`, `dict`, `sequence`
+
+**Example:**
+
+```python
+def process_data(
+    items: List[str],
+    config: Optional[Dict[str, Any]] = None
+) -> str | int:
+    ...
+```
+
 ## Dependency Management
 
 Three types of dependencies:
@@ -220,7 +275,7 @@ Example workflow:
 uv sync --all-extras --all-groups
 
 # Before committing
-uv run ruff format . && uv run ruff check . --fix && uv run pytest -v
+uv run ruff format . && uv run ruff check . --fix && uv run pytest -v && uv run ty check
 
 # Run example
 uv run python examples/amazon_collab.py
@@ -234,11 +289,6 @@ uv add --optional <extra-name> <package-name>
 # Check specific test file
 uv run pytest tests/test_core/test_agent.py -v
 ```
-
-## Type Hinting
-
-This repository uses proper type hinting. For unions use the `A | B` notation. For optional imports, prefer `Optional[...]` as it is more explicit.
-For lists and dictionaries, use `Dict[...,...]`, `List[...]`, `Sequence[...]` etc. instead of `list`, `dict`.
 
 ## Security and Confidentiality
 
