@@ -237,3 +237,200 @@ def test_premature_termination(evaluator):
     assert result["reward"] == 0.0
     assert result["passed"] is False
     assert "prematurely" in result["note"]
+
+
+@pytest.mark.benchmark
+def test_max_steps_termination(evaluator):
+    """Test evaluation aborts on max_steps termination."""
+    traces = {"termination_reason": "max_steps"}
+
+    result = evaluator(traces)
+
+    assert result["reward"] == 0.0
+    assert result["passed"] is False
+    assert "prematurely" in result["note"]
+
+
+# =============================================================================
+# Metrics Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestComputeBenchmarkMetrics:
+    """Tests for compute_benchmark_metrics function."""
+
+    def test_empty_results(self):
+        """Empty results returns zeros."""
+        from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
+
+        result = compute_benchmark_metrics([])
+
+        assert result["total_tasks"] == 0
+        assert result["scored_tasks"] == 0
+        assert result["successful_tasks"] == 0
+        assert result["success_rate"] == 0.0
+        assert result["mean_reward"] == 0.0
+
+    def test_single_success(self):
+        """Single successful result counted."""
+        from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
+
+        results = [{"status": "completed", "eval": [{"reward": 1.0, "passed": True}]}]
+
+        metrics = compute_benchmark_metrics(results)
+
+        assert metrics["total_tasks"] == 1
+        assert metrics["scored_tasks"] == 1
+        assert metrics["successful_tasks"] == 1
+        assert metrics["success_rate"] == 1.0
+        assert metrics["mean_reward"] == 1.0
+
+    def test_single_failure(self):
+        """Single failed result counted."""
+        from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
+
+        results = [{"status": "completed", "eval": [{"reward": 0.0, "passed": False}]}]
+
+        metrics = compute_benchmark_metrics(results)
+
+        assert metrics["total_tasks"] == 1
+        assert metrics["scored_tasks"] == 1
+        assert metrics["successful_tasks"] == 0
+        assert metrics["success_rate"] == 0.0
+
+    def test_mixed_results(self):
+        """Mixed success/failure results aggregated."""
+        from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
+
+        results = [
+            {"status": "completed", "eval": [{"reward": 1.0, "passed": True}]},
+            {"status": "completed", "eval": [{"reward": 0.0, "passed": False}]},
+            {"status": "completed", "eval": [{"reward": 0.5, "passed": False}]},
+        ]
+
+        metrics = compute_benchmark_metrics(results)
+
+        assert metrics["total_tasks"] == 3
+        assert metrics["scored_tasks"] == 3
+        assert metrics["successful_tasks"] == 1
+        assert metrics["success_rate"] == pytest.approx(1 / 3)
+        assert metrics["mean_reward"] == pytest.approx(0.5)
+
+    def test_excludes_infrastructure_errors(self):
+        """Infrastructure errors excluded from scoring."""
+        from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
+
+        results = [
+            {"status": "completed", "eval": [{"reward": 1.0, "passed": True}]},
+            {"status": "environment_error", "eval": None},
+            {"status": "user_error", "eval": None},
+            {"status": "setup_failed", "eval": None},
+        ]
+
+        metrics = compute_benchmark_metrics(results)
+
+        assert metrics["total_tasks"] == 4
+        assert metrics["scored_tasks"] == 1  # Only completed
+        assert metrics["successful_tasks"] == 1
+        assert metrics["success_rate"] == 1.0
+
+    def test_status_counts(self):
+        """Status counts tracked correctly."""
+        from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
+
+        results = [
+            {"status": "completed", "eval": [{"reward": 1.0, "passed": True}]},
+            {"status": "completed", "eval": [{"reward": 0.0, "passed": False}]},
+            {"status": "environment_error", "eval": None},
+        ]
+
+        metrics = compute_benchmark_metrics(results)
+
+        assert metrics["status_counts"]["completed"] == 2
+        assert metrics["status_counts"]["environment_error"] == 1
+
+
+@pytest.mark.benchmark
+class TestComputePassAtK:
+    """Tests for compute_pass_at_k function."""
+
+    def test_all_pass(self):
+        """All attempts pass gives 1.0 for all k."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_at_k
+
+        results = [
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+        ]
+
+        pass_k = compute_pass_at_k(results, k_values=[1, 2, 3])
+
+        assert pass_k["pass@1"] == 1.0
+        assert pass_k["pass@2"] == 1.0
+        assert pass_k["pass@3"] == 1.0
+
+    def test_all_fail(self):
+        """All attempts fail gives 0.0 for all k."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_at_k
+
+        results = [
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+        ]
+
+        pass_k = compute_pass_at_k(results, k_values=[1, 2, 3])
+
+        assert pass_k["pass@1"] == 0.0
+        assert pass_k["pass@2"] == 0.0
+        assert pass_k["pass@3"] == 0.0
+
+    def test_mixed_results(self):
+        """Mixed results with pass on second attempt."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_at_k
+
+        results = [
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+        ]
+
+        pass_k = compute_pass_at_k(results, k_values=[1, 2, 3])
+
+        assert pass_k["pass@1"] == 0.0  # First attempt failed
+        assert pass_k["pass@2"] == 1.0  # Second attempt passed
+        assert pass_k["pass@3"] == 1.0  # At least one passed
+
+    def test_insufficient_attempts(self):
+        """Insufficient attempts for k returns 0.0."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_at_k
+
+        results = [
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+        ]
+
+        pass_k = compute_pass_at_k(results, k_values=[1, 2, 3])
+
+        assert pass_k["pass@1"] == 1.0
+        assert pass_k["pass@2"] == 0.0  # Not enough attempts
+        assert pass_k["pass@3"] == 0.0
+
+    def test_multiple_tasks(self):
+        """Multiple tasks with different outcomes."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_at_k
+
+        results = [
+            # Task 1: passes on first try
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            # Task 2: fails all
+            {"task_id": "task2", "status": "success", "eval": [{"passed": False}]},
+            {"task_id": "task2", "status": "success", "eval": [{"passed": False}]},
+        ]
+
+        pass_k = compute_pass_at_k(results, k_values=[1, 2])
+
+        assert pass_k["pass@1"] == 0.5  # 1/2 tasks pass@1
+        assert pass_k["pass@2"] == 0.5  # 1/2 tasks pass@2

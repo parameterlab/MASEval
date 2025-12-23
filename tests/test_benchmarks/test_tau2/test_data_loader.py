@@ -245,3 +245,135 @@ class TestTaskContent:
             user_data = task.user_data
             # Just verify user_data is a dict
             assert isinstance(user_data, dict)
+
+
+# =============================================================================
+# Split Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestTaskSplits:
+    """Tests for task split loading."""
+
+    def test_load_all_split(self):
+        """Load all split returns all tasks."""
+        tasks_all = load_tasks("retail", split="all", limit=100)
+        tasks_base = load_tasks("retail", split="base", limit=100)
+        tasks_hard = load_tasks("retail", split="hard", limit=100)
+
+        # All should include both base and hard
+        assert len(tasks_all) >= len(tasks_base)
+        assert len(tasks_all) >= len(tasks_hard)
+
+    def test_load_hard_split(self):
+        """Load hard split returns hard tasks."""
+        tasks = load_tasks("retail", split="hard", limit=10)
+
+        assert len(tasks) >= 0  # May be empty if no hard tasks
+        for task in tasks:
+            # Hard tasks should have hard indicator in metadata or split
+            if hasattr(task, "metadata") and "split" in task.metadata:
+                assert task.metadata.get("split") in ["hard", "all"]
+
+
+# =============================================================================
+# Configure Model IDs Edge Cases
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestConfigureModelIdsEdgeCases:
+    """Edge case tests for configure_model_ids function."""
+
+    def test_configures_empty_task_list(self):
+        """Configure model IDs on empty task list doesn't error."""
+        tasks = []
+        configure_model_ids(tasks, user_model_id="test-model")
+
+        assert len(tasks) == 0
+
+    def test_cannot_overwrite_existing_model_id(self):
+        """Cannot overwrite existing model_id - raises error."""
+        tasks = load_tasks("retail", limit=2)
+
+        # First configure
+        configure_model_ids(tasks, user_model_id="first-model")
+        assert tasks[0].user_data.get("model_id") == "first-model"
+
+        # Second configure should raise ValueError
+        with pytest.raises(ValueError, match="already has"):
+            configure_model_ids(tasks, user_model_id="second-model")
+
+
+# =============================================================================
+# Task Metadata Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestTaskMetadata:
+    """Tests for task metadata."""
+
+    def test_task_has_id(self):
+        """All tasks have an id."""
+        from uuid import UUID
+
+        tasks = load_tasks("retail", limit=10)
+
+        for task in tasks:
+            assert task.id is not None
+            # Task ID can be UUID or string
+            assert isinstance(task.id, (str, UUID))
+
+    def test_task_ids_unique(self):
+        """Task IDs are unique."""
+        tasks = load_tasks("retail", limit=50)
+
+        ids = [task.id for task in tasks]
+        assert len(ids) == len(set(ids)), "Task IDs are not unique"
+
+    def test_task_environment_data_has_domain(self):
+        """Task environment_data includes domain."""
+        tasks = load_tasks("retail", limit=5)
+
+        for task in tasks:
+            assert "domain" in task.environment_data
+            assert task.environment_data["domain"] == "retail"
+
+
+# =============================================================================
+# Domain-specific Task Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestDomainTasks:
+    """Tests for domain-specific task loading."""
+
+    def test_airline_tasks_have_domain(self):
+        """Airline tasks have correct domain."""
+        tasks = load_tasks("airline", limit=5)
+
+        for task in tasks:
+            assert task.environment_data.get("domain") == "airline"
+
+    def test_telecom_tasks_have_domain(self):
+        """Telecom tasks have correct domain."""
+        tasks = load_tasks("telecom", limit=5)
+
+        for task in tasks:
+            assert task.environment_data.get("domain") == "telecom"
+
+    def test_cross_domain_tasks_different(self):
+        """Tasks from different domains have different content."""
+        retail_tasks = load_tasks("retail", limit=3)
+        airline_tasks = load_tasks("airline", limit=3)
+
+        # Task queries should be different between domains
+        retail_queries = {t.query for t in retail_tasks}
+        airline_queries = {t.query for t in airline_tasks}
+
+        # There should be little to no overlap
+        overlap = retail_queries & airline_queries
+        assert len(overlap) <= 1, "Too much overlap between domain tasks"

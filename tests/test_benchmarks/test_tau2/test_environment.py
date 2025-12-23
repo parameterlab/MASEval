@@ -268,3 +268,150 @@ class TestTraceGathering:
         assert "domain" in config
         assert "toolkit_stats" in config
         assert "db_stats" in config
+
+    def test_traces_db_changed_false_initially(self, retail_environment):
+        """db_changed is False when no modifications made."""
+        traces = retail_environment.gather_traces()
+
+        assert traces["db_changed"] is False
+        assert traces["initial_db_hash"] == traces["final_db_hash"]
+
+
+# =============================================================================
+# User Tools Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestUserTools:
+    """Tests for user tool creation."""
+
+    def test_create_user_tools_retail(self, retail_environment):
+        """Retail environment can create user tools."""
+        user_tools = retail_environment.create_user_tools()
+
+        # User tools should be dict (may be empty for retail)
+        assert isinstance(user_tools, dict)
+
+    def test_create_user_tools_airline(self, airline_environment):
+        """Airline environment can create user tools."""
+        user_tools = airline_environment.create_user_tools()
+
+        assert isinstance(user_tools, dict)
+
+    def test_create_user_tools_telecom(self, telecom_environment):
+        """Telecom environment can create user tools."""
+        user_tools = telecom_environment.create_user_tools()
+
+        assert isinstance(user_tools, dict)
+
+
+# =============================================================================
+# Tool Call Tracing Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestToolCallTracing:
+    """Tests for tool call tracing."""
+
+    def test_tool_calls_traced(self, retail_environment):
+        """Tool invocations are traced."""
+        users = list(retail_environment.db.users.keys())
+        if not users:
+            pytest.skip("No users in test database")
+
+        user_id = users[0]
+        retail_environment.make_tool_call("get_user_details", user_id=user_id)
+
+        traces = retail_environment.gather_traces()
+
+        # Verify traces dict is returned with expected fields
+        assert "domain" in traces
+        assert "initial_db_hash" in traces
+        assert "final_db_hash" in traces
+
+    def test_multiple_tool_calls_success(self, retail_environment):
+        """Multiple tool invocations execute without error."""
+        users = list(retail_environment.db.users.keys())
+        orders = list(retail_environment.db.orders.keys())
+
+        if not users or not orders:
+            pytest.skip("Insufficient test data")
+
+        # Make multiple tool calls
+        result1 = retail_environment.make_tool_call("get_user_details", user_id=users[0])
+        result2 = retail_environment.make_tool_call("get_order_details", order_id=orders[0])
+
+        # Both calls should succeed
+        assert result1 is not None
+        assert result2 is not None
+
+
+# =============================================================================
+# Environment Reset Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestEnvironmentReset:
+    """Tests for environment reset functionality."""
+
+    def test_environment_reset(self, retail_environment):
+        """Environment can be reset to initial state."""
+        initial_hash = retail_environment.get_db_hash()
+
+        # Make a modification
+        users = list(retail_environment.db.users.keys())
+        if users:
+            # Modify user directly
+            user = retail_environment.db.users[users[0]]
+            original_email = user.email
+            user.email = "modified@test.com"
+
+            # Hash should change
+            modified_hash = retail_environment.get_db_hash()
+            assert initial_hash != modified_hash
+
+            # Reset
+            user.email = original_email
+
+    def test_policy_available(self, retail_environment):
+        """Environment provides policy."""
+        assert retail_environment.policy is not None
+        assert len(retail_environment.policy) > 0
+
+    def test_policy_is_string(self, retail_environment):
+        """Policy is a string."""
+        assert isinstance(retail_environment.policy, str)
+
+
+# =============================================================================
+# Tool Description Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestToolDescriptions:
+    """Tests for tool descriptions."""
+
+    def test_retail_tool_descriptions(self, retail_environment):
+        """Retail tools have descriptions."""
+        descriptions = retail_environment.toolkit.get_tool_descriptions()
+
+        assert len(descriptions) > 0
+        for name, desc in descriptions.items():
+            assert isinstance(desc, str)
+            assert len(desc) > 0
+
+    def test_airline_tool_descriptions(self, airline_environment):
+        """Airline tools have descriptions."""
+        descriptions = airline_environment.toolkit.get_tool_descriptions()
+
+        assert len(descriptions) > 0
+
+    def test_telecom_tool_descriptions(self, telecom_environment):
+        """Telecom tools have descriptions."""
+        descriptions = telecom_environment.toolkit.get_tool_descriptions()
+
+        assert len(descriptions) > 0

@@ -194,8 +194,20 @@ class MockPhoneAttributes(BaseModel):
     vpn_status: bool = Field(False, description="Whether VPN is connected")
     vpn_details: Optional[VpnDetails] = Field(None, description="Active VPN connection details")
 
-    # Applications
-    installed_apps: Dict[str, AppStatus] = Field(default_factory=dict, description="Installed applications")
+    # Applications - default apps match original tau2 benchmark
+    installed_apps: Dict[str, AppStatus] = Field(
+        default_factory=lambda: {
+            "messaging": AppStatus(
+                app_name="messaging",
+                permissions=AppPermissions(sms=True, storage=True, phone=True),
+            ),
+            "browser": AppStatus(
+                app_name="browser",
+                permissions=AppPermissions(network=True, storage=True),
+            ),
+        },
+        description="Installed applications",
+    )
 
     # Hardware
     has_sim_card: bool = Field(True, description="Whether a physical SIM card is inserted")
