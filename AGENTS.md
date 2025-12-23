@@ -55,6 +55,20 @@ uv run pytest -m smolagents -v
 uv run pytest -m interface -v
 ```
 
+## Coverage
+
+View coverage by feature area (auto-discovers benchmarks/interfaces):
+
+```bash
+uv run python scripts/coverage_by_feature.py
+```
+
+Manual coverage for specific modules:
+
+```bash
+pytest --cov=maseval.core.agent --cov-report=term-missing
+```
+
 ## Typing
 
 ### Type Checker
