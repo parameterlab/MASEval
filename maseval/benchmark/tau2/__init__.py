@@ -57,7 +57,13 @@ Usage:
 """
 
 # Main benchmark components
-from maseval.benchmark.tau2.tau2 import Tau2Benchmark, Tau2User
+from maseval.benchmark.tau2.tau2 import (
+    Tau2Benchmark,
+    Tau2User,
+    DefaultTau2Agent,
+    DefaultTau2AgentAdapter,
+    DefaultAgentTau2Benchmark,
+)
 
 # Environment
 from maseval.benchmark.tau2.environment import Tau2Environment, get_environment_constructor
@@ -99,6 +105,10 @@ __all__ = [
     # Benchmark
     "Tau2Benchmark",
     "Tau2User",
+    # Default agent implementation
+    "DefaultTau2Agent",
+    "DefaultTau2AgentAdapter",
+    "DefaultAgentTau2Benchmark",
     # Environment
     "Tau2Environment",
     "get_environment_constructor",

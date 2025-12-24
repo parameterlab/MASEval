@@ -40,6 +40,20 @@ Usage:
     # Run
     benchmark = MyTau2Benchmark(agent_data={})
     results = benchmark.run(tasks)
+
+Default Agent Implementation:
+    For comparison with the original tau2-bench results, use DefaultAgentTau2Benchmark
+    which implements their agent logic exactly:
+
+    from maseval.benchmark.tau2 import DefaultAgentTau2Benchmark, load_tasks, configure_model_ids
+
+    tasks = load_tasks("retail", split="base", limit=5)
+    configure_model_ids(tasks, user_model_id="gpt-4o")
+
+    benchmark = DefaultAgentTau2Benchmark(
+        agent_data={"model_id": "gpt-4o"},
+    )
+    results = benchmark.run(tasks)
 """
 
 from abc import abstractmethod
@@ -436,3 +450,441 @@ class Tau2Benchmark(Benchmark):
             results.append(result)
 
         return results
+
+
+# =============================================================================
+# Default Agent Implementation
+# =============================================================================
+
+# Agent system prompt constants (matching original tau2-bench)
+_AGENT_INSTRUCTION = """
+You are a customer service agent that helps the user according to the <policy> provided below.
+In each turn you can either:
+- Send a message to the user.
+- Make a tool call.
+You cannot do both at the same time.
+
+Try to be helpful and always follow the policy. Always make sure you generate valid JSON only.
+""".strip()
+
+_SYSTEM_PROMPT_TEMPLATE = """
+<instructions>
+{agent_instruction}
+</instructions>
+<policy>
+{domain_policy}
+</policy>
+""".strip()
+
+
+class DefaultTau2Agent:
+    """Default agent implementation matching original tau2-bench LLMAgent.
+
+    This agent mirrors the behavior of the original tau2-bench LLMAgent class,
+    enabling direct comparison with the original benchmark results.
+
+    The agent uses a simple ReAct-style loop:
+    1. Receives user message
+    2. Generates response (text or tool call)
+    3. If tool call: executes tool and loops back to step 2
+    4. If text: returns text as response
+
+    Original implementation: tau2-bench/src/tau2/agent/llm_agent.py
+
+    Attributes:
+        tools: Dictionary mapping tool names to callables
+        policy: Domain policy text (markdown)
+        model: ModelAdapter for LLM calls
+        llm_args: Additional arguments for LLM calls
+        max_tool_calls: Maximum tool calls per turn (prevents infinite loops)
+    """
+
+    def __init__(
+        self,
+        tools: Dict[str, Callable],
+        policy: str,
+        model: ModelAdapter,
+        llm_args: Optional[Dict[str, Any]] = None,
+        max_tool_calls: int = 50,
+    ):
+        """Initialize the default tau2 agent.
+
+        Args:
+            tools: Dictionary mapping tool names to callable implementations
+            policy: Domain policy text (markdown format)
+            model: ModelAdapter for making LLM calls
+            llm_args: Optional additional arguments passed to model.generate()
+            max_tool_calls: Maximum number of tool calls per agent turn
+        """
+        self.tools = tools
+        self.policy = policy
+        self.model = model
+        self.llm_args = llm_args or {}
+        self.max_tool_calls = max_tool_calls
+
+        # Build system prompt
+        self.system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
+            agent_instruction=_AGENT_INSTRUCTION,
+            domain_policy=self.policy,
+        )
+
+        # Message history for the conversation
+        self._messages: List[Dict[str, Any]] = []
+        self._tool_call_count = 0
+
+    def reset(self) -> None:
+        """Reset the agent state for a new conversation."""
+        self._messages = []
+        self._tool_call_count = 0
+
+    def run(self, query: str) -> str:
+        """Process a user query and return the agent's response.
+
+        This method handles the full agent turn:
+        1. Adds user message to history
+        2. Generates LLM response with tool access
+        3. If tool call: executes tools and continues generating
+        4. Returns final text response to user
+
+        Args:
+            query: The user's message/query
+
+        Returns:
+            Agent's text response to the user
+        """
+        # Add user message to history
+        self._messages.append({"role": "user", "content": query})
+
+        # Generate response with potential tool calls
+        return self._generate_with_tools()
+
+    def _generate_with_tools(self) -> str:
+        """Generate response, handling any tool calls.
+
+        Implements the agent's ReAct loop:
+        - Generate LLM response with tools available
+        - If response includes tool calls, execute them and continue
+        - If response is text only, return it
+
+        Returns:
+            Final text response from the agent
+        """
+        while self._tool_call_count < self.max_tool_calls:
+            # Build messages for LLM call
+            messages = [{"role": "system", "content": self.system_prompt}] + self._messages
+
+            # Generate response with tool access
+            response = self.model.generate(
+                messages=messages,
+                tools=self._get_tool_definitions(),
+                **self.llm_args,
+            )
+
+            # Parse response
+            content = response.get("content", "")
+            tool_calls = response.get("tool_calls", [])
+
+            if tool_calls:
+                # Add assistant message with tool calls
+                self._messages.append(
+                    {
+                        "role": "assistant",
+                        "content": content,
+                        "tool_calls": tool_calls,
+                    }
+                )
+
+                # Execute each tool call
+                for tool_call in tool_calls:
+                    self._tool_call_count += 1
+                    tool_result = self._execute_tool_call(tool_call)
+
+                    # Add tool result to history
+                    self._messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.get("id", ""),
+                            "content": str(tool_result),
+                        }
+                    )
+
+                # Continue loop to generate next response
+                continue
+            else:
+                # Text response - add to history and return
+                self._messages.append({"role": "assistant", "content": content})
+                return content
+
+        # Max tool calls reached - return empty or error message
+        return "I apologize, but I've encountered an issue processing your request. Please try again."
+
+    def _execute_tool_call(self, tool_call: Dict[str, Any]) -> Any:
+        """Execute a single tool call.
+
+        Args:
+            tool_call: Dict with 'name' and 'arguments' keys
+
+        Returns:
+            Tool execution result
+        """
+        name = tool_call.get("name", "")
+        # Handle both 'arguments' (dict) and 'function' (nested dict) formats
+        if "function" in tool_call:
+            arguments = tool_call["function"].get("arguments", {})
+        else:
+            arguments = tool_call.get("arguments", {})
+
+        # Handle string arguments (JSON encoded)
+        if isinstance(arguments, str):
+            import json
+
+            try:
+                arguments = json.loads(arguments)
+            except json.JSONDecodeError:
+                arguments = {}
+
+        if name not in self.tools:
+            return f"Error: Tool '{name}' not found"
+
+        try:
+            result = self.tools[name](**arguments)
+            return result
+        except Exception as e:
+            return f"Error executing tool '{name}': {str(e)}"
+
+    def _get_tool_definitions(self) -> List[Dict[str, Any]]:
+        """Generate tool definitions for the LLM.
+
+        Returns:
+            List of tool definitions in OpenAI function calling format
+        """
+        import inspect
+
+        definitions = []
+        for name, func in self.tools.items():
+            sig = inspect.signature(func)
+            doc = func.__doc__ or f"Tool: {name}"
+
+            # Build parameters schema
+            properties = {}
+            required = []
+
+            for param_name, param in sig.parameters.items():
+                if param_name == "self":
+                    continue
+
+                # Determine parameter type
+                param_type = "string"  # Default
+                if param.annotation is not inspect.Parameter.empty:
+                    if param.annotation is int:
+                        param_type = "integer"
+                    elif param.annotation is float:
+                        param_type = "number"
+                    elif param.annotation is bool:
+                        param_type = "boolean"
+                    elif param.annotation is list or (hasattr(param.annotation, "__origin__") and param.annotation.__origin__ is list):
+                        param_type = "array"
+                    elif param.annotation is dict:
+                        param_type = "object"
+
+                properties[param_name] = {
+                    "type": param_type,
+                    "description": f"Parameter: {param_name}",
+                }
+
+                # Check if parameter is required (no default value)
+                if param.default is inspect.Parameter.empty:
+                    required.append(param_name)
+
+            definitions.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": doc.strip().split("\n")[0],  # First line of docstring
+                        "parameters": {
+                            "type": "object",
+                            "properties": properties,
+                            "required": required,
+                        },
+                    },
+                }
+            )
+
+        return definitions
+
+    def get_messages(self) -> List[Dict[str, Any]]:
+        """Get the current message history.
+
+        Returns:
+            List of message dictionaries
+        """
+        return list(self._messages)
+
+
+class DefaultTau2AgentAdapter(AgentAdapter):
+    """AgentAdapter wrapper for DefaultTau2Agent.
+
+    Provides the standard MASEval AgentAdapter interface for DefaultTau2Agent.
+    """
+
+    def __init__(self, agent: DefaultTau2Agent, name: str = "default_agent"):
+        """Initialize the adapter.
+
+        Args:
+            agent: DefaultTau2Agent instance to wrap
+            name: Name for the agent adapter
+        """
+        super().__init__(agent, name)
+        self._agent = agent
+
+    def _run_agent(self, query: str) -> str:
+        """Execute the agent with a query.
+
+        Args:
+            query: User query string
+
+        Returns:
+            Agent's response string
+        """
+        return self._agent.run(query)
+
+    def get_messages(self) -> Any:
+        """Get the agent's message history.
+
+        Returns:
+            Message history from the underlying agent
+        """
+        return self._agent.get_messages()
+
+
+class DefaultAgentTau2Benchmark(Tau2Benchmark):
+    """Tau2 benchmark with default agent implementation.
+
+    This benchmark uses the DefaultTau2Agent which mirrors the original
+    tau2-bench LLMAgent implementation for direct comparison.
+
+    Configuration via agent_data:
+        - model_id: LLM model identifier (required)
+        - llm_args: Optional dict of additional LLM arguments
+        - max_tool_calls: Maximum tool calls per turn (default: 50)
+
+    Example:
+        from maseval.benchmark.tau2 import DefaultAgentTau2Benchmark, load_tasks, configure_model_ids
+
+        tasks = load_tasks("retail", split="base", limit=5)
+        configure_model_ids(tasks, user_model_id="gpt-4o")
+
+        benchmark = DefaultAgentTau2Benchmark(
+            agent_data={"model_id": "gpt-4o"},
+        )
+        results = benchmark.run(tasks)
+    """
+
+    def __init__(
+        self,
+        agent_data: Optional[Dict[str, Any]] = None,
+        callbacks: Optional[List[Any]] = None,
+        n_task_repeats: int = 1,
+        max_invocations: int = 10,
+        data_dir: Optional[Path] = None,
+        **kwargs: Any,
+    ):
+        """Initialize the default agent benchmark.
+
+        Args:
+            agent_data: Agent configuration containing:
+                - model_id: LLM model identifier (required)
+                - llm_args: Optional dict of additional LLM arguments
+                - max_tool_calls: Maximum tool calls per turn (default: 50)
+            callbacks: Benchmark callbacks
+            n_task_repeats: Repetitions per task
+            max_invocations: Maximum agent-user interaction rounds
+            data_dir: Base data directory for domain data
+            **kwargs: Additional arguments passed to parent
+        """
+        super().__init__(agent_data, callbacks, n_task_repeats, max_invocations, data_dir, **kwargs)
+        self._model_cache: Dict[str, ModelAdapter] = {}
+
+    def _get_agent_model_id(self, agent_data: Dict[str, Any]) -> str:
+        """Get agent model ID from agent_data.
+
+        Args:
+            agent_data: Agent configuration dict
+
+        Returns:
+            Model ID string
+
+        Raises:
+            ValueError: If model_id not configured
+        """
+        model_id = agent_data.get("model_id")
+        if model_id is None:
+            raise ValueError(
+                "Agent model_id not configured in agent_data.\n"
+                "Pass model_id when creating the benchmark:\n\n"
+                "    benchmark = DefaultAgentTau2Benchmark(\n"
+                "        agent_data={'model_id': 'gpt-4o'},\n"
+                "    )"
+            )
+        return model_id
+
+    def setup_agents(
+        self,
+        agent_data: Dict[str, Any],
+        environment: Tau2Environment,
+        task: Task,
+        user: Optional[User],
+    ) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
+        """Create the default tau2 agent.
+
+        Args:
+            agent_data: Agent configuration with model_id
+            environment: Tau2Environment with real tools
+            task: Current task
+            user: Optional user simulator
+
+        Returns:
+            Tuple of (agent list, agent dict)
+        """
+        # Get configuration
+        model_id = self._get_agent_model_id(agent_data)
+        llm_args = agent_data.get("llm_args", {})
+        max_tool_calls = agent_data.get("max_tool_calls", 50)
+
+        # Get tools and policy from environment
+        tools = environment.create_tools()
+        policy = environment.policy
+
+        # Create model adapter
+        model = self.get_model_adapter(model_id, register_name="agent_model")
+
+        # Create agent
+        agent = DefaultTau2Agent(
+            tools=tools,
+            policy=policy,
+            model=model,
+            llm_args=llm_args,
+            max_tool_calls=max_tool_calls,
+        )
+
+        # Wrap in adapter
+        adapter = DefaultTau2AgentAdapter(agent, name="default_agent")
+
+        return [adapter], {"default_agent": adapter}
+
+    @abstractmethod
+    def get_model_adapter(self, model_id: str, **kwargs: Any) -> ModelAdapter:
+        """Get or create a model adapter.
+
+        Must be implemented by subclass to provide the actual ModelAdapter
+        implementation for the desired LLM provider.
+
+        Args:
+            model_id: Model identifier
+            **kwargs: Additional arguments (e.g., register_name for tracing)
+
+        Returns:
+            ModelAdapter instance
+        """
+        pass
