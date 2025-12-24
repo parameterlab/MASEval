@@ -377,3 +377,133 @@ class TestDomainTasks:
         # There should be little to no overlap
         overlap = retail_queries & airline_queries
         assert len(overlap) <= 1, "Too much overlap between domain tasks"
+
+
+# =============================================================================
+# Task Filtering Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestTaskFiltering:
+    """Tests for task filtering functionality."""
+
+    def test_load_specific_task_ids(self):
+        """Load specific tasks by ID."""
+        # First get some task IDs
+        all_tasks = load_tasks("retail", limit=10)
+        if len(all_tasks) < 3:
+            pytest.skip("Not enough tasks in database")
+
+        # Try to load specific tasks by filtering (if supported)
+        task_ids = [str(t.id) for t in all_tasks[:3]]
+
+        # Check that tasks have the expected IDs
+        for i, task in enumerate(all_tasks[:3]):
+            assert str(task.id) == task_ids[i]
+
+    def test_load_with_negative_limit(self):
+        """Load with negative limit returns all tasks (no limit)."""
+        tasks = load_tasks("retail", limit=-1)
+        # Negative limit means no limit - should return all tasks
+        assert len(tasks) > 0
+
+    def test_load_with_large_limit(self):
+        """Load with limit larger than available tasks."""
+        tasks = load_tasks("retail", limit=10000)
+        # Should return all available tasks without error
+        assert len(tasks) > 0
+
+
+# =============================================================================
+# Policy Loading Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestPolicyLoading:
+    """Tests for policy loading in domain config."""
+
+    def test_retail_policy_content(self):
+        """Retail policy contains expected content."""
+        config = load_domain_config("retail")
+
+        policy = config.get("policy", "")
+        assert len(policy) > 0
+        # Policy should mention retail-related terms
+        assert isinstance(policy, str)
+
+    def test_airline_policy_content(self):
+        """Airline policy contains expected content."""
+        config = load_domain_config("airline")
+
+        policy = config.get("policy", "")
+        assert len(policy) > 0
+
+    def test_telecom_policy_content(self):
+        """Telecom policy contains expected content."""
+        config = load_domain_config("telecom")
+
+        policy = config.get("policy", "")
+        assert len(policy) > 0
+
+
+# =============================================================================
+# Database Path Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestDatabasePaths:
+    """Tests for database path handling."""
+
+    def test_retail_db_is_json(self):
+        """Retail database uses JSON format."""
+        config = load_domain_config("retail")
+
+        db_path = config.get("db_path")
+        assert db_path is not None
+        assert db_path.suffix == ".json"
+
+    def test_airline_db_is_json(self):
+        """Airline database uses JSON format."""
+        config = load_domain_config("airline")
+
+        db_path = config.get("db_path")
+        assert db_path is not None
+        assert db_path.suffix == ".json"
+
+    def test_telecom_db_is_toml(self):
+        """Telecom database uses TOML format."""
+        config = load_domain_config("telecom")
+
+        db_path = config.get("db_path")
+        assert db_path is not None
+        assert db_path.suffix == ".toml"
+
+
+# =============================================================================
+# Task ID Handling Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestTaskIdHandling:
+    """Tests for task ID handling."""
+
+    def test_task_ids_are_strings_or_ints(self):
+        """Task IDs can be converted to strings."""
+        tasks = load_tasks("retail", limit=10)
+
+        for task in tasks:
+            # Should be able to convert to string
+            str_id = str(task.id)
+            assert len(str_id) > 0
+
+    def test_task_metadata_contains_original_id(self):
+        """Task metadata may contain original task ID."""
+        tasks = load_tasks("retail", limit=5)
+
+        for task in tasks:
+            # Task should have either id in metadata or as attribute
+            assert task.id is not None

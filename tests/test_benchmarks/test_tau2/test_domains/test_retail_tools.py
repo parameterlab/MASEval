@@ -692,3 +692,267 @@ class TestRetailReturnItems:
 
         assert result.status == "return requested"
         assert item_id in result.return_items
+
+
+# =============================================================================
+# Write Tool Tests - Modify Items Success Path
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestRetailModifyItemsSuccess:
+    """Tests for successful item modification."""
+
+    def test_modify_pending_order_items_success(self, retail_toolkit):
+        """Successfully modify items in a pending order."""
+        # Find a pending order with items that can be modified
+        pending_order = None
+        for order_id, order in retail_toolkit.db.orders.items():
+            if order.status == "pending" and order.items:
+                pending_order = order
+                break
+
+        if not pending_order:
+            pytest.skip("No pending orders with items")
+
+        user = retail_toolkit.db.users.get(pending_order.user_id)
+        if not user or not user.payment_methods:
+            pytest.skip("Order user has no payment methods")
+
+        payment_id = list(user.payment_methods.keys())[0]
+        item = pending_order.items[0]
+
+        # Find a different variant of the same product
+        product = retail_toolkit.db.products.get(item.product_id)
+        if not product or len(product.variants) < 2:
+            pytest.skip("Product needs multiple variants for item modification test")
+
+        # Find a different item_id for the same product
+        new_item_id = None
+        for variant_id, variant in product.variants.items():
+            if variant_id != item.item_id and variant.available:
+                new_item_id = variant_id
+                break
+
+        if not new_item_id:
+            pytest.skip("No alternative variant available")
+
+        result = retail_toolkit.use_tool(
+            "modify_pending_order_items",
+            order_id=pending_order.order_id,
+            item_ids=[item.item_id],
+            new_item_ids=[new_item_id],
+            payment_method_id=payment_id,
+        )
+
+        assert result.status == "pending (item modified)"
+
+    def test_modify_pending_order_items_same_item_fails(self, retail_toolkit):
+        """Modification fails when new item is same as old item."""
+        pending_order = None
+        for order_id, order in retail_toolkit.db.orders.items():
+            if order.status == "pending" and order.items:
+                pending_order = order
+                break
+
+        if not pending_order:
+            pytest.skip("No pending orders with items")
+
+        user = retail_toolkit.db.users.get(pending_order.user_id)
+        if not user or not user.payment_methods:
+            pytest.skip("Order user has no payment methods")
+
+        payment_id = list(user.payment_methods.keys())[0]
+        item = pending_order.items[0]
+
+        with pytest.raises(ValueError, match="different"):
+            retail_toolkit.use_tool(
+                "modify_pending_order_items",
+                order_id=pending_order.order_id,
+                item_ids=[item.item_id],
+                new_item_ids=[item.item_id],  # Same as old
+                payment_method_id=payment_id,
+            )
+
+
+# =============================================================================
+# Write Tool Tests - Modify Payment Success Path
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestRetailModifyPaymentSuccess:
+    """Tests for successful payment modification."""
+
+    def test_modify_pending_order_payment_success(self, retail_toolkit):
+        """Successfully modify payment method of a pending order."""
+        # Find a pending order with a single payment
+        pending_order = None
+        for order_id, order in retail_toolkit.db.orders.items():
+            if order.status == "pending" and len(order.payment_history) == 1 and order.payment_history[0].transaction_type == "payment":
+                pending_order = order
+                break
+
+        if not pending_order:
+            pytest.skip("No suitable pending orders")
+
+        user = retail_toolkit.db.users.get(pending_order.user_id)
+        if not user or len(user.payment_methods) < 2:
+            pytest.skip("User needs at least 2 payment methods")
+
+        # Find a different payment method
+        current_payment_id = pending_order.payment_history[0].payment_method_id
+        new_payment_id = None
+        for pm_id in user.payment_methods.keys():
+            if pm_id != current_payment_id:
+                new_payment_id = pm_id
+                break
+
+        if not new_payment_id:
+            pytest.skip("No alternative payment method available")
+
+        result = retail_toolkit.use_tool(
+            "modify_pending_order_payment",
+            order_id=pending_order.order_id,
+            payment_method_id=new_payment_id,
+        )
+
+        assert result is not None
+        # Payment history should now have 3 entries (original + new payment + refund)
+        assert len(result.payment_history) == 3
+
+    def test_modify_payment_same_method_fails(self, retail_toolkit):
+        """Modification fails when using same payment method."""
+        pending_order = None
+        for order_id, order in retail_toolkit.db.orders.items():
+            if order.status == "pending" and len(order.payment_history) == 1 and order.payment_history[0].transaction_type == "payment":
+                pending_order = order
+                break
+
+        if not pending_order:
+            pytest.skip("No suitable pending orders")
+
+        current_payment_id = pending_order.payment_history[0].payment_method_id
+
+        with pytest.raises(ValueError, match="different"):
+            retail_toolkit.use_tool(
+                "modify_pending_order_payment",
+                order_id=pending_order.order_id,
+                payment_method_id=current_payment_id,  # Same payment method
+            )
+
+
+# =============================================================================
+# Write Tool Tests - Exchange Success Path
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestRetailExchangeSuccess:
+    """Tests for successful item exchange."""
+
+    def test_exchange_delivered_order_items_success(self, retail_toolkit):
+        """Successfully exchange items in a delivered order."""
+        # Find a delivered order with items
+        delivered_order = None
+        for order_id, order in retail_toolkit.db.orders.items():
+            if order.status == "delivered" and order.items:
+                delivered_order = order
+                break
+
+        if not delivered_order:
+            pytest.skip("No delivered orders with items")
+
+        user = retail_toolkit.db.users.get(delivered_order.user_id)
+        if not user or not user.payment_methods:
+            pytest.skip("Order user has no payment methods")
+
+        payment_id = list(user.payment_methods.keys())[0]
+        item = delivered_order.items[0]
+
+        # Find a different variant of the same product
+        product = retail_toolkit.db.products.get(item.product_id)
+        if not product or len(product.variants) < 2:
+            pytest.skip("Product needs multiple variants for exchange test")
+
+        # Find a different item_id for the same product
+        new_item_id = None
+        for variant_id, variant in product.variants.items():
+            if variant_id != item.item_id and variant.available:
+                new_item_id = variant_id
+                break
+
+        if not new_item_id:
+            pytest.skip("No alternative variant available")
+
+        result = retail_toolkit.use_tool(
+            "exchange_delivered_order_items",
+            order_id=delivered_order.order_id,
+            item_ids=[item.item_id],
+            new_item_ids=[new_item_id],
+            payment_method_id=payment_id,
+        )
+
+        assert result.status == "exchange requested"
+        assert item.item_id in result.exchange_items
+        assert new_item_id in result.exchange_new_items
+
+
+# =============================================================================
+# Helper Method Tests
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestRetailHelperMethods:
+    """Tests for internal helper methods."""
+
+    def test_get_product_details_invalid(self, retail_toolkit):
+        """get_product_details raises for invalid product."""
+        with pytest.raises(ValueError, match="not found"):
+            retail_toolkit.use_tool("get_product_details", product_id="INVALID_PRODUCT")
+
+    def test_is_pending_order_check(self, retail_toolkit):
+        """_is_pending_order correctly identifies pending orders."""
+        pending_order = None
+        non_pending_order = None
+
+        for order_id, order in retail_toolkit.db.orders.items():
+            if order.status == "pending" and not pending_order:
+                pending_order = order
+            elif order.status not in ["pending", "pending (item modified)"] and not non_pending_order:
+                non_pending_order = order
+
+            if pending_order and non_pending_order:
+                break
+
+        if pending_order:
+            assert retail_toolkit._is_pending_order(pending_order) is True
+
+        if non_pending_order:
+            assert retail_toolkit._is_pending_order(non_pending_order) is False
+
+
+# =============================================================================
+# Calculator Edge Cases
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestRetailCalculatorEdgeCases:
+    """Edge case tests for calculator tool."""
+
+    def test_calculate_division(self, retail_toolkit):
+        """Calculate division expression."""
+        result = retail_toolkit.use_tool("calculate", expression="100 / 4")
+        assert float(result) == 25.0
+
+    def test_calculate_negative(self, retail_toolkit):
+        """Calculate with negative numbers."""
+        result = retail_toolkit.use_tool("calculate", expression="10 - 15")
+        assert float(result) == -5.0
+
+    def test_calculate_decimal(self, retail_toolkit):
+        """Calculate with decimal numbers."""
+        result = retail_toolkit.use_tool("calculate", expression="3.5 * 2")
+        assert float(result) == 7.0
