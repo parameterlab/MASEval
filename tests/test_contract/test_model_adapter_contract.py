@@ -29,6 +29,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 from conftest import DummyModelAdapter
+from maseval.core.model import ChatResponse
 
 
 # ==================== Helper Functions ====================
@@ -226,6 +227,43 @@ def create_dummy_adapter(model_id: str = "test-model", responses: Optional[List[
     return DummyModelAdapter(model_id=model_id, responses=responses)
 
 
+def create_anthropic_adapter(model_id: str = "claude-3", responses: Optional[List[str]] = None) -> Any:
+    """Create AnthropicModelAdapter instance."""
+    pytest.importorskip("anthropic")
+    from maseval.interface.inference.anthropic import AnthropicModelAdapter
+
+    response_list: List[str] = responses or ["Test response"]
+    call_count = [0]
+
+    class MockTextBlock:
+        type = "text"
+
+        def __init__(self, text: str):
+            self.text = text
+
+    class MockUsage:
+        input_tokens = 10
+        output_tokens = 5
+
+    class MockMessages:
+        def create(self, **kwargs):
+            response = response_list[call_count[0] % len(response_list)]
+            call_count[0] += 1
+
+            class MockResponse:
+                content = [MockTextBlock(response)]
+                usage = MockUsage()
+                model = model_id
+                stop_reason = "end_turn"
+
+            return MockResponse()
+
+    class MockClient:
+        messages = MockMessages()
+
+    return AnthropicModelAdapter(client=MockClient(), model_id=model_id)
+
+
 def create_adapter_for_implementation(implementation: str, model_id: str, responses: Optional[List[str]] = None) -> Any:
     """Factory function to create adapter for specified implementation."""
     factories = {
@@ -234,6 +272,7 @@ def create_adapter_for_implementation(implementation: str, model_id: str, respon
         "google_genai": create_google_genai_adapter,
         "huggingface": create_huggingface_adapter,
         "litellm": create_litellm_adapter,
+        "anthropic": create_anthropic_adapter,
     }
 
     if implementation not in factories:
@@ -255,7 +294,7 @@ def cleanup_adapter(adapter: Any, implementation: str) -> None:
 
 @pytest.mark.contract
 @pytest.mark.interface
-@pytest.mark.parametrize("implementation", ["dummy", "openai", "google_genai", "huggingface", "litellm"])
+@pytest.mark.parametrize("implementation", ["dummy", "openai", "google_genai", "huggingface", "litellm", "anthropic"])
 class TestModelAdapterContract:
     """Verify all ModelAdapter implementations honor the same contract."""
 
@@ -267,6 +306,51 @@ class TestModelAdapterContract:
             result = adapter.generate("Test prompt")
             assert isinstance(result, str)
             assert len(result) > 0
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_chat_returns_chat_response(self, implementation):
+        """All adapters return ChatResponse from chat()."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model", responses=["Test response"])
+
+        try:
+            result = adapter.chat([{"role": "user", "content": "Test prompt"}])
+            assert isinstance(result, ChatResponse)
+            assert result.content is not None or result.tool_calls is not None
+            assert result.role == "assistant"
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_chat_handles_multi_turn(self, implementation):
+        """All adapters handle multi-turn conversations."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model", responses=["Response"])
+
+        try:
+            result = adapter.chat(
+                [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi there!"},
+                    {"role": "user", "content": "How are you?"},
+                ]
+            )
+            assert isinstance(result, ChatResponse)
+            assert result.content is not None
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_chat_handles_system_message(self, implementation):
+        """All adapters handle system messages."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model", responses=["Response"])
+
+        try:
+            result = adapter.chat(
+                [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "Hello"},
+                ]
+            )
+            assert isinstance(result, ChatResponse)
+            assert result.content is not None
         finally:
             cleanup_adapter(adapter, implementation)
 
@@ -453,7 +537,7 @@ class TestCrossAdapterConsistency:
 
     def test_all_adapters_have_consistent_trace_structure(self):
         """All adapter implementations have same base trace structure."""
-        implementations = ["dummy", "openai", "google_genai", "huggingface", "litellm"]
+        implementations = ["dummy", "openai", "google_genai", "huggingface", "litellm", "anthropic"]
         adapters = []
 
         try:
@@ -485,7 +569,7 @@ class TestCrossAdapterConsistency:
 
     def test_all_adapters_have_consistent_config_structure(self):
         """All adapter implementations have same base config structure."""
-        implementations = ["dummy", "openai", "google_genai", "huggingface", "litellm"]
+        implementations = ["dummy", "openai", "google_genai", "huggingface", "litellm", "anthropic"]
         adapters = []
 
         try:
@@ -511,7 +595,7 @@ class TestCrossAdapterConsistency:
 
     def test_all_adapters_log_same_call_metadata(self):
         """All adapters log same metadata for each call."""
-        implementations = ["dummy", "openai", "google_genai", "huggingface", "litellm"]
+        implementations = ["dummy", "openai", "google_genai", "huggingface", "litellm", "anthropic"]
         adapters = []
 
         try:
