@@ -124,9 +124,7 @@ class LiteLLMModelAdapter(ModelAdapter):
         try:
             import litellm
         except ImportError as e:
-            raise ImportError(
-                "LiteLLM is not installed. Install with: pip install maseval[litellm]"
-            ) from e
+            raise ImportError("LiteLLM is not installed. Install with: pip install maseval[litellm]") from e
 
         # Merge parameters
         params = dict(self._default_generation_params)

@@ -123,18 +123,14 @@ class OpenAIModelAdapter(ModelAdapter):
         # Call OpenAI API
         # Try the modern client interface first
         if hasattr(self._client, "chat") and hasattr(self._client.chat, "completions"):
-            response = self._client.chat.completions.create(
-                model=self._model_id, messages=messages, **params
-            )
+            response = self._client.chat.completions.create(model=self._model_id, messages=messages, **params)
         else:
             # Fallback for older or custom clients
             response = self._call_legacy_client(messages, params)
 
         return self._parse_response(response)
 
-    def _call_legacy_client(
-        self, messages: List[Dict[str, Any]], params: Dict[str, Any]
-    ) -> Any:
+    def _call_legacy_client(self, messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Any:
         """Handle older client interfaces or callables.
 
         Args:
@@ -162,8 +158,7 @@ class OpenAIModelAdapter(ModelAdapter):
             return self._client(model=self._model_id, messages=messages, **params)
 
         raise TypeError(
-            f"Unable to call client of type {type(self._client).__name__}. "
-            "Expected an OpenAI client with chat.completions.create() method."
+            f"Unable to call client of type {type(self._client).__name__}. Expected an OpenAI client with chat.completions.create() method."
         )
 
     def _parse_response(self, response: Any) -> ChatResponse:

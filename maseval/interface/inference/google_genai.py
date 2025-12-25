@@ -161,15 +161,11 @@ class GoogleGenAIModelAdapter(ModelAdapter):
         generation_config = genai.types.GenerateContentConfig(**config_params) if config_params else None
 
         # Call API
-        response = self._client.models.generate_content(
-            model=self._model_id, contents=contents, config=generation_config
-        )
+        response = self._client.models.generate_content(model=self._model_id, contents=contents, config=generation_config)
 
         return self._parse_response(response)
 
-    def _convert_messages(
-        self, messages: List[Dict[str, Any]]
-    ) -> tuple[Optional[str], List[Dict[str, Any]]]:
+    def _convert_messages(self, messages: List[Dict[str, Any]]) -> tuple[Optional[str], List[Dict[str, Any]]]:
         """Convert OpenAI messages to Google format.
 
         Google uses 'contents' with 'parts', and separates system instructions.

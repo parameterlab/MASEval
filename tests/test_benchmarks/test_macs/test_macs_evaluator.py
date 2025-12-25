@@ -436,20 +436,21 @@ class TestEvaluationCall:
 
         traces = {"messages": sample_trace, "tool_traces": sample_tool_traces}
 
-        # Capture the prompt sent to the model
-        captured_prompts = []
-        original_generate = model._generate_impl
+        # Capture the messages sent to the model
+        captured_messages = []
+        original_chat = model._chat_impl
 
-        def capture_prompt(prompt, *args, **kwargs):
-            captured_prompts.append(prompt)
-            return original_generate(prompt, *args, **kwargs)
+        def capture_messages(messages, *args, **kwargs):
+            captured_messages.append(messages)
+            return original_chat(messages, *args, **kwargs)
 
-        with patch.object(model, "_generate_impl", side_effect=capture_prompt):
+        with patch.object(model, "_chat_impl", side_effect=capture_messages):
             evaluator(traces)
 
         # Check that tool invocations were included in the prompt
-        assert len(captured_prompts) > 0
-        prompt = captured_prompts[0]
+        assert len(captured_messages) > 0
+        # The prompt is in the first user message content
+        prompt = captured_messages[0][0]["content"]
         assert "search_flights" in prompt or "book_flight" in prompt
 
 

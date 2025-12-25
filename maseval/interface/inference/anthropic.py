@@ -167,9 +167,7 @@ class AnthropicModelAdapter(ModelAdapter):
 
         return self._parse_response(response)
 
-    def _convert_messages(
-        self, messages: List[Dict[str, Any]]
-    ) -> tuple[Optional[str], List[Dict[str, Any]]]:
+    def _convert_messages(self, messages: List[Dict[str, Any]]) -> tuple[Optional[str], List[Dict[str, Any]]]:
         """Convert OpenAI messages to Anthropic format.
 
         Anthropic separates system messages and uses different format for
@@ -273,9 +271,7 @@ class AnthropicModelAdapter(ModelAdapter):
 
         return anthropic_tools
 
-    def _convert_tool_choice(
-        self, tool_choice: Union[str, Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def _convert_tool_choice(self, tool_choice: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
         """Convert OpenAI tool_choice to Anthropic format.
 
         Args:
@@ -341,10 +337,7 @@ class AnthropicModelAdapter(ModelAdapter):
             usage = {
                 "input_tokens": getattr(response.usage, "input_tokens", 0),
                 "output_tokens": getattr(response.usage, "output_tokens", 0),
-                "total_tokens": (
-                    getattr(response.usage, "input_tokens", 0)
-                    + getattr(response.usage, "output_tokens", 0)
-                ),
+                "total_tokens": (getattr(response.usage, "input_tokens", 0) + getattr(response.usage, "output_tokens", 0)),
             }
 
         # Extract stop reason

@@ -172,9 +172,7 @@ class HuggingFaceModelAdapter(ModelAdapter):
             # Try to apply template with tools to check support
             try:
                 # The template should accept tools parameter if it supports them
-                prompt = tokenizer.apply_chat_template(
-                    messages, tools=tools, add_generation_prompt=True, tokenize=False
-                )
+                prompt = tokenizer.apply_chat_template(messages, tools=tools, add_generation_prompt=True, tokenize=False)
             except TypeError:
                 # Template doesn't accept tools parameter
                 raise ToolCallingNotSupportedError(
@@ -183,9 +181,7 @@ class HuggingFaceModelAdapter(ModelAdapter):
                     "Consider using LiteLLMModelAdapter for reliable tool calling."
                 )
         else:
-            prompt = tokenizer.apply_chat_template(
-                messages, add_generation_prompt=True, tokenize=False
-            )
+            prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
 
         # Generate response
         response_text = self._call_model(prompt, params)
@@ -206,9 +202,7 @@ class HuggingFaceModelAdapter(ModelAdapter):
             model=self._model_id,
         )
 
-    def _chat_without_template(
-        self, messages: List[Dict[str, Any]], params: Dict[str, Any]
-    ) -> ChatResponse:
+    def _chat_without_template(self, messages: List[Dict[str, Any]], params: Dict[str, Any]) -> ChatResponse:
         """Generate without a chat template (simple prompt concatenation).
 
         Args:
@@ -274,9 +268,7 @@ class HuggingFaceModelAdapter(ModelAdapter):
         else:
             return str(result)
 
-    def _parse_tool_calls(
-        self, response: str
-    ) -> tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    def _parse_tool_calls(self, response: str) -> tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
         """Parse tool calls from model response.
 
         Different models format tool calls differently. This method attempts
@@ -314,9 +306,7 @@ class HuggingFaceModelAdapter(ModelAdapter):
                         },
                     }
                 )
-                remaining_content = remaining_content.replace(
-                    f"<tool_call>{match}</tool_call>", ""
-                )
+                remaining_content = remaining_content.replace(f"<tool_call>{match}</tool_call>", "")
             except json.JSONDecodeError:
                 continue
 

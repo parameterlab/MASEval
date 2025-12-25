@@ -15,7 +15,6 @@ import pytest
 import json
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
 from conftest import DummyModelAdapter
 from maseval.core.model import ChatResponse
 

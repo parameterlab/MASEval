@@ -11,6 +11,7 @@ their benchmark code.
 
 What this contract validates:
 - generate() returns string consistently
+- chat() returns ChatResponse consistently
 - Call logging happens uniformly (successful and failed calls)
 - Timing capture works consistently
 - Trace structure is consistent across implementations (gather_traces)
@@ -126,12 +127,19 @@ def create_openai_adapter(model_id: str = "gpt-4", responses: Optional[List[str]
     response_list: List[str] = responses or ["Test response"]
     call_count = [0]
 
-    def mock_client(prompt, **kwargs):
-        response = response_list[call_count[0] % len(response_list)]
-        call_count[0] += 1
-        return {"choices": [{"message": {"content": response}}]}
+    class MockClient:
+        class Chat:
+            class Completions:
+                def create(self, model, messages, **kwargs):
+                    response = response_list[call_count[0] % len(response_list)]
+                    call_count[0] += 1
+                    return {"choices": [{"message": {"content": response}}]}
 
-    return OpenAIModelAdapter(client=mock_client, model_id=model_id)
+            completions = Completions()
+
+        chat = Chat()
+
+    return OpenAIModelAdapter(client=MockClient(), model_id=model_id)
 
 
 def create_google_genai_adapter(model_id: str = "gemini-pro", responses: Optional[List[str]] = None) -> Any:
@@ -417,7 +425,8 @@ class TestModelAdapterContract:
 
             traces = adapter.gather_traces()
             assert traces["total_calls"] == 1
-            assert traces["logs"][0]["prompt_length"] == 0
+            # Empty prompt still creates one message
+            assert traces["logs"][0]["message_count"] == 1
         finally:
             cleanup_adapter(adapter, implementation)
 
@@ -521,7 +530,7 @@ class TestCrossAdapterConsistency:
                 assert "timestamp" in call, f"Missing timestamp in {impl}"
                 assert "status" in call, f"Missing status in {impl}"
                 assert "duration_seconds" in call, f"Missing duration in {impl}"
-                assert "prompt_length" in call, f"Missing prompt_length in {impl}"
+                assert "message_count" in call, f"Missing message_count in {impl}"
         finally:
             for adapter, impl in adapters:
                 cleanup_adapter(adapter, impl)
