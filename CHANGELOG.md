@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**ModelAdapter Chat Interface**
+
+- Added `chat()` method to `ModelAdapter` as the primary interface for LLM inference, accepting a list of messages in OpenAI format and returning a `ChatResponse` object and accepting tools
+- Added `ChatResponse` dataclass containing `content`, `tool_calls`, `role`, `usage`, `model`, and `stop_reason` fields for structured response handling
+
+**AnthropicModelAdapter**
+
+- New `AnthropicModelAdapter` for direct integration with Anthropic Claude models via the official Anthropic SDK
+- Handles Anthropic-specific message format conversion (system messages, tool_use/tool_result blocks) internally while accepting OpenAI-compatible input
+- Added `anthropic` optional dependency: `pip install maseval[anthropic]`
+
 ### Changed
 
 ### Fixed

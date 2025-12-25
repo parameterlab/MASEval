@@ -22,7 +22,7 @@ from .core.simulator import (
     ToolSimulatorError,
     UserSimulatorError,
 )
-from .core.model import ModelAdapter
+from .core.model import ModelAdapter, ChatResponse
 from .core.user import User, TerminationReason
 from .core.evaluator import Evaluator
 from .core.history import MessageHistory, ToolInvocationHistory
@@ -67,8 +67,10 @@ __all__ = [
     # History and tracing
     "MessageHistory",
     "ToolInvocationHistory",
-    "ModelAdapter",
     "TraceableMixin",
+    # Model adapters
+    "ModelAdapter",
+    "ChatResponse",
     # Exceptions and validation
     "MASEvalError",
     "AgentError",

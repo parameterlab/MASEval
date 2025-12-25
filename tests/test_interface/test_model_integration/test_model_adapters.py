@@ -25,23 +25,40 @@ class TestOpenAIModelAdapterIntegration:
         pytest.importorskip("openai")
         from maseval.interface.inference.openai import OpenAIModelAdapter
 
-        # Mock client
-        def mock_client(prompt, **kwargs):
-            return {"choices": [{"message": {"content": "Response"}}]}
+        # Mock client with chat.completions.create interface
+        class MockClient:
+            class Chat:
+                class Completions:
+                    def create(self, model, messages, **kwargs):
+                        return {"choices": [{"message": {"content": "Response"}}]}
 
-        adapter = OpenAIModelAdapter(client=mock_client, model_id="gpt-4")
+                completions = Completions()
+
+            chat = Chat()
+
+        adapter = OpenAIModelAdapter(client=MockClient(), model_id="gpt-4")
 
         assert adapter.model_id == "gpt-4"
 
-    def test_openai_adapter_generate_with_callable(self):
-        """OpenAIModelAdapter works with callable client."""
+    def test_openai_adapter_generate_with_modern_client(self):
+        """OpenAIModelAdapter works with modern client interface."""
         pytest.importorskip("openai")
         from maseval.interface.inference.openai import OpenAIModelAdapter
 
-        def mock_client(prompt, **kwargs):
-            return {"choices": [{"message": {"content": f"Response to: {prompt}"}}]}
+        class MockClient:
+            class Chat:
+                class Completions:
+                    def create(self, model, messages, **kwargs):
+                        # Extract user message content
+                        user_msg = next((m for m in messages if m["role"] == "user"), {})
+                        content = user_msg.get("content", "")
+                        return {"choices": [{"message": {"content": f"Response to: {content}"}}]}
 
-        adapter = OpenAIModelAdapter(client=mock_client, model_id="gpt-4")
+                completions = Completions()
+
+            chat = Chat()
+
+        adapter = OpenAIModelAdapter(client=MockClient(), model_id="gpt-4")
         result = adapter.generate("Test prompt")
 
         assert isinstance(result, str)
@@ -53,24 +70,19 @@ class TestOpenAIModelAdapterIntegration:
         from maseval.interface.inference.openai import OpenAIModelAdapter
 
         # Chat completion format
-        def chat_client(prompt, **kwargs):
-            return {"choices": [{"message": {"content": "Chat response"}}]}
+        class MockClient:
+            class Chat:
+                class Completions:
+                    def create(self, model, messages, **kwargs):
+                        return {"choices": [{"message": {"content": "Chat response"}}]}
 
-        adapter = OpenAIModelAdapter(client=chat_client, model_id="gpt-4")
+                completions = Completions()
+
+            chat = Chat()
+
+        adapter = OpenAIModelAdapter(client=MockClient(), model_id="gpt-4")
         result = adapter.generate("Test")
         assert result == "Chat response"
-
-    def test_openai_adapter_extract_text_from_string(self):
-        """OpenAIModelAdapter handles string responses."""
-        pytest.importorskip("openai")
-        from maseval.interface.inference.openai import OpenAIModelAdapter
-
-        def string_client(prompt, **kwargs):
-            return "Direct string response"
-
-        adapter = OpenAIModelAdapter(client=string_client, model_id="gpt-4")
-        result = adapter.generate("Test")
-        assert result == "Direct string response"
 
     def test_openai_adapter_default_generation_params(self):
         """OpenAIModelAdapter uses default generation parameters."""
@@ -79,12 +91,19 @@ class TestOpenAIModelAdapterIntegration:
 
         captured_params = {}
 
-        def mock_client(prompt, **kwargs):
-            captured_params.update(kwargs)
-            return "Response"
+        class MockClient:
+            class Chat:
+                class Completions:
+                    def create(self, model, messages, **kwargs):
+                        captured_params.update(kwargs)
+                        return {"choices": [{"message": {"content": "Response"}}]}
+
+                completions = Completions()
+
+            chat = Chat()
 
         adapter = OpenAIModelAdapter(
-            client=mock_client,
+            client=MockClient(),
             model_id="gpt-4",
             default_generation_params={"temperature": 0.7, "max_tokens": 100},
         )
@@ -100,11 +119,18 @@ class TestOpenAIModelAdapterIntegration:
         pytest.importorskip("openai")
         from maseval.interface.inference.openai import OpenAIModelAdapter
 
-        def mock_client(prompt, **kwargs):
-            return "Response"
+        class MockClient:
+            class Chat:
+                class Completions:
+                    def create(self, model, messages, **kwargs):
+                        return {"choices": [{"message": {"content": "Response"}}]}
+
+                completions = Completions()
+
+            chat = Chat()
 
         adapter = OpenAIModelAdapter(
-            client=mock_client,
+            client=MockClient(),
             model_id="gpt-4",
             default_generation_params={"temperature": 0.9},
         )
@@ -126,8 +152,14 @@ class TestOpenAIModelAdapterIntegration:
                 self.timeout = 60
                 self.max_retries = 3
 
-            def __call__(self, prompt, **kwargs):
-                return "Response"
+            class Chat:
+                class Completions:
+                    def create(self, model, messages, **kwargs):
+                        return {"choices": [{"message": {"content": "Response"}}]}
+
+                completions = Completions()
+
+            chat = Chat()
 
         client = MockOpenAIClient()
         adapter = OpenAIModelAdapter(client=client, model_id="gpt-4")
@@ -176,10 +208,22 @@ class TestGoogleGenAIModelAdapterIntegration:
         class MockClient:
             class Models:
                 def generate_content(self, model, contents, config=None):
-                    class Response:
-                        text = f"Response to: {contents}"
+                    # Extract text from contents (first user message)
+                    text = ""
+                    if contents:
+                        for content in contents:
+                            if content.get("role") == "user":
+                                parts = content.get("parts", [])
+                                if parts:
+                                    text = parts[0].get("text", "")
+                                    break
 
-                    return Response()
+                    class Response:
+                        pass
+
+                    resp = Response()
+                    resp.text = f"Response to: {text}"
+                    return resp
 
             def __init__(self):
                 self.models = self.Models()
@@ -274,7 +318,7 @@ class TestHuggingFaceModelAdapterIntegration:
         assert adapter.model_id == "gpt2"
 
     def test_huggingface_adapter_generate(self):
-        """HuggingFaceModelAdapter generates text."""
+        """HuggingFaceModelAdapter generates text with message formatting."""
         pytest.importorskip("transformers")
         from maseval.interface.inference.huggingface import HuggingFaceModelAdapter
 
@@ -285,7 +329,8 @@ class TestHuggingFaceModelAdapterIntegration:
         result = adapter.generate("Test prompt")
 
         assert isinstance(result, str)
-        assert result == "Generated: Test prompt"
+        # Without a tokenizer, the adapter formats messages as "user: content\nassistant:"
+        assert "Generated:" in result
 
     def test_huggingface_adapter_default_generation_params(self):
         """HuggingFaceModelAdapter uses default generation parameters."""
@@ -322,7 +367,8 @@ class TestHuggingFaceModelAdapterIntegration:
         adapter = HuggingFaceModelAdapter(model=mock_model, model_id="gpt2")
         result = adapter.generate("Test")
 
-        assert result == "Response: Test"
+        # Should still work, just formats the prompt as messages
+        assert "Response:" in result
 
     def test_huggingface_adapter_gather_config(self):
         """HuggingFaceModelAdapter config includes parameters."""
@@ -440,8 +486,18 @@ class TestCrossAdapterConsistency:
         from maseval.interface.inference.huggingface import HuggingFaceModelAdapter
         from maseval.interface.inference.litellm import LiteLLMModelAdapter
 
-        # OpenAI
-        openai_adapter = OpenAIModelAdapter(client=lambda p, **k: "R", model_id="gpt-4")
+        # OpenAI - mock with modern interface
+        class MockOpenAIClient:
+            class Chat:
+                class Completions:
+                    def create(self, model, messages, **kwargs):
+                        return {"choices": [{"message": {"content": "R"}}]}
+
+                completions = Completions()
+
+            chat = Chat()
+
+        openai_adapter = OpenAIModelAdapter(client=MockOpenAIClient(), model_id="gpt-4")
         assert openai_adapter.model_id == "gpt-4"
 
         # Google GenAI
@@ -482,8 +538,18 @@ class TestCrossAdapterConsistency:
         params = {"temperature": 0.7}
 
         # OpenAI
+        class MockOpenAIClient:
+            class Chat:
+                class Completions:
+                    def create(self, model, messages, **kwargs):
+                        return {"choices": [{"message": {"content": "R"}}]}
+
+                completions = Completions()
+
+            chat = Chat()
+
         openai_config = OpenAIModelAdapter(
-            client=lambda p, **k: "R",
+            client=MockOpenAIClient(),
             model_id="gpt-4",
             default_generation_params=params,
         ).gather_config()
