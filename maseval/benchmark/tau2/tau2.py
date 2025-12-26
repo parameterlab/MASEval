@@ -573,16 +573,16 @@ class DefaultTau2Agent:
             # Build messages for LLM call
             messages = [{"role": "system", "content": self.system_prompt}] + self._messages
 
-            # Generate response with tool access
-            response = self.model.generate(
+            # Generate response with tool access using chat() method
+            response = self.model.chat(
                 messages=messages,
                 tools=self._get_tool_definitions(),
                 **self.llm_args,
             )
 
-            # Parse response
-            content = response.get("content", "")
-            tool_calls = response.get("tool_calls", [])
+            # Parse response from ChatResponse
+            content = response.content or ""
+            tool_calls = response.tool_calls or []
 
             if tool_calls:
                 # Add assistant message with tool calls
@@ -673,24 +673,37 @@ class DefaultTau2Agent:
                 if param_name == "self":
                     continue
 
-                # Determine parameter type
-                param_type = "string"  # Default
+                # Determine parameter type and build property schema
+                param_schema: Dict[str, Any] = {"description": f"Parameter: {param_name}"}
+
                 if param.annotation is not inspect.Parameter.empty:
                     if param.annotation is int:
-                        param_type = "integer"
+                        param_schema["type"] = "integer"
                     elif param.annotation is float:
-                        param_type = "number"
+                        param_schema["type"] = "number"
                     elif param.annotation is bool:
-                        param_type = "boolean"
+                        param_schema["type"] = "boolean"
                     elif param.annotation is list or (hasattr(param.annotation, "__origin__") and param.annotation.__origin__ is list):
-                        param_type = "array"
+                        param_schema["type"] = "array"
+                        # Add items schema for array types (required by Google GenAI)
+                        param_schema["items"] = {"type": "string"}
+                        # Try to get the inner type for List[X]
+                        if hasattr(param.annotation, "__args__") and param.annotation.__args__:
+                            inner_type = param.annotation.__args__[0]
+                            if inner_type is int:
+                                param_schema["items"] = {"type": "integer"}
+                            elif inner_type is float:
+                                param_schema["items"] = {"type": "number"}
+                            elif inner_type is bool:
+                                param_schema["items"] = {"type": "boolean"}
                     elif param.annotation is dict:
-                        param_type = "object"
+                        param_schema["type"] = "object"
+                    else:
+                        param_schema["type"] = "string"
+                else:
+                    param_schema["type"] = "string"
 
-                properties[param_name] = {
-                    "type": param_type,
-                    "description": f"Parameter: {param_name}",
-                }
+                properties[param_name] = param_schema
 
                 # Check if parameter is required (no default value)
                 if param.default is inspect.Parameter.empty:
@@ -756,6 +769,26 @@ class DefaultTau2AgentAdapter(AgentAdapter):
             Message history from the underlying agent
         """
         return self._agent.get_messages()
+
+    def gather_traces(self) -> Dict[str, Any]:
+        """Gather execution traces from this agent.
+
+        Overrides base implementation to handle list-based message history.
+        """
+        history = self.get_messages()
+        # history is already a list, not a MessageHistory object
+        messages = history if isinstance(history, list) else []
+        return {
+            "type": type(self).__name__,
+            "gathered_at": __import__("datetime").datetime.now().isoformat(),
+            "name": self.name,
+            "agent_type": type(self.agent).__name__,
+            "adapter_type": type(self).__name__,
+            "message_count": len(messages),
+            "messages": messages,
+            "callbacks": [type(cb).__name__ for cb in self.callbacks],
+            "logs": self.logs,
+        }
 
 
 class DefaultAgentTau2Benchmark(Tau2Benchmark):

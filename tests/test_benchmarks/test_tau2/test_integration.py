@@ -1,9 +1,11 @@
 """Integration tests for Tau2 Benchmark."""
 
 import pytest
+from typing import Any, Dict, List, Optional, Union
 from unittest.mock import MagicMock
 
 from maseval import AgentAdapter, Task, ModelAdapter
+from maseval.core.model import ChatResponse
 from maseval.benchmark.tau2 import Tau2Benchmark, Tau2Evaluator
 
 
@@ -20,9 +22,20 @@ class MockModel(ModelAdapter):
     def model_id(self):
         return "mock"
 
-    def _generate_impl(self, prompt, generation_params=None, **kwargs):
-        # Return a valid JSON for agentic user
-        return '{"text": "I am satisfied.", "tool_calls": []}'
+    def _chat_impl(
+        self,
+        messages: List[Dict[str, Any]],
+        generation_params: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        **kwargs: Any,
+    ) -> ChatResponse:
+        """Return mock response for agentic user."""
+        # Return a valid JSON response for agentic user
+        chat_response = ChatResponse()
+        chat_response.content = '{"text": "I am satisfied.", "tool_calls": []}'
+        chat_response.tool_calls = None
+        return chat_response
 
 
 class IntegrationTau2Benchmark(Tau2Benchmark):

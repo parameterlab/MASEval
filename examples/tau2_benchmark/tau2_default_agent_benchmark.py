@@ -49,10 +49,10 @@ from maseval.benchmark.tau2 import (
     load_tasks,
 )
 
-# Import a ModelAdapter - using Google GenAI Tool Calling adapter
-# You can substitute with OpenAI, Anthropic, or any other tool-calling capable ModelAdapter
+# Import a ModelAdapter - using Google GenAI adapter (has built-in tool calling support)
+# You can substitute with OpenAI, Anthropic, LiteLLM, or any other ModelAdapter
 from google.genai import Client as GoogleGenAIClient
-from maseval.interface.inference.google_genai_tool_calling import ToolCallingGoogleGenAIAdapter
+from maseval.interface.inference import GoogleGenAIModelAdapter
 
 
 # =============================================================================
@@ -140,7 +140,7 @@ class GoogleGenAITau2Benchmark(DefaultAgentTau2Benchmark):
         super().__init__(agent_data=agent_data, **kwargs)
         self._model_id = model_id
 
-    def get_model_adapter(self, model_id: str, **kwargs: Any) -> ToolCallingGoogleGenAIAdapter:
+    def get_model_adapter(self, model_id: str, **kwargs: Any) -> GoogleGenAIModelAdapter:
         """Create a Google GenAI model adapter with tool calling support.
 
         Args:
@@ -148,9 +148,9 @@ class GoogleGenAITau2Benchmark(DefaultAgentTau2Benchmark):
             **kwargs: Additional arguments (e.g., register_name for tracing)
 
         Returns:
-            Configured ToolCallingGoogleGenAIAdapter
+            Configured GoogleGenAIModelAdapter
         """
-        adapter = ToolCallingGoogleGenAIAdapter(get_google_client(), model_id=model_id)
+        adapter = GoogleGenAIModelAdapter(get_google_client(), model_id=model_id)
 
         # Register for tracing if requested
         if "register_name" in kwargs:

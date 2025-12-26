@@ -2,9 +2,10 @@
 
 import pytest
 import json
+from typing import Any, Dict, List, Optional, Union
 from unittest.mock import MagicMock
 from maseval.core.user import AgenticUser
-from maseval.core.model import ModelAdapter
+from maseval.core.model import ModelAdapter, ChatResponse
 
 
 class MockModelAdapter(ModelAdapter):
@@ -17,10 +18,23 @@ class MockModelAdapter(ModelAdapter):
     def model_id(self):
         return "mock-model"
 
-    def _generate_impl(self, prompt: str, generation_params=None, **kwargs):
-        response = self.responses[self.call_count % len(self.responses)]
+    def _chat_impl(
+        self,
+        messages: List[Dict[str, Any]],
+        generation_params: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        **kwargs: Any,
+    ) -> ChatResponse:
+        """Return mock response as ChatResponse."""
+        response_text = self.responses[self.call_count % len(self.responses)]
         self.call_count += 1
-        return response
+
+        # Create ChatResponse with the text content
+        chat_response = ChatResponse()
+        chat_response.content = response_text
+        chat_response.tool_calls = None
+        return chat_response
 
 
 class DummyAgenticUser(AgenticUser):

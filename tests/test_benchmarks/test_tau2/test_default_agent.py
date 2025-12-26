@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch, call
 from typing import Any, Dict, List
 
 from maseval import Task, AgentAdapter
+from maseval.core.model import ChatResponse
 from maseval.benchmark.tau2 import (
     DefaultTau2Agent,
     DefaultTau2AgentAdapter,
@@ -26,11 +27,11 @@ from maseval.benchmark.tau2 import (
 def mock_model():
     """Create a mock model adapter."""
     model = MagicMock()
-    # Default behavior: return text response without tool calls
-    model.generate.return_value = {
-        "content": "I can help you with that.",
-        "tool_calls": [],
-    }
+    # Default behavior: return ChatResponse with text and no tool calls
+    response = ChatResponse()
+    response.content = "I can help you with that."
+    response.tool_calls = []
+    model.chat.return_value = response
     return model
 
 
@@ -164,10 +165,10 @@ class TestDefaultTau2AgentRun:
 
     def test_run_simple_text_response(self, default_agent, mock_model):
         """Test run with simple text response (no tool calls)."""
-        mock_model.generate.return_value = {
-            "content": "How can I help you today?",
-            "tool_calls": [],
-        }
+        chat_response = ChatResponse()
+        chat_response.content = "How can I help you today?"
+        chat_response.tool_calls = []
+        mock_model.chat.return_value = chat_response
 
         response = default_agent.run("Hello")
 
@@ -180,27 +181,24 @@ class TestDefaultTau2AgentRun:
         """Test run with a single tool call."""
         # First call: tool call
         # Second call: text response
-        mock_model.generate.side_effect = [
+        resp1 = ChatResponse()
+        resp1.content = ""
+        resp1.tool_calls = [
             {
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "call_1",
-                        "name": "get_order",
-                        "arguments": {"order_id": "12345"},
-                    }
-                ],
-            },
-            {
-                "content": "Your order 12345 is shipped.",
-                "tool_calls": [],
-            },
+                "id": "call_1",
+                "name": "get_order",
+                "arguments": {"order_id": "12345"},
+            }
         ]
+        resp2 = ChatResponse()
+        resp2.content = "Your order 12345 is shipped."
+        resp2.tool_calls = []
+        mock_model.chat.side_effect = [resp1, resp2]
 
         response = default_agent.run("What's the status of order 12345?")
 
         assert response == "Your order 12345 is shipped."
-        assert mock_model.generate.call_count == 2
+        assert mock_model.chat.call_count == 2
 
         # Check message history
         messages = default_agent.get_messages()
@@ -213,44 +211,31 @@ class TestDefaultTau2AgentRun:
 
     def test_run_with_multiple_tool_calls(self, default_agent, mock_model):
         """Test run with multiple sequential tool calls."""
-        mock_model.generate.side_effect = [
-            {
-                "content": "",
-                "tool_calls": [
-                    {"id": "call_1", "name": "get_order", "arguments": {"order_id": "123"}},
-                ],
-            },
-            {
-                "content": "",
-                "tool_calls": [
-                    {"id": "call_2", "name": "cancel_order", "arguments": {"order_id": "123", "reason": "Customer request"}},
-                ],
-            },
-            {
-                "content": "Order cancelled successfully.",
-                "tool_calls": [],
-            },
-        ]
+        resp1 = ChatResponse()
+        resp1.content = ""
+        resp1.tool_calls = [{"id": "call_1", "name": "get_order", "arguments": {"order_id": "123"}}]
+        resp2 = ChatResponse()
+        resp2.content = ""
+        resp2.tool_calls = [{"id": "call_2", "name": "cancel_order", "arguments": {"order_id": "123", "reason": "Customer request"}}]
+        resp3 = ChatResponse()
+        resp3.content = "Order cancelled successfully."
+        resp3.tool_calls = []
+        mock_model.chat.side_effect = [resp1, resp2, resp3]
 
         response = default_agent.run("Cancel order 123")
 
         assert response == "Order cancelled successfully."
-        assert mock_model.generate.call_count == 3
+        assert mock_model.chat.call_count == 3
 
     def test_run_tool_not_found(self, default_agent, mock_model):
         """Test run with tool call for non-existent tool."""
-        mock_model.generate.side_effect = [
-            {
-                "content": "",
-                "tool_calls": [
-                    {"id": "call_1", "name": "nonexistent_tool", "arguments": {}},
-                ],
-            },
-            {
-                "content": "I encountered an error.",
-                "tool_calls": [],
-            },
-        ]
+        resp1 = ChatResponse()
+        resp1.content = ""
+        resp1.tool_calls = [{"id": "call_1", "name": "nonexistent_tool", "arguments": {}}]
+        resp2 = ChatResponse()
+        resp2.content = "I encountered an error."
+        resp2.tool_calls = []
+        mock_model.chat.side_effect = [resp1, resp2]
 
         response = default_agent.run("Do something")
 
@@ -272,16 +257,13 @@ class TestDefaultTau2AgentRun:
             model=mock_model,
         )
 
-        mock_model.generate.side_effect = [
-            {
-                "content": "",
-                "tool_calls": [{"id": "call_1", "name": "failing_tool", "arguments": {}}],
-            },
-            {
-                "content": "I had an error.",
-                "tool_calls": [],
-            },
-        ]
+        resp1 = ChatResponse()
+        resp1.content = ""
+        resp1.tool_calls = [{"id": "call_1", "name": "failing_tool", "arguments": {}}]
+        resp2 = ChatResponse()
+        resp2.content = "I had an error."
+        resp2.tool_calls = []
+        mock_model.chat.side_effect = [resp1, resp2]
 
         response = agent.run("Do something")
 
@@ -300,10 +282,10 @@ class TestDefaultTau2AgentRun:
         )
 
         # Always return tool calls
-        mock_model.generate.return_value = {
-            "content": "",
-            "tool_calls": [{"id": "call_1", "name": "get_order", "arguments": {"order_id": "123"}}],
-        }
+        resp = ChatResponse()
+        resp.content = ""
+        resp.tool_calls = [{"id": "call_1", "name": "get_order", "arguments": {"order_id": "123"}}]
+        mock_model.chat.return_value = resp
 
         response = agent.run("Loop forever")
 
@@ -312,22 +294,19 @@ class TestDefaultTau2AgentRun:
 
     def test_run_json_string_arguments(self, default_agent, mock_model):
         """Test run with JSON-encoded string arguments."""
-        mock_model.generate.side_effect = [
+        resp1 = ChatResponse()
+        resp1.content = ""
+        resp1.tool_calls = [
             {
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "call_1",
-                        "name": "get_order",
-                        "arguments": '{"order_id": "12345"}',  # JSON string
-                    }
-                ],
-            },
-            {
-                "content": "Order found.",
-                "tool_calls": [],
-            },
+                "id": "call_1",
+                "name": "get_order",
+                "arguments": '{"order_id": "12345"}',  # JSON string
+            }
         ]
+        resp2 = ChatResponse()
+        resp2.content = "Order found."
+        resp2.tool_calls = []
+        mock_model.chat.side_effect = [resp1, resp2]
 
         response = default_agent.run("Check order")
 
@@ -335,22 +314,19 @@ class TestDefaultTau2AgentRun:
 
     def test_run_function_format_arguments(self, default_agent, mock_model):
         """Test run with nested function format for tool calls."""
-        mock_model.generate.side_effect = [
+        resp1 = ChatResponse()
+        resp1.content = ""
+        resp1.tool_calls = [
             {
-                "content": "",
-                "tool_calls": [
-                    {
-                        "id": "call_1",
-                        "name": "get_order",
-                        "function": {"arguments": {"order_id": "12345"}},
-                    }
-                ],
-            },
-            {
-                "content": "Order found.",
-                "tool_calls": [],
-            },
+                "id": "call_1",
+                "name": "get_order",
+                "function": {"arguments": {"order_id": "12345"}},
+            }
         ]
+        resp2 = ChatResponse()
+        resp2.content = "Order found."
+        resp2.tool_calls = []
+        mock_model.chat.side_effect = [resp1, resp2]
 
         response = default_agent.run("Check order")
 
@@ -431,10 +407,10 @@ class TestDefaultTau2AgentState:
 
     def test_reset(self, default_agent, mock_model):
         """Test reset clears state."""
-        mock_model.generate.return_value = {
-            "content": "Hello!",
-            "tool_calls": [],
-        }
+        resp = ChatResponse()
+        resp.content = "Hello!"
+        resp.tool_calls = []
+        mock_model.chat.return_value = resp
 
         default_agent.run("Hello")
         assert len(default_agent._messages) > 0
@@ -445,10 +421,10 @@ class TestDefaultTau2AgentState:
 
     def test_get_messages(self, default_agent, mock_model):
         """Test get_messages returns copy of history."""
-        mock_model.generate.return_value = {
-            "content": "Hello!",
-            "tool_calls": [],
-        }
+        resp = ChatResponse()
+        resp.content = "Hello!"
+        resp.tool_calls = []
+        mock_model.chat.return_value = resp
 
         default_agent.run("Hello")
 
@@ -478,10 +454,10 @@ class TestDefaultTau2AgentAdapter:
 
     def test_adapter_run_agent(self, default_agent, mock_model):
         """Test _run_agent passes through to agent."""
-        mock_model.generate.return_value = {
-            "content": "Response",
-            "tool_calls": [],
-        }
+        resp = ChatResponse()
+        resp.content = "Response"
+        resp.tool_calls = []
+        mock_model.chat.return_value = resp
 
         adapter = DefaultTau2AgentAdapter(default_agent)
         response = adapter._run_agent("Query")
@@ -490,10 +466,10 @@ class TestDefaultTau2AgentAdapter:
 
     def test_adapter_get_messages(self, default_agent, mock_model):
         """Test get_messages returns agent messages."""
-        mock_model.generate.return_value = {
-            "content": "Response",
-            "tool_calls": [],
-        }
+        resp = ChatResponse()
+        resp.content = "Response"
+        resp.tool_calls = []
+        mock_model.chat.return_value = resp
 
         adapter = DefaultTau2AgentAdapter(default_agent)
         adapter._run_agent("Query")
@@ -513,10 +489,10 @@ class DummyDefaultAgentBenchmark(DefaultAgentTau2Benchmark):
     def get_model_adapter(self, model_id: str, **kwargs):
         """Return a mock model adapter."""
         mock = MagicMock()
-        mock.generate.return_value = {
-            "content": "I can help with that.",
-            "tool_calls": [],
-        }
+        resp = ChatResponse()
+        resp.content = "I can help with that."
+        resp.tool_calls = []
+        mock.chat.return_value = resp
         return mock
 
 
@@ -581,9 +557,7 @@ class TestDefaultAgentTau2BenchmarkSetupAgents:
 
     def test_setup_agents_with_llm_args(self, sample_task):
         """Test agent setup with custom llm_args."""
-        benchmark = DummyDefaultAgentBenchmark(
-            agent_data={"model_id": "gpt-4o", "llm_args": {"temperature": 0.5}}
-        )
+        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o", "llm_args": {"temperature": 0.5}})
 
         mock_env = MagicMock(spec=Tau2Environment)
         mock_env.create_tools.return_value = {}
@@ -601,9 +575,7 @@ class TestDefaultAgentTau2BenchmarkSetupAgents:
 
     def test_setup_agents_with_max_tool_calls(self, sample_task):
         """Test agent setup with custom max_tool_calls."""
-        benchmark = DummyDefaultAgentBenchmark(
-            agent_data={"model_id": "gpt-4o", "max_tool_calls": 10}
-        )
+        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o", "max_tool_calls": 10})
 
         mock_env = MagicMock(spec=Tau2Environment)
         mock_env.create_tools.return_value = {}
@@ -650,16 +622,13 @@ class TestDefaultAgentIntegration:
         )
 
         # Simulate: get order, then provide response
-        mock_model.generate.side_effect = [
-            {
-                "content": "Let me check that order.",
-                "tool_calls": [{"id": "1", "name": "get_order", "arguments": {"order_id": "ORD-001"}}],
-            },
-            {
-                "content": "Your order ORD-001 is shipped.",
-                "tool_calls": [],
-            },
-        ]
+        resp1 = ChatResponse()
+        resp1.content = "Let me check that order."
+        resp1.tool_calls = [{"id": "1", "name": "get_order", "arguments": {"order_id": "ORD-001"}}]
+        resp2 = ChatResponse()
+        resp2.content = "Your order ORD-001 is shipped."
+        resp2.tool_calls = []
+        mock_model.chat.side_effect = [resp1, resp2]
 
         response = agent.run("Check order ORD-001")
 
@@ -681,10 +650,10 @@ class TestDefaultAgentIntegration:
             model=mock_model,
         )
 
-        mock_model.generate.return_value = {
-            "content": "Hello!",
-            "tool_calls": [],
-        }
+        resp = ChatResponse()
+        resp.content = "Hello!"
+        resp.tool_calls = []
+        mock_model.chat.return_value = resp
 
         agent.run("Hi")
         agent.run("Thanks")
@@ -914,18 +883,13 @@ class TestDefaultTau2AgentEdgeCases:
             model=mock_model,
         )
 
-        mock_model.generate.side_effect = [
-            {
-                "content": "",
-                "tool_calls": [
-                    {"id": "1", "name": "get_order", "arguments": "invalid{json"},
-                ],
-            },
-            {
-                "content": "Error occurred.",
-                "tool_calls": [],
-            },
-        ]
+        resp1 = ChatResponse()
+        resp1.content = ""
+        resp1.tool_calls = [{"id": "1", "name": "get_order", "arguments": "invalid{json"}]
+        resp2 = ChatResponse()
+        resp2.content = "Error occurred."
+        resp2.tool_calls = []
+        mock_model.chat.side_effect = [resp1, resp2]
 
         response = agent.run("Check order")
 
@@ -957,10 +921,10 @@ class TestDefaultTau2AgentEdgeCases:
 
     def test_empty_content_in_response(self, default_agent, mock_model):
         """Test handling of None or missing content in response."""
-        mock_model.generate.return_value = {
-            "content": None,
-            "tool_calls": [],
-        }
+        resp = ChatResponse()
+        resp.content = None
+        resp.tool_calls = []
+        mock_model.chat.return_value = resp
 
         response = default_agent.run("Hello")
 
@@ -969,18 +933,13 @@ class TestDefaultTau2AgentEdgeCases:
 
     def test_tool_call_with_empty_tool_call_id(self, default_agent, mock_model):
         """Test tool call without tool_call_id."""
-        mock_model.generate.side_effect = [
-            {
-                "content": "",
-                "tool_calls": [
-                    {"name": "get_order", "arguments": {"order_id": "123"}},  # No id
-                ],
-            },
-            {
-                "content": "Done.",
-                "tool_calls": [],
-            },
-        ]
+        resp1 = ChatResponse()
+        resp1.content = ""
+        resp1.tool_calls = [{"name": "get_order", "arguments": {"order_id": "123"}}]  # No id
+        resp2 = ChatResponse()
+        resp2.content = "Done."
+        resp2.tool_calls = []
+        mock_model.chat.side_effect = [resp1, resp2]
 
         response = default_agent.run("Check order")
 
@@ -1002,6 +961,7 @@ class TestDummyBenchmarkModelAdapter:
         adapter = benchmark.get_model_adapter("gpt-4o")
 
         assert adapter is not None
-        # Verify it can generate
-        result = adapter.generate(messages=[], tools=[])
-        assert "content" in result
+        # Verify it can chat
+        result = adapter.chat(messages=[], tools=[])
+        assert isinstance(result, ChatResponse)
+        assert result.content == "I can help with that."
