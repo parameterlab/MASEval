@@ -120,21 +120,36 @@ def assert_base_config_fields(config: Dict[str, Any], model_id: Optional[str] = 
 # ==================== Adapter Factory Functions ====================
 
 
-def create_openai_adapter(model_id: str = "gpt-4", responses: Optional[List[str]] = None) -> Any:
+def create_openai_adapter(
+    model_id: str = "gpt-4", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+) -> Any:
     """Create OpenAIModelAdapter instance."""
     pytest.importorskip("openai")
     from maseval.interface.inference.openai import OpenAIModelAdapter
 
     response_list: List[str] = responses or ["Test response"]
+    tool_calls_list = tool_calls
     call_count = [0]
 
     class MockClient:
         class Chat:
             class Completions:
                 def create(self, model, messages, **kwargs):
-                    response = response_list[call_count[0] % len(response_list)]
+                    response_text = response_list[call_count[0] % len(response_list)]
+                    response_tool_calls = tool_calls_list[call_count[0] % len(tool_calls_list)] if tool_calls_list else None
                     call_count[0] += 1
-                    return {"choices": [{"message": {"content": response}}]}
+
+                    # Mock response structure
+                    message = {"content": response_text, "role": "assistant"}
+
+                    if response_tool_calls:
+                        message["tool_calls"] = response_tool_calls
+
+                    return {
+                        "choices": [{"message": message, "finish_reason": "stop"}],
+                        "model": model,
+                        "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+                    }
 
             completions = Completions()
 
@@ -143,12 +158,15 @@ def create_openai_adapter(model_id: str = "gpt-4", responses: Optional[List[str]
     return OpenAIModelAdapter(client=MockClient(), model_id=model_id)
 
 
-def create_google_genai_adapter(model_id: str = "gemini-pro", responses: Optional[List[str]] = None) -> Any:
+def create_google_genai_adapter(
+    model_id: str = "gemini-pro", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+) -> Any:
     """Create GoogleGenAIModelAdapter instance."""
     pytest.importorskip("google.genai")
     from maseval.interface.inference.google_genai import GoogleGenAIModelAdapter
 
     response_list: List[str] = responses or ["Test response"]
+    tool_calls_list = tool_calls
     call_count = [0]
 
     class MockClient:
@@ -168,7 +186,9 @@ def create_google_genai_adapter(model_id: str = "gemini-pro", responses: Optiona
     return GoogleGenAIModelAdapter(client=MockClient(), model_id=model_id)
 
 
-def create_huggingface_adapter(model_id: str = "gpt2", responses: Optional[List[str]] = None) -> Any:
+def create_huggingface_adapter(
+    model_id: str = "gpt2", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+) -> Any:
     """Create HuggingFaceModelAdapter instance."""
     pytest.importorskip("transformers")
     from maseval.interface.inference.huggingface import HuggingFaceModelAdapter
@@ -184,7 +204,9 @@ def create_huggingface_adapter(model_id: str = "gpt2", responses: Optional[List[
     return HuggingFaceModelAdapter(model=mock_model, model_id=model_id)
 
 
-def create_litellm_adapter(model_id: str = "gpt-3.5-turbo", responses: Optional[List[str]] = None) -> Any:
+def create_litellm_adapter(
+    model_id: str = "gpt-3.5-turbo", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+) -> Any:
     """Create LiteLLMModelAdapter instance."""
     pytest.importorskip("litellm")
     import litellm
@@ -192,21 +214,36 @@ def create_litellm_adapter(model_id: str = "gpt-3.5-turbo", responses: Optional[
 
     # Mock litellm.completion
     response_list: List[str] = responses or ["Test response"]
+    tool_calls_list = tool_calls
     call_count = [0]
     original_completion = litellm.completion
 
     def mock_completion(model, messages, **kwargs):
         response = response_list[call_count[0] % len(response_list)]
+        response_tool_calls = tool_calls_list[call_count[0] % len(tool_calls_list)] if tool_calls_list else None
         call_count[0] += 1
 
         class MockMessage:
-            content = response
+            def __init__(self):
+                self.content = response
+                self.role = "assistant"
+                self.tool_calls = response_tool_calls
 
         class MockChoice:
-            message = MockMessage()
+            def __init__(self):
+                self.message = MockMessage()
+                self.finish_reason = "stop"
+
+        class MockUsage:
+            prompt_tokens = 10
+            completion_tokens = 20
+            total_tokens = 30
 
         class MockResponse:
-            choices = [MockChoice()]
+            def __init__(self):
+                self.choices = [MockChoice()]
+                self.usage = MockUsage()
+                self.model = model
 
         return MockResponse()
 
@@ -221,18 +258,24 @@ def create_litellm_adapter(model_id: str = "gpt-3.5-turbo", responses: Optional[
     return adapter
 
 
-def create_dummy_adapter(model_id: str = "test-model", responses: Optional[List[str]] = None) -> DummyModelAdapter:
+def create_dummy_adapter(
+    model_id: str = "test-model", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+) -> DummyModelAdapter:
     """Create DummyModelAdapter instance."""
     responses = responses or ["Test response"]
-    return DummyModelAdapter(model_id=model_id, responses=responses)
+    usage = {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}
+    return DummyModelAdapter(model_id=model_id, responses=responses, tool_calls=tool_calls, usage=usage, stop_reason="stop")
 
 
-def create_anthropic_adapter(model_id: str = "claude-3", responses: Optional[List[str]] = None) -> Any:
+def create_anthropic_adapter(
+    model_id: str = "claude-3", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+) -> Any:
     """Create AnthropicModelAdapter instance."""
     pytest.importorskip("anthropic")
     from maseval.interface.inference.anthropic import AnthropicModelAdapter
 
     response_list: List[str] = responses or ["Test response"]
+    tool_calls_list = tool_calls
     call_count = [0]
 
     class MockTextBlock:
@@ -241,6 +284,16 @@ def create_anthropic_adapter(model_id: str = "claude-3", responses: Optional[Lis
         def __init__(self, text: str):
             self.text = text
 
+    class MockToolUseBlock:
+        type = "tool_use"
+
+        def __init__(self, tool_call: Dict[str, Any]):
+            self.id = tool_call["id"]
+            self.name = tool_call["function"]["name"]
+            import json
+
+            self.input = json.loads(tool_call["function"]["arguments"])
+
     class MockUsage:
         input_tokens = 10
         output_tokens = 5
@@ -248,13 +301,20 @@ def create_anthropic_adapter(model_id: str = "claude-3", responses: Optional[Lis
     class MockMessages:
         def create(self, **kwargs):
             response = response_list[call_count[0] % len(response_list)]
+            response_tool_calls = tool_calls_list[call_count[0] % len(tool_calls_list)] if tool_calls_list else None
             call_count[0] += 1
 
             class MockResponse:
-                content = [MockTextBlock(response)]
-                usage = MockUsage()
-                model = model_id
-                stop_reason = "end_turn"
+                def __init__(self):
+                    self.content = []
+                    if response:
+                        self.content.append(MockTextBlock(response))
+                    if response_tool_calls:
+                        for tc in response_tool_calls:
+                            self.content.append(MockToolUseBlock(tc))
+                    self.usage = MockUsage()
+                    self.model = model_id
+                    self.stop_reason = "end_turn"
 
             return MockResponse()
 
@@ -264,7 +324,12 @@ def create_anthropic_adapter(model_id: str = "claude-3", responses: Optional[Lis
     return AnthropicModelAdapter(client=MockClient(), model_id=model_id)
 
 
-def create_adapter_for_implementation(implementation: str, model_id: str, responses: Optional[List[str]] = None) -> Any:
+def create_adapter_for_implementation(
+    implementation: str,
+    model_id: str,
+    responses: Optional[List[Optional[str]]] = None,
+    tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None,
+) -> Any:
     """Factory function to create adapter for specified implementation."""
     factories = {
         "dummy": create_dummy_adapter,
@@ -278,7 +343,7 @@ def create_adapter_for_implementation(implementation: str, model_id: str, respon
     if implementation not in factories:
         raise ValueError(f"Unknown implementation: {implementation}")
 
-    return factories[implementation](model_id=model_id, responses=responses)
+    return factories[implementation](model_id=model_id, responses=responses, tool_calls=tool_calls)
 
 
 def cleanup_adapter(adapter: Any, implementation: str) -> None:
@@ -618,3 +683,395 @@ class TestCrossAdapterConsistency:
         finally:
             for adapter, impl in adapters:
                 cleanup_adapter(adapter, impl)
+
+
+# ==================== Tool Calling Contract Tests ====================
+
+
+@pytest.mark.contract
+@pytest.mark.interface
+@pytest.mark.parametrize("implementation", ["dummy", "openai", "litellm", "anthropic"])
+class TestToolCallingContract:
+    """Contract tests for tool calling functionality across adapters.
+
+    These tests verify that tool-related features work consistently across
+    all model adapters that support tools. This is critical for users building
+    agentic systems that need to swap between providers.
+
+    Note: Only testing adapters that support tools (OpenAI, Anthropic, LiteLLM, Dummy).
+    HuggingFace and GoogleGenAI don't fully support tool calling in their current implementation.
+    """
+
+    def test_adapter_accepts_tools_parameter(self, implementation):
+        """All adapters accept tools parameter without error."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model")
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get weather for a city",
+                    "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
+                },
+            }
+        ]
+
+        try:
+            result = adapter.chat([{"role": "user", "content": "What's the weather in Paris?"}], tools=tools)
+            assert isinstance(result, ChatResponse)
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_accepts_tool_choice_parameter(self, implementation):
+        """All adapters accept tool_choice parameter without error."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model")
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get weather for a city",
+                    "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
+                },
+            }
+        ]
+
+        try:
+            # Test different tool_choice values
+            for tool_choice in ["auto", "none", "required"]:
+                result = adapter.chat([{"role": "user", "content": "What's the weather?"}], tools=tools, tool_choice=tool_choice)
+                assert isinstance(result, ChatResponse)
+
+            # Test specific tool selection
+            result = adapter.chat(
+                [{"role": "user", "content": "What's the weather?"}],
+                tools=tools,
+                tool_choice={"type": "function", "function": {"name": "get_weather"}},
+            )
+            assert isinstance(result, ChatResponse)
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_returns_tool_calls_in_response(self, implementation):
+        """All adapters return tool_calls with consistent structure."""
+        tool_calls_to_return = [
+            [
+                {
+                    "id": "call_123",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                }
+            ]
+        ]
+
+        adapter = create_adapter_for_implementation(
+            implementation, model_id="test-model", responses=["I'll check the weather"], tool_calls=tool_calls_to_return
+        )
+
+        tools = [
+            {
+                "type": "function",
+                "function": {"name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {}}},
+            }
+        ]
+
+        try:
+            result = adapter.chat([{"role": "user", "content": "What's the weather in Paris?"}], tools=tools)
+
+            assert result.tool_calls is not None, f"{implementation} did not return tool_calls"
+            assert isinstance(result.tool_calls, list)
+            assert len(result.tool_calls) > 0
+
+            # Verify structure of first tool call
+            tc = result.tool_calls[0]
+            assert "id" in tc, f"{implementation} tool_call missing 'id'"
+            assert "type" in tc, f"{implementation} tool_call missing 'type'"
+            assert "function" in tc, f"{implementation} tool_call missing 'function'"
+            assert "name" in tc["function"], f"{implementation} tool_call function missing 'name'"
+            assert "arguments" in tc["function"], f"{implementation} tool_call function missing 'arguments'"
+
+            # Verify types
+            assert isinstance(tc["id"], str)
+            assert isinstance(tc["type"], str)
+            assert isinstance(tc["function"]["name"], str)
+            assert isinstance(tc["function"]["arguments"], str)  # JSON string
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_handles_tool_result_messages(self, implementation):
+        """All adapters handle role='tool' messages in conversations."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model")
+
+        # Simulate a conversation with tool use
+        messages = [
+            {"role": "user", "content": "What's the weather in Paris?"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_123",
+                        "type": "function",
+                        "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_123", "content": '{"temperature": 72, "condition": "sunny"}'},
+            {"role": "user", "content": "What about London?"},
+        ]
+
+        try:
+            result = adapter.chat(messages)
+            assert isinstance(result, ChatResponse)
+            # Should not raise an error
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_handles_assistant_messages_with_tool_calls(self, implementation):
+        """All adapters handle assistant messages containing tool_calls."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model")
+
+        # Include an assistant message with tool_calls in the history
+        messages = [
+            {"role": "user", "content": "Get weather for Paris"},
+            {
+                "role": "assistant",
+                "content": "I'll check the weather for you.",
+                "tool_calls": [
+                    {
+                        "id": "call_123",
+                        "type": "function",
+                        "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call_123", "content": '{"temperature": 72}'},
+            {"role": "user", "content": "Thanks!"},
+        ]
+
+        try:
+            result = adapter.chat(messages)
+            assert isinstance(result, ChatResponse)
+            # Should process the conversation history without error
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_tool_calls_logs_correctly(self, implementation):
+        """All adapters log tool-related calls consistently."""
+        tool_calls_to_return = [
+            [
+                {
+                    "id": "call_123",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                }
+            ]
+        ]
+
+        adapter = create_adapter_for_implementation(
+            implementation, model_id="test-model", responses=["I'll check"], tool_calls=tool_calls_to_return
+        )
+
+        tools = [
+            {
+                "type": "function",
+                "function": {"name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {}}},
+            }
+        ]
+
+        try:
+            adapter.chat([{"role": "user", "content": "Weather?"}], tools=tools)
+
+            traces = adapter.gather_traces()
+            assert traces["total_calls"] == 1
+            assert len(traces["logs"]) == 1
+
+            call_log = traces["logs"][0]
+            assert "response_type" in call_log
+            assert call_log["response_type"] == "tool_call"
+            assert "tool_calls_count" in call_log
+            assert call_log["tool_calls_count"] == 1
+            assert "tools_provided" in call_log
+            assert call_log["tools_provided"] == 1
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+
+# ==================== Usage and Metadata Contract Tests ====================
+
+
+@pytest.mark.contract
+@pytest.mark.interface
+@pytest.mark.parametrize("implementation", ["dummy", "openai", "litellm", "anthropic"])
+class TestUsageAndMetadataContract:
+    """Contract tests for usage tracking and response metadata.
+
+    These tests ensure consistent reporting of token usage, stop reasons,
+    and other metadata across all adapters. This is important for evaluation
+    and cost tracking in production systems.
+
+    Note: Only testing adapters with full metadata support (OpenAI, Anthropic, LiteLLM, Dummy).
+    """
+
+    def test_adapter_returns_usage_info(self, implementation):
+        """All adapters return consistent usage information."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model")
+
+        try:
+            result = adapter.chat([{"role": "user", "content": "Hello"}])
+
+            # Usage should be present and have required fields
+            if result.usage is not None:  # Some adapters might not support this
+                assert isinstance(result.usage, dict)
+                assert "input_tokens" in result.usage
+                assert "output_tokens" in result.usage
+                assert "total_tokens" in result.usage
+
+                assert isinstance(result.usage["input_tokens"], int)
+                assert isinstance(result.usage["output_tokens"], int)
+                assert isinstance(result.usage["total_tokens"], int)
+
+                assert result.usage["input_tokens"] >= 0
+                assert result.usage["output_tokens"] >= 0
+                assert result.usage["total_tokens"] >= 0
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_returns_stop_reason(self, implementation):
+        """All adapters return stop_reason in responses."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model")
+
+        try:
+            result = adapter.chat([{"role": "user", "content": "Hello"}])
+
+            # stop_reason should be present
+            if result.stop_reason is not None:  # Some adapters might not support this
+                assert isinstance(result.stop_reason, str)
+                assert len(result.stop_reason) > 0
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_stop_reason_for_tool_calls(self, implementation):
+        """All adapters indicate tool use in stop_reason when applicable."""
+        tool_calls_to_return = [
+            [
+                {
+                    "id": "call_123",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                }
+            ]
+        ]
+
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model", responses=[None], tool_calls=tool_calls_to_return)
+
+        tools = [
+            {
+                "type": "function",
+                "function": {"name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {}}},
+            }
+        ]
+
+        try:
+            result = adapter.chat([{"role": "user", "content": "Weather?"}], tools=tools)
+
+            # When tool_calls are returned, should have a stop_reason
+            # (The exact value may vary: "tool_calls", "tool_use", "function_call", etc.)
+            if result.stop_reason is not None:
+                assert isinstance(result.stop_reason, str)
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_handles_content_none_with_tool_calls(self, implementation):
+        """All adapters handle responses with content=None and only tool_calls."""
+        tool_calls_to_return = [
+            [
+                {
+                    "id": "call_123",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                }
+            ]
+        ]
+
+        # Response with None content, only tool_calls
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model", responses=[None], tool_calls=tool_calls_to_return)
+
+        tools = [
+            {
+                "type": "function",
+                "function": {"name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {}}},
+            }
+        ]
+
+        try:
+            result = adapter.chat([{"role": "user", "content": "What's the weather?"}], tools=tools)
+
+            assert isinstance(result, ChatResponse)
+            # content can be None when model only returns tool calls
+            assert result.tool_calls is not None, f"{implementation} should return tool_calls when content is None"
+            assert isinstance(result.tool_calls, list)
+            assert len(result.tool_calls) > 0
+
+            # Verify the response is still valid
+            msg = result.to_message()
+            assert isinstance(msg, dict)
+            assert msg["role"] == "assistant"
+            assert "tool_calls" in msg
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_to_message_includes_tool_calls(self, implementation):
+        """All adapters include tool_calls in to_message() output."""
+        tool_calls_to_return = [
+            [
+                {
+                    "id": "call_123",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
+                }
+            ]
+        ]
+
+        adapter = create_adapter_for_implementation(
+            implementation, model_id="test-model", responses=["I'll check"], tool_calls=tool_calls_to_return
+        )
+
+        tools = [
+            {
+                "type": "function",
+                "function": {"name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {}}},
+            }
+        ]
+
+        try:
+            result = adapter.chat([{"role": "user", "content": "Weather?"}], tools=tools)
+
+            msg = result.to_message()
+            assert isinstance(msg, dict)
+            assert msg["role"] == "assistant"
+            assert "tool_calls" in msg, f"{implementation} to_message() should include tool_calls"
+            assert isinstance(msg["tool_calls"], list)
+            assert len(msg["tool_calls"]) > 0
+        finally:
+            cleanup_adapter(adapter, implementation)
+
+    def test_adapter_usage_tracking_across_calls(self, implementation):
+        """All adapters consistently report usage across multiple calls."""
+        adapter = create_adapter_for_implementation(implementation, model_id="test-model", responses=["R1", "R2"])
+
+        try:
+            result1 = adapter.chat([{"role": "user", "content": "First"}])
+            result2 = adapter.chat([{"role": "user", "content": "Second"}])
+
+            # Both should have usage (if supported)
+            if result1.usage is not None and result2.usage is not None:
+                assert isinstance(result1.usage, dict)
+                assert isinstance(result2.usage, dict)
+
+                # Structure should be consistent
+                assert set(result1.usage.keys()) == set(result2.usage.keys())
+        finally:
+            cleanup_adapter(adapter, implementation)

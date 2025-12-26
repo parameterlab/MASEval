@@ -31,21 +31,30 @@ class DummyModelAdapter(ModelAdapter):
     def __init__(
         self,
         model_id: str = "test-model",
-        responses: Optional[List[str]] = None,
-        tool_calls: Optional[List[List[Dict[str, Any]]]] = None,
+        responses: Optional[List[Optional[str]]] = None,
+        tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None,
+        usage: Optional[Dict[str, int]] = None,
+        stop_reason: Optional[str] = None,
     ):
         """Initialize DummyModelAdapter.
 
         Args:
             model_id: Identifier for this model instance.
             responses: List of text responses to return. Cycles through the list.
+                Can include None for tool-only responses.
             tool_calls: Optional list of tool call lists. If provided, each call
                 returns the corresponding tool_calls (cycling through the list).
+                Can include None for text-only responses.
+            usage: Optional usage dict to include in all responses. Should have
+                input_tokens, output_tokens, total_tokens.
+            stop_reason: Optional stop_reason to include in all responses.
         """
         super().__init__()
         self._model_id = model_id
-        self._responses = responses or ["test response"]
+        self._responses: List[Optional[str]] = responses or ["test response"]
         self._tool_calls = tool_calls
+        self._usage = usage
+        self._stop_reason = stop_reason
         self._call_count = 0
 
     @property
@@ -86,6 +95,8 @@ class DummyModelAdapter(ModelAdapter):
             tool_calls=response_tool_calls,
             role="assistant",
             model=self._model_id,
+            usage=self._usage,
+            stop_reason=self._stop_reason,
         )
 
 
