@@ -1,12 +1,13 @@
 from .model import ModelAdapter
-from .simulator import UserLLMSimulator
+from .simulator import UserLLMSimulator, AgenticUserLLMSimulator
 from .tracing import TraceableMixin
 from .config import ConfigurableMixin
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Callable
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 import time
+import inspect
 from .history import MessageHistory
 
 
@@ -369,3 +370,167 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
             NotImplementedError: If the method is not implemented by the subclass.
         """
         raise NotImplementedError
+
+
+class AgenticUser(User):
+    """A user that can use tools to interact with the environment."""
+
+    def __init__(
+        self,
+        name: str,
+        model: ModelAdapter,
+        user_profile: Dict[str, Any],
+        scenario: str,
+        tools: Optional[Dict[str, Callable]] = None,
+        max_internal_steps: int = 5,
+        **kwargs,
+    ):
+        """Initialize AgenticUser.
+
+        Args:
+            tools: Dictionary of tools available to the user.
+            max_internal_steps: Maximum number of tool execution loops per turn.
+            **kwargs: Arguments passed to User.__init__
+        """
+        self.tools = tools or {}
+        self.max_internal_steps = max_internal_steps
+
+        # Initialize the parent, but we will replace the simulator
+        super().__init__(name=name, model=model, user_profile=user_profile, scenario=scenario, **kwargs)
+
+        # Generate tool definitions
+        tool_definitions = self._generate_tool_definitions() if self.tools else None
+
+        # Replace the standard simulator with AgenticUserLLMSimulator
+        self.simulator = AgenticUserLLMSimulator(
+            model=self.model,
+            user_profile=self.user_profile,
+            scenario=self.scenario,
+            template=kwargs.get("template"),
+            max_try=kwargs.get("max_try", 3),
+            stop_token=kwargs.get("stop_token"),
+            early_stopping_condition=kwargs.get("early_stopping_condition"),
+            tools=tool_definitions,
+        )
+
+    def _generate_tool_definitions(self) -> List[Dict[str, Any]]:
+        """Generate tool definitions from the tools dictionary."""
+        definitions = []
+        for name, func in self.tools.items():
+            sig = inspect.signature(func)
+            doc = func.__doc__ or ""
+
+            inputs = {}
+            for param_name, param in sig.parameters.items():
+                if param_name == "self":
+                    continue
+                param_type = "string"  # Default
+                if param.annotation is not inspect.Parameter.empty:
+                    if param.annotation is int:
+                        param_type = "integer"
+                    elif param.annotation is float:
+                        param_type = "number"
+                    elif param.annotation is bool:
+                        param_type = "boolean"
+
+                inputs[param_name] = {"type": param_type, "description": f"Parameter {param_name}"}
+
+            definitions.append({"name": name, "description": doc.strip(), "inputs": inputs})
+        return definitions
+
+    def simulate_response(self, question: str) -> str:
+        """Simulate a user response, potentially executing tools in a loop."""
+        if self.is_done():
+            return ""
+
+        # Start with the current shared history
+        self.messages.add_message("assistant", question)
+
+        # Internal history for the ReAct loop (scratchpad)
+        # We start with a copy of the shared conversation history
+        internal_history = list(self.messages.to_list())
+
+        start_time = time.time()
+        log_entry: Dict[str, Any] = {"timestamp": datetime.now().isoformat(), "question": question, "status": "success", "internal_steps": []}
+
+        final_response = ""
+        steps = 0
+
+        try:
+            while steps < self.max_internal_steps:
+                steps += 1
+
+                # Call simulator
+                # Note: AgenticUserLLMSimulator returns (text, tool_calls)
+                text, tool_calls = self.simulator(conversation_history=internal_history)
+
+                # Log the step
+                step_log = {"step": steps, "thought": text, "tool_calls": tool_calls}
+
+                if not tool_calls:
+                    # No tools called, this is the final response
+                    final_response = text
+                    log_entry["internal_steps"].append(step_log)
+                    break
+
+                # Tools called - execute them
+                # Append the thought to internal history
+                # We use 'user' role for thoughts as it's the user speaking to themselves/environment
+                internal_history.append({"role": "user", "content": text})
+
+                tool_outputs = []
+                for call in tool_calls:
+                    name = call.get("name")  # type: ignore[union-attr]
+                    args = call.get("arguments", {})  # type: ignore[union-attr]
+                    result_str = ""
+
+                    if name in self.tools:
+                        try:
+                            result = self.tools[name](**args)
+                            result_str = str(result)
+                            status = "success"
+                        except Exception as e:
+                            result_str = f"Error: {str(e)}"
+                            status = "error"
+                    else:
+                        result_str = f"Error: Tool '{name}' not found"
+                        status = "error"
+
+                    tool_outputs.append({"name": name, "arguments": args, "result": result_str, "status": status})
+
+                    # Append observation to internal history
+                    # Format: Tool Output [name]: result
+                    internal_history.append(
+                        {
+                            "role": "user",  # Using user role for simplicity, or we could use 'system'
+                            "content": f"Tool Output [{name}]: {result_str}",
+                        }
+                    )
+
+                step_log["tool_outputs"] = tool_outputs
+                log_entry["internal_steps"].append(step_log)
+
+            if not final_response and steps >= self.max_internal_steps:
+                # Forced termination of loop
+                final_response = "I need to stop checking things now."
+                log_entry["status"] = "max_internal_steps_reached"
+
+        except Exception as exc:
+            log_entry["duration_seconds"] = time.time() - start_time
+            log_entry["status"] = "error"
+            log_entry["error"] = str(exc)
+            self.logs.append(log_entry)
+            raise
+
+        log_entry["duration_seconds"] = time.time() - start_time
+        log_entry["final_response"] = final_response[:200]
+        self.logs.append(log_entry)
+
+        # Clean stop token from final response
+        _, clean_response = self._check_stop_token(final_response)
+
+        # Update the shared history with the final text only
+        self.messages.add_message("user", clean_response)
+        self.increment_turn()
+
+        return clean_response

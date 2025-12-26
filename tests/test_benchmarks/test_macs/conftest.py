@@ -19,7 +19,7 @@ responses passed explicitly (e.g., DummyModelAdapter(responses=['{"text": "..."}
 """
 
 import pytest
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from unittest.mock import MagicMock
 
 from conftest import DummyModelAdapter
@@ -146,13 +146,13 @@ class ConcreteMACSBenchmark(MACSBenchmark):
 
         return adapter
 
-    def setup_agents(
+    def setup_agents(  # type: ignore[override]
         self,
         agent_data: Dict[str, Any],
         environment: MACSEnvironment,
         task: Task,
         user: Optional[User],
-    ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
+    ) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
         """Create test agents using MACSAgentAdapter."""
         adapter = MACSAgentAdapter("macs_test_agent")
         return [adapter], {"macs_test_agent": adapter}

@@ -1,0 +1,5 @@
+# Ignore downloaded data files created by the Tau2 benchmark
+data/*
+
+# Ignore downloaded prompt templates
+prompt_templates/*.txt

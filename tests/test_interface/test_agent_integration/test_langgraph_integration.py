@@ -74,7 +74,7 @@ def test_langgraph_adapter_logs_after_run():
         )
         return {"messages": messages + [response]}
 
-    graph = StateGraph(State)
+    graph = StateGraph(State)  # type: ignore[arg-type]
     graph.add_node("agent", agent_node)
     graph.set_entry_point("agent")
     graph.add_edge("agent", END)
@@ -143,7 +143,7 @@ def test_langgraph_adapter_logs_multiple_runs():
         response = AIMessage(content="Response")
         return {"messages": messages + [response]}
 
-    graph = StateGraph(State)
+    graph = StateGraph(State)  # type: ignore[arg-type]
     graph.add_node("agent", agent_node)
     graph.set_entry_point("agent")
     graph.add_edge("agent", END)
@@ -177,7 +177,7 @@ def test_langgraph_adapter_logs_error_handling():
     def failing_node(state: State) -> State:
         raise ValueError("Intentional test error")
 
-    graph = StateGraph(State)
+    graph = StateGraph(State)  # type: ignore[arg-type]
     graph.add_node("agent", failing_node)
     graph.set_entry_point("agent")
     graph.add_edge("agent", END)
@@ -222,7 +222,7 @@ def test_langgraph_adapter_logs_without_token_metadata():
         response = AIMessage(content="Test response")
         return {"messages": messages + [response]}
 
-    graph = StateGraph(State)
+    graph = StateGraph(State)  # type: ignore[arg-type]
     graph.add_node("agent", agent_node)
     graph.set_entry_point("agent")
     graph.add_edge("agent", END)

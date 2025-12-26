@@ -53,13 +53,7 @@ class LiteLLMModelAdapter(ModelAdapter):
     (OpenAI, Anthropic, Cohere, Azure, AWS Bedrock, Google, etc.) using
     OpenAI-compatible syntax.
 
-    Supported providers include:
-        - OpenAI: "gpt-4", "gpt-3.5-turbo"
-        - Anthropic: "claude-3-opus-20240229", "claude-3-sonnet-20240229"
-        - Azure: "azure/gpt-4", "azure/gpt-35-turbo"
-        - AWS Bedrock: "bedrock/anthropic.claude-v2"
-        - Google: "gemini/gemini-pro"
-        - And many more (see https://docs.litellm.ai/docs/providers)
+    For supported providers see https://docs.litellm.ai/docs/providers.
 
     API keys are read from environment variables by default:
         - OPENAI_API_KEY for OpenAI
