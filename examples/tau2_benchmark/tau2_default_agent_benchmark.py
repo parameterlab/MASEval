@@ -287,7 +287,7 @@ def run_benchmark(
         callbacks=[logger],
         n_task_repeats=n_task_repeats,
         fail_on_setup_error=True,
-        fail_on_task_error=False,  # Continue on task errors
+        fail_on_task_error=False,  # Set to False to continue on task errors
         fail_on_evaluation_error=True,
     )
 

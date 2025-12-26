@@ -168,7 +168,26 @@ class GoogleGenAIModelAdapter(ModelAdapter):
             if role == "system":
                 system_instruction = content
             elif role == "assistant":
-                contents.append({"role": "model", "parts": [{"text": content}]})
+                # Handle assistant messages with or without tool calls
+                parts = []
+                if content:
+                    parts.append({"text": content})
+                # Convert tool_calls to Google's function_call format
+                tool_calls = msg.get("tool_calls", [])
+                if tool_calls:
+                    import json
+
+                    for tc in tool_calls:
+                        if tc.get("type") == "function":
+                            func = tc.get("function", {})
+                            args_str = func.get("arguments", "{}")
+                            try:
+                                args = json.loads(args_str) if isinstance(args_str, str) else args_str
+                            except json.JSONDecodeError:
+                                args = {}
+                            parts.append({"function_call": {"name": func.get("name", ""), "args": args}})
+                if parts:
+                    contents.append({"role": "model", "parts": parts})
             elif role == "tool":
                 # Tool response in Google format
                 tool_call_id = msg.get("tool_call_id", "")
@@ -237,7 +256,7 @@ class GoogleGenAIModelAdapter(ModelAdapter):
         tool_calls = None
         if hasattr(response, "candidates") and response.candidates:
             candidate = response.candidates[0]
-            if hasattr(candidate, "content") and candidate.content:
+            if hasattr(candidate, "content") and candidate.content and candidate.content.parts:
                 for part in candidate.content.parts:
                     if hasattr(part, "function_call") and part.function_call:
                         if tool_calls is None:
