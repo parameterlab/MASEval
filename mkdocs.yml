@@ -114,6 +114,7 @@ nav:
               - LlamaIndex: interface/agents/llamaindex.md
               - SmolAgents: interface/agents/smolagents.md
           - Models:
+              - Anthropic: interface/inference/anthropic.md
               - Google GenAI: interface/inference/google_genai.md
               - HuggingFace: interface/inference/huggingface.md
               - LiteLLM: interface/inference/litellm.md

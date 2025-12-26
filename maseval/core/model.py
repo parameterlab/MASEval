@@ -4,8 +4,7 @@ This module provides the base `ModelAdapter` class that all model adapters must
 implement. It defines a consistent interface for interacting with LLMs across
 different providers (OpenAI, Anthropic, Google, HuggingFace, LiteLLM, etc.).
 
-Concrete implementations for specific inference providers are in:
-    maseval.interface.inference
+See `maseval.interface.inference` for concrete implementations.
 
 Example:
     ```python
