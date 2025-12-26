@@ -53,12 +53,7 @@ class GoogleGenAIModelAdapter(ModelAdapter):
     """Adapter for Google Generative AI (Gemini models).
 
     Works with Google's Gemini models through the google-genai SDK.
-
-    Supported models include:
-        - gemini-2.0-flash
-        - gemini-1.5-pro
-        - gemini-1.5-flash
-        - And other Gemini model variants
+    Pass any model ID supported by the Google GenAI API.
 
     The adapter converts OpenAI-style messages to Google's format internally,
     so you can use the same message format across all adapters.
@@ -119,23 +114,9 @@ class GoogleGenAIModelAdapter(ModelAdapter):
         system_instruction, contents = self._convert_messages(messages)
 
         # Build config
-        config_params = {}
+        config_params = dict(params)
         if system_instruction:
             config_params["system_instruction"] = system_instruction
-
-        # Map common parameter names
-        if "max_tokens" in params:
-            config_params["max_output_tokens"] = params.pop("max_tokens")
-        if "max_output_tokens" in params:
-            config_params["max_output_tokens"] = params.pop("max_output_tokens")
-        if "temperature" in params:
-            config_params["temperature"] = params.pop("temperature")
-        if "top_p" in params:
-            config_params["top_p"] = params.pop("top_p")
-        if "top_k" in params:
-            config_params["top_k"] = params.pop("top_k")
-        if "stop_sequences" in params:
-            config_params["stop_sequences"] = params.pop("stop_sequences")
 
         # Convert tools to Google format
         if tools:
