@@ -171,14 +171,49 @@ def create_google_genai_adapter(
 
     class MockClient:
         class Models:
-            def generate_content(self, model, contents, config=None):
+            def generate_content(self_inner, model, contents, config=None):
                 response = response_list[call_count[0] % len(response_list)]
+                response_tool_calls = tool_calls_list[call_count[0] % len(tool_calls_list)] if tool_calls_list else None
                 call_count[0] += 1
 
-                class Response:
-                    text = response
+                # Build mock response with function calls if tool_calls provided
+                if response_tool_calls:
 
-                return Response()
+                    class MockFunctionCall:
+                        def __init__(self, name, args):
+                            self.name = name
+                            self.args = args
+
+                    class MockPart:
+                        def __init__(self, tc_dict):
+                            self.type = "function_call"
+                            func = tc_dict.get("function", {})
+                            args_str = func.get("arguments", "{}")
+                            import json
+
+                            self.function_call = MockFunctionCall(func.get("name", ""), json.loads(args_str) if args_str else {})
+
+                    class MockContent:
+                        def __init__(self):
+                            self.parts = [MockPart(tc) for tc in response_tool_calls]
+
+                    class MockCandidate:
+                        def __init__(self):
+                            self.content = MockContent()
+                            self.finish_reason = "STOP"
+
+                    class MockResponse:
+                        text = None
+                        candidates = [MockCandidate()]
+
+                    return MockResponse()
+                else:
+
+                    class Response:
+                        text = response
+                        candidates = []
+
+                    return Response()
 
         def __init__(self):
             self.models = self.Models()
@@ -220,19 +255,41 @@ def create_litellm_adapter(
 
     def mock_completion(model, messages, **kwargs):
         response = response_list[call_count[0] % len(response_list)]
-        response_tool_calls = tool_calls_list[call_count[0] % len(tool_calls_list)] if tool_calls_list else None
+        response_tool_calls_dicts = tool_calls_list[call_count[0] % len(tool_calls_list)] if tool_calls_list else None
         call_count[0] += 1
+
+        # Convert dict tool_calls to objects with attributes (like real LiteLLM returns)
+        mock_tool_calls = None
+        if response_tool_calls_dicts:
+            mock_tool_calls = []
+            for tc_dict in response_tool_calls_dicts:
+
+                class MockFunction:
+                    pass
+
+                class MockToolCall:
+                    pass
+
+                func = MockFunction()
+                func.name = tc_dict.get("function", {}).get("name", "")
+                func.arguments = tc_dict.get("function", {}).get("arguments", "{}")
+
+                tc = MockToolCall()
+                tc.id = tc_dict.get("id", "")
+                tc.type = tc_dict.get("type", "function")
+                tc.function = func
+                mock_tool_calls.append(tc)
 
         class MockMessage:
             def __init__(self):
                 self.content = response
                 self.role = "assistant"
-                self.tool_calls = response_tool_calls
+                self.tool_calls = mock_tool_calls
 
         class MockChoice:
             def __init__(self):
                 self.message = MockMessage()
-                self.finish_reason = "stop"
+                self.finish_reason = "tool_calls" if mock_tool_calls else "stop"
 
         class MockUsage:
             prompt_tokens = 10
