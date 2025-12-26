@@ -497,6 +497,7 @@ class DefaultTau2Agent:
         model: ModelAdapter for LLM calls
         llm_args: Additional arguments for LLM calls
         max_tool_calls: Maximum tool calls per turn (prevents infinite loops)
+        verbose: Verbosity level (0=silent, 1=basic, 2=detailed)
     """
 
     def __init__(
@@ -506,6 +507,7 @@ class DefaultTau2Agent:
         model: ModelAdapter,
         llm_args: Optional[Dict[str, Any]] = None,
         max_tool_calls: int = 50,
+        verbose: int = 0,
     ):
         """Initialize the default tau2 agent.
 
@@ -515,12 +517,17 @@ class DefaultTau2Agent:
             model: ModelAdapter for making LLM calls
             llm_args: Optional additional arguments passed to model.generate()
             max_tool_calls: Maximum number of tool calls per agent turn
+            verbose: Verbosity level for debugging output:
+                - 0: Silent (no output)
+                - 1: Basic (tool calls and responses)
+                - 2: Detailed (full message contents, tool arguments and results)
         """
         self.tools = tools
         self.policy = policy
         self.model = model
         self.llm_args = llm_args or {}
         self.max_tool_calls = max_tool_calls
+        self.verbose = verbose
 
         # Build system prompt
         self.system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
@@ -537,6 +544,16 @@ class DefaultTau2Agent:
         self._messages = []
         self._tool_call_count = 0
 
+    def _log(self, level: int, message: str) -> None:
+        """Print message if verbosity level is high enough.
+
+        Args:
+            level: Minimum verbosity level required (1 or 2)
+            message: Message to print
+        """
+        if self.verbose >= level:
+            print(message)
+
     def run(self, query: str) -> str:
         """Process a user query and return the agent's response.
 
@@ -552,6 +569,8 @@ class DefaultTau2Agent:
         Returns:
             Agent's text response to the user
         """
+        self._log(1, f"[Agent] Received query: {query[:100]}{'...' if len(query) > 100 else ''}")
+
         # Add user message to history
         self._messages.append({"role": "user", "content": query})
 
@@ -572,6 +591,7 @@ class DefaultTau2Agent:
         while self._tool_call_count < self.max_tool_calls:
             # Build messages for LLM call
             messages = [{"role": "system", "content": self.system_prompt}] + self._messages
+            self._log(2, f"[Agent] Generating response (messages: {len(messages)}, tools: {len(self.tools)})")
 
             # Generate response with tool access using chat() method
             response = self.model.chat(
@@ -585,6 +605,8 @@ class DefaultTau2Agent:
             tool_calls = response.tool_calls or []
 
             if tool_calls:
+                self._log(1, f"[Agent] Tool calls: {[self._get_tool_name(tc) for tc in tool_calls]}")
+
                 # Add assistant message with tool calls
                 self._messages.append(
                     {
@@ -612,26 +634,36 @@ class DefaultTau2Agent:
                 continue
             else:
                 # Text response - add to history and return
+                self._log(1, f"[Agent] Response: {content[:100]}{'...' if len(content) > 100 else ''}")
                 self._messages.append({"role": "assistant", "content": content})
                 return content
 
         # Max tool calls reached - return empty or error message
+        self._log(1, f"[Agent] Max tool calls ({self.max_tool_calls}) reached")
         return "I apologize, but I've encountered an issue processing your request. Please try again."
+
+    def _get_tool_name(self, tool_call: Dict[str, Any]) -> str:
+        """Extract tool name from a tool call dict."""
+        if "function" in tool_call:
+            return tool_call["function"].get("name", "unknown")
+        return tool_call.get("name", "unknown")
 
     def _execute_tool_call(self, tool_call: Dict[str, Any]) -> Any:
         """Execute a single tool call.
 
         Args:
-            tool_call: Dict with 'name' and 'arguments' keys
+            tool_call: Dict in OpenAI format with 'function.name' and 'function.arguments',
+                or flat format with 'name' and 'arguments' keys.
 
         Returns:
             Tool execution result
         """
-        name = tool_call.get("name", "")
-        # Handle both 'arguments' (dict) and 'function' (nested dict) formats
+        # Handle both flat format and nested 'function' format (OpenAI/ChatResponse style)
         if "function" in tool_call:
+            name = tool_call["function"].get("name", "")
             arguments = tool_call["function"].get("arguments", {})
         else:
+            name = tool_call.get("name", "")
             arguments = tool_call.get("arguments", {})
 
         # Handle string arguments (JSON encoded)
@@ -644,12 +676,17 @@ class DefaultTau2Agent:
                 arguments = {}
 
         if name not in self.tools:
+            self._log(1, f"[Agent] Tool not found: {name}")
             return f"Error: Tool '{name}' not found"
 
+        self._log(2, f"[Agent] Executing {name}({arguments})")
         try:
             result = self.tools[name](**arguments)
+            result_str = str(result)
+            self._log(2, f"[Agent] Result: {result_str[:200]}{'...' if len(result_str) > 200 else ''}")
             return result
         except Exception as e:
+            self._log(1, f"[Agent] Tool error: {name} - {e}")
             return f"Error executing tool '{name}': {str(e)}"
 
     def _get_tool_definitions(self) -> List[Dict[str, Any]]:
@@ -801,6 +838,7 @@ class DefaultAgentTau2Benchmark(Tau2Benchmark):
         - model_id: LLM model identifier (required)
         - llm_args: Optional dict of additional LLM arguments
         - max_tool_calls: Maximum tool calls per turn (default: 50)
+        - verbose: Verbosity level for debugging (0=silent, 1=basic, 2=detailed)
 
     Example:
         from maseval.benchmark.tau2 import DefaultAgentTau2Benchmark, load_tasks, configure_model_ids
@@ -809,7 +847,7 @@ class DefaultAgentTau2Benchmark(Tau2Benchmark):
         configure_model_ids(tasks, user_model_id="gpt-4o")
 
         benchmark = DefaultAgentTau2Benchmark(
-            agent_data={"model_id": "gpt-4o"},
+            agent_data={"model_id": "gpt-4o", "verbose": 1},
         )
         results = benchmark.run(tasks)
     """
@@ -884,6 +922,7 @@ class DefaultAgentTau2Benchmark(Tau2Benchmark):
         model_id = self._get_agent_model_id(agent_data)
         llm_args = agent_data.get("llm_args", {})
         max_tool_calls = agent_data.get("max_tool_calls", 50)
+        verbose = agent_data.get("verbose", 0)
 
         # Get tools and policy from environment
         tools = environment.create_tools()
@@ -899,6 +938,7 @@ class DefaultAgentTau2Benchmark(Tau2Benchmark):
             model=model,
             llm_args=llm_args,
             max_tool_calls=max_tool_calls,
+            verbose=verbose,
         )
 
         # Wrap in adapter
