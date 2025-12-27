@@ -434,3 +434,144 @@ class TestComputePassAtK:
 
         assert pass_k["pass@1"] == 0.5  # 1/2 tasks pass@1
         assert pass_k["pass@2"] == 0.5  # 1/2 tasks pass@2
+
+
+# =============================================================================
+# Pass^k Tests (Combinatorial Metric)
+# =============================================================================
+
+
+@pytest.mark.benchmark
+class TestPassHatK:
+    """Tests for pass^k (combinatorial) metric."""
+
+    def test_pass_hat_k_basic(self):
+        """Basic pass^k calculation."""
+        from maseval.benchmark.tau2.evaluator import pass_hat_k
+
+        # 4 trials, 2 successes, k=1: C(2,1)/C(4,1) = 2/4 = 0.5
+        assert pass_hat_k(4, 2, 1) == 0.5
+
+        # 4 trials, 2 successes, k=2: C(2,2)/C(4,2) = 1/6 ≈ 0.167
+        assert abs(pass_hat_k(4, 2, 2) - 1 / 6) < 0.001
+
+        # 4 trials, 4 successes, k=4: C(4,4)/C(4,4) = 1
+        assert pass_hat_k(4, 4, 4) == 1.0
+
+        # 4 trials, 0 successes, k=1: C(0,1)/C(4,1) = 0
+        assert pass_hat_k(4, 0, 1) == 0.0
+
+    def test_pass_hat_k_insufficient_successes(self):
+        """pass^k returns 0 when success_count < k."""
+        from maseval.benchmark.tau2.evaluator import pass_hat_k
+
+        # 4 trials, 1 success, k=2: can't get 2 successes from 1
+        assert pass_hat_k(4, 1, 2) == 0.0
+
+    def test_pass_hat_k_invalid_k(self):
+        """pass^k raises error when k > num_trials."""
+        from maseval.benchmark.tau2.evaluator import pass_hat_k
+
+        with pytest.raises(ValueError):
+            pass_hat_k(2, 1, 3)  # k=3 > num_trials=2
+
+    def test_compute_pass_hat_k_single_task(self):
+        """compute_pass_hat_k with single task."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_hat_k
+
+        # 4 attempts, 2 successes
+        results = [
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+        ]
+
+        pass_hat = compute_pass_hat_k(results, k_values=[1, 2])
+
+        # k=1: C(2,1)/C(4,1) = 2/4 = 0.5
+        assert pass_hat["pass^1"] == 0.5
+        # k=2: C(2,2)/C(4,2) = 1/6 ≈ 0.167
+        assert abs(pass_hat["pass^2"] - 1 / 6) < 0.001
+
+    def test_compute_pass_hat_k_multiple_tasks(self):
+        """compute_pass_hat_k averages across tasks."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_hat_k
+
+        results = [
+            # Task 1: 2/2 successes
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            # Task 2: 0/2 successes
+            {"task_id": "task2", "status": "success", "eval": [{"passed": False}]},
+            {"task_id": "task2", "status": "success", "eval": [{"passed": False}]},
+        ]
+
+        pass_hat = compute_pass_hat_k(results, k_values=[1, 2])
+
+        # Task 1: pass^1 = C(2,1)/C(2,1) = 1.0
+        # Task 2: pass^1 = C(0,1)/C(2,1) = 0.0
+        # Average: (1.0 + 0.0) / 2 = 0.5
+        assert pass_hat["pass^1"] == 0.5
+
+        # Task 1: pass^2 = C(2,2)/C(2,2) = 1.0
+        # Task 2: pass^2 = C(0,2)/C(2,2) = 0.0
+        # Average: (1.0 + 0.0) / 2 = 0.5
+        assert pass_hat["pass^2"] == 0.5
+
+    def test_compute_pass_hat_k_auto_k_values(self):
+        """compute_pass_hat_k auto-determines k values if not provided."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_hat_k
+
+        results = [
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+        ]
+
+        pass_hat = compute_pass_hat_k(results)
+
+        # Should have pass^1, pass^2, pass^3
+        assert "pass^1" in pass_hat
+        assert "pass^2" in pass_hat
+        assert "pass^3" in pass_hat
+        assert pass_hat["pass^1"] == 1.0
+        assert pass_hat["pass^2"] == 1.0
+        assert pass_hat["pass^3"] == 1.0
+
+    def test_compute_pass_hat_k_empty_results(self):
+        """compute_pass_hat_k with empty results."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_hat_k
+
+        pass_hat = compute_pass_hat_k([])
+        assert pass_hat == {}
+
+    def test_pass_at_k_vs_pass_hat_k_difference(self):
+        """Demonstrate the difference between pass@k and pass^k."""
+        from maseval.benchmark.tau2.evaluator import compute_pass_at_k, compute_pass_hat_k
+
+        # 4 attempts: [True, False, False, False] (1 success out of 4)
+        results = [
+            {"task_id": "task1", "status": "success", "eval": [{"passed": True}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+            {"task_id": "task1", "status": "success", "eval": [{"passed": False}]},
+        ]
+
+        pass_at = compute_pass_at_k(results, k_values=[1, 2, 4])
+        pass_hat = compute_pass_hat_k(results, k_values=[1, 2, 4])
+
+        # pass@1: First attempt succeeded → 1.0
+        assert pass_at["pass@1"] == 1.0
+        # pass^1: C(1,1)/C(4,1) = 1/4 = 0.25
+        assert pass_hat["pass^1"] == 0.25
+
+        # pass@2: At least one of first 2 succeeded → 1.0
+        assert pass_at["pass@2"] == 1.0
+        # pass^2: C(1,2)/C(4,2) = 0 (can't pick 2 from 1 success)
+        assert pass_hat["pass^2"] == 0.0
+
+        # pass@4: At least one of all 4 succeeded → 1.0
+        assert pass_at["pass@4"] == 1.0
+        # pass^4: C(1,4)/C(4,4) = 0 (can't pick 4 from 1 success)
+        assert pass_hat["pass^4"] == 0.0

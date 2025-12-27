@@ -563,3 +563,98 @@ def compute_pass_at_k(
         pass_at_k[f"pass@{k}"] = successes / total if total > 0 else 0.0
 
     return pass_at_k
+
+
+def pass_hat_k(num_trials: int, success_count: int, k: int) -> float:
+    """Compute the pass^k metric for a single task.
+
+    Pass^k is a combinatorial metric from https://arxiv.org/pdf/2406.12045
+    that estimates the probability of getting k successes in k draws
+    without replacement from a pool of num_trials attempts.
+
+    Formula: C(success_count, k) / C(num_trials, k)
+
+    Args:
+        num_trials: Total number of attempts for the task
+        success_count: Number of successful attempts
+        k: Number of draws to consider
+
+    Returns:
+        Pass^k probability (0.0 to 1.0)
+
+    Raises:
+        ValueError: If num_trials < k
+    """
+    from math import comb
+
+    if num_trials < k:
+        raise ValueError(f"Number of trials {num_trials} is less than k {k}.")
+
+    if success_count < k:
+        return 0.0
+
+    return comb(success_count, k) / comb(num_trials, k)
+
+
+def compute_pass_hat_k(
+    results: List[Dict[str, Any]],
+    k_values: Optional[List[int]] = None,
+) -> Dict[str, float]:
+    """Compute Pass^k metrics from benchmark results.
+
+    Pass^k is the combinatorial metric from the tau2 paper that estimates
+    the probability of k successes in k draws without replacement.
+
+    This differs from Pass@k which only checks if at least 1 of k attempts succeeds.
+
+    Requires running benchmark with n_task_repeats >= max(k_values).
+
+    Args:
+        results: List of result dicts from benchmark.run()
+        k_values: k values to compute. If None, uses 1 to max trials.
+
+    Returns:
+        Dict with pass^1, pass^2, etc. scores (averaged across all tasks)
+    """
+    # Group results by task_id
+    task_results: Dict[str, List[bool]] = {}
+    for res in results:
+        task_id = res.get("task_id", "")
+        if res.get("status") not in {"success", "agent_error"}:
+            continue  # Skip infrastructure errors
+
+        evals = res.get("eval") or []
+        passed = any(entry.get("passed", False) for entry in evals)
+
+        if task_id not in task_results:
+            task_results[task_id] = []
+        task_results[task_id].append(passed)
+
+    if not task_results:
+        return {}
+
+    # Determine max k based on minimum trials across tasks
+    min_trials = min(len(attempts) for attempts in task_results.values())
+
+    if k_values is None:
+        k_values = list(range(1, min_trials + 1))
+
+    # Compute pass^k for each k
+    pass_hat_k_results: Dict[str, float] = {}
+
+    for k in k_values:
+        task_scores = []
+
+        for task_id, attempts in task_results.items():
+            num_trials = len(attempts)
+            if num_trials < k:
+                continue  # Not enough attempts for this k
+
+            success_count = sum(attempts)
+            score = pass_hat_k(num_trials, success_count, k)
+            task_scores.append(score)
+
+        if task_scores:
+            pass_hat_k_results[f"pass^{k}"] = sum(task_scores) / len(task_scores)
+
+    return pass_hat_k_results

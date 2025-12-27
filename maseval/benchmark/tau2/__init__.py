@@ -47,13 +47,14 @@ Usage:
                 self.register("models", kwargs["register_name"], adapter)
             return adapter
 
-    # Run with multiple repeats for Pass@k
+    # Run with multiple repeats for Pass@k / Pass^k
     benchmark = MyTau2Benchmark(agent_data={}, n_task_repeats=4)
     results = benchmark.run(tasks)
 
     # Compute metrics
     metrics = compute_benchmark_metrics(results)
-    pass_k = compute_pass_at_k(results, k_values=[1, 2, 3, 4])
+    pass_k = compute_pass_at_k(results, k_values=[1, 2, 3, 4])  # At least 1 success in k
+    pass_hat_k = compute_pass_hat_k(results, k_values=[1, 2, 3, 4])  # Combinatorial (paper metric)
 """
 
 # Main benchmark components
@@ -75,6 +76,8 @@ from maseval.benchmark.tau2.evaluator import (
     TerminationReason,
     compute_benchmark_metrics,
     compute_pass_at_k,
+    compute_pass_hat_k,
+    pass_hat_k,
 )
 
 # Data loading
@@ -118,6 +121,8 @@ __all__ = [
     "TerminationReason",
     "compute_benchmark_metrics",
     "compute_pass_at_k",
+    "compute_pass_hat_k",
+    "pass_hat_k",
     # Data loading
     "load_tasks",
     "load_domain_config",
