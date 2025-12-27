@@ -289,9 +289,9 @@ def run_maseval_tau2_bench(config: ComparisonConfig) -> Optional[RunResult]:
 
     provider = get_provider_from_model(config.model_id)
 
-    # Currently only Google provider is supported in the example
-    if provider != "google":
-        print(f"Warning: MASEval example currently only supports 'google' provider.")
+    # Check for supported providers
+    if provider not in ("google", "openai"):
+        print(f"Warning: MASEval example currently only supports 'google' and 'openai' providers.")
         print(f"Model '{config.model_id}' uses provider '{provider}'.")
         print("Skipping MASEval. To add support, implement a benchmark class for this provider.")
         return None

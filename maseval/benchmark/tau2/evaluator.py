@@ -72,18 +72,15 @@ class Tau2Evaluator(Evaluator):
         self,
         task: Task,
         environment: Tau2Environment,
-        data_dir: Optional[Path] = None,
     ):
         """Initialize the evaluator.
 
         Args:
             task: Task being evaluated
             environment: Tau2Environment instance
-            data_dir: Data directory for creating reference environments
         """
         self.task = task
         self.environment = environment
-        self.data_dir = data_dir
 
         # Extract evaluation criteria from task
         eval_data = task.evaluation_data
@@ -229,8 +226,7 @@ class Tau2Evaluator(Evaluator):
         predicted_db_hash = env_trace.get("final_db_hash") or self.environment.get_db_hash()
 
         # Create gold environment and replay expected actions
-        domain = self.environment.domain
-        gold_env_constructor = get_environment_constructor(domain, self.data_dir)
+        gold_env_constructor = get_environment_constructor(self.task.environment_data)
         gold_env = gold_env_constructor()
 
         # Apply initial state if present

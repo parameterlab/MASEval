@@ -32,7 +32,14 @@ Usage:
 import argparse
 import os
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional, Union
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed, rely on environment variables
 
 # MASEval imports
 from maseval import Task
@@ -49,10 +56,20 @@ from maseval.benchmark.tau2 import (
     load_tasks,
 )
 
-# Import a ModelAdapter - using Google GenAI adapter (has built-in tool calling support)
-# You can substitute with OpenAI, Anthropic, LiteLLM, or any other ModelAdapter
+# Import ModelAdapters - Google GenAI and OpenAI both have built-in tool calling support
 from google.genai import Client as GoogleGenAIClient
 from maseval.interface.inference import GoogleGenAIModelAdapter
+
+# OpenAI imports (optional - only needed if using OpenAI models)
+try:
+    from openai import OpenAI as OpenAIClient
+    from maseval.interface.inference import OpenAIModelAdapter
+
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    OpenAIClient = None
+    OpenAIModelAdapter = None
 
 
 # =============================================================================
@@ -71,6 +88,22 @@ def get_google_client() -> GoogleGenAIClient:
             raise ValueError("GOOGLE_API_KEY environment variable is required")
         _google_client = GoogleGenAIClient(api_key=api_key)
     return _google_client
+
+
+_openai_client: Optional[Any] = None
+
+
+def get_openai_client() -> Any:
+    """Get or create the shared OpenAI client."""
+    global _openai_client
+    if not OPENAI_AVAILABLE:
+        raise ImportError("OpenAI package not installed. Run: pip install openai")
+    if _openai_client is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required")
+        _openai_client = OpenAIClient(api_key=api_key)
+    return _openai_client
 
 
 # =============================================================================
@@ -230,6 +263,186 @@ class GoogleGenAITau2Benchmark(DefaultAgentTau2Benchmark):
         return agents_to_run, agents_dict
 
 
+class OpenAITau2Benchmark(DefaultAgentTau2Benchmark):
+    """Tau2 Benchmark using OpenAI for the default agent.
+
+    This implementation uses OpenAI's API (gpt-4, gpt-5-mini, etc.) for
+    the default tau2 agent. It follows the same structure as the original
+    tau2-bench LLMAgent.
+
+    Usage:
+        benchmark = OpenAITau2Benchmark(model_id="gpt-5-mini")
+        results = benchmark.run(tasks=tasks)
+    """
+
+    def __init__(
+        self,
+        model_id: str = "gpt-5-mini",
+        **kwargs: Any,
+    ):
+        """Initialize the benchmark.
+
+        Args:
+            model_id: OpenAI model to use (default: gpt-5-mini)
+            **kwargs: Additional arguments passed to parent
+        """
+        if not OPENAI_AVAILABLE:
+            raise ImportError("OpenAI package not installed. Run: pip install openai")
+
+        # Set model_id in agent_data
+        agent_data = kwargs.pop("agent_data", {})
+        agent_data["model_id"] = model_id
+        super().__init__(agent_data=agent_data, **kwargs)
+        self._model_id = model_id
+
+    def get_model_adapter(self, model_id: str, **kwargs: Any) -> "OpenAIModelAdapter":
+        """Create an OpenAI model adapter with tool calling support.
+
+        Args:
+            model_id: Model identifier
+            **kwargs: Additional arguments (e.g., register_name for tracing)
+
+        Returns:
+            Configured OpenAIModelAdapter
+        """
+        adapter = OpenAIModelAdapter(get_openai_client(), model_id=model_id)
+
+        # Register for tracing if requested
+        if "register_name" in kwargs:
+            self.register("models", kwargs["register_name"], adapter)
+
+        return adapter
+
+    def setup_user(
+        self,
+        agent_data: Dict[str, Any],
+        environment: Tau2Environment,
+        task: Task,
+    ) -> DefaultTau2User:
+        """Create user simulator with tool support for default agent.
+
+        Args:
+            agent_data: Agent configuration
+            environment: Task environment
+            task: Current task
+
+        Returns:
+            DefaultTau2User instance with callable user tool
+        """
+        user_data = task.user_data
+        instructions = user_data.get("instructions", {})
+
+        # Build scenario from instructions
+        if isinstance(instructions, str):
+            scenario = instructions
+        elif isinstance(instructions, dict):
+            parts = []
+            if instructions.get("reason_for_call"):
+                parts.append(f"Reason for call: {instructions['reason_for_call']}")
+            if instructions.get("known_info"):
+                parts.append(f"Known info: {instructions['known_info']}")
+            if instructions.get("task_instructions"):
+                parts.append(f"Task: {instructions['task_instructions']}")
+            scenario = "\n".join(parts)
+        else:
+            scenario = ""
+
+        # Add persona if available
+        persona = user_data.get("persona")
+        if persona:
+            scenario = f"Persona: {persona}\n\n{scenario}"
+
+        user_model_id = self._get_user_model_id(task)
+        user_model = self.get_model_adapter(user_model_id, register_name="user_simulator")
+
+        return DefaultTau2User(
+            model=user_model,
+            scenario=scenario,
+            initial_query=task.query,
+            tools=environment.create_user_tools(),
+        )
+
+    def setup_agents(
+        self,
+        agent_data: Dict[str, Any],
+        environment: Tau2Environment,
+        task: Task,
+        user: Optional[DefaultTau2User],
+    ):
+        """Create the default agent with user tool support.
+
+        Extends parent to add the user's ask_user tool to the agent's toolset.
+        """
+        # Get base agent setup
+        agents_to_run, agents_dict = super().setup_agents(agent_data, environment, task, user)
+
+        # Add user tool to agent if user is available
+        if user is not None:
+            agent = agents_dict["default_agent"]._agent
+            user_tools = user.get_tool()
+            agent.tools.update(user_tools)
+
+        return agents_to_run, agents_dict
+
+
+# =============================================================================
+# Provider Detection
+# =============================================================================
+
+
+def get_provider_from_model(model_id: str) -> Literal["openai", "google", "anthropic"]:
+    """Determine the provider from a model ID.
+
+    Args:
+        model_id: The model identifier (e.g., "gpt-5-mini", "gemini-2.5-flash")
+
+    Returns:
+        The provider name.
+    """
+    model_lower = model_id.lower()
+
+    # OpenAI models
+    if any(x in model_lower for x in ["gpt-", "o1-", "o3-", "chatgpt"]):
+        return "openai"
+
+    # Google models
+    if any(x in model_lower for x in ["gemini", "palm", "bard"]):
+        return "google"
+
+    # Anthropic models
+    if any(x in model_lower for x in ["claude"]):
+        return "anthropic"
+
+    # Default to OpenAI for unknown models
+    return "openai"
+
+
+def get_benchmark_class(
+    model_id: str,
+) -> Union[type[GoogleGenAITau2Benchmark], type["OpenAITau2Benchmark"]]:
+    """Get the appropriate benchmark class for a model.
+
+    Args:
+        model_id: The model identifier
+
+    Returns:
+        The benchmark class to use
+
+    Raises:
+        ValueError: If the provider is not supported
+    """
+    provider = get_provider_from_model(model_id)
+
+    if provider == "google":
+        return GoogleGenAITau2Benchmark
+    elif provider == "openai":
+        if not OPENAI_AVAILABLE:
+            raise ImportError("OpenAI package not installed. Run: pip install openai")
+        return OpenAITau2Benchmark
+    else:
+        raise ValueError(f"Provider '{provider}' is not yet supported. Supported: google, openai")
+
+
 # =============================================================================
 # Main Entry Point
 # =============================================================================
@@ -246,7 +459,7 @@ def run_benchmark(
 
     Args:
         domain: Tau2 domain (airline, retail, or telecom)
-        model_id: LLM model to use
+        model_id: LLM model to use (supports OpenAI and Google models)
         limit: Maximum number of tasks to run
         n_task_repeats: Number of times to repeat each task (for Pass@k)
         output_dir: Directory for results
@@ -281,13 +494,18 @@ def run_benchmark(
         filename_pattern=f"tau2_{domain}_default_{{timestamp}}.jsonl",
     )
 
-    # Create benchmark
-    benchmark = GoogleGenAITau2Benchmark(
-        model_id=model_id,
+    # Get the appropriate benchmark class based on model provider
+    BenchmarkClass = get_benchmark_class(model_id)
+    provider = get_provider_from_model(model_id)
+    print(f"Using {provider} provider")
+
+    # Create benchmark with verbose agent for debugging
+    benchmark = BenchmarkClass(
+        agent_data={"model_id": model_id, "verbose": 2},
         callbacks=[logger],
         n_task_repeats=n_task_repeats,
         fail_on_setup_error=True,
-        fail_on_task_error=False,  # Set to False to continue on task errors
+        fail_on_task_error=True,  # Fail fast for debugging
         fail_on_evaluation_error=True,
     )
 

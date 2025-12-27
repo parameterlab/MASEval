@@ -62,7 +62,6 @@ class Tau2Environment(Environment):
         self,
         task_data: Dict[str, Any],
         callbacks: Optional[List[Any]] = None,
-        data_dir: Optional[Path] = None,
     ):
         """Initialize environment for a domain.
 
@@ -70,12 +69,14 @@ class Tau2Environment(Environment):
             task_data: Task data containing:
                 - domain: Domain name ("retail", "airline", "telecom")
                 - initial_state: Optional initial state setup
+                - policy: Domain policy text (embedded during task loading)
+                - db_path: Path to database file (embedded during task loading)
             callbacks: Optional callbacks
-            data_dir: Base data directory for loading domain data
         """
-        self._data_dir = data_dir or DEFAULT_DATA_DIR
         self._domain = task_data.get("domain", "retail")
         self._initial_state_config = task_data.get("initial_state")
+        self._policy = task_data.get("policy")
+        self._db_path = task_data.get("db_path")
 
         if self._domain not in VALID_DOMAINS:
             raise ValueError(f"Invalid domain '{self._domain}'. Must be one of {VALID_DOMAINS}")
@@ -120,17 +121,19 @@ class Tau2Environment(Environment):
         - initial_db_hash: Hash of initial state
 
         Args:
-            task_data: Task data with domain and initial_state
+            task_data: Task data with domain, initial_state, policy, db_path
 
         Returns:
             State dictionary
         """
-        # Load domain configuration
-        config = load_domain_config(self._domain, self._data_dir)
-
-        # Load and initialize database
+        # Load database from embedded path (or fallback to loading config)
         db_class = DOMAIN_DB_CLASSES[self._domain]
-        db = db_class.load(config["db_path"])
+        if self._db_path:
+            db = db_class.load(Path(self._db_path))
+        else:
+            # Fallback for backwards compatibility
+            config = load_domain_config(self._domain)
+            db = db_class.load(config["db_path"])
 
         # Apply initial state if provided
         if self._initial_state_config:
@@ -149,11 +152,17 @@ class Tau2Environment(Environment):
         # Store initial hash for comparison
         initial_db_hash = db.get_hash()
 
+        # Get policy from embedded data or fallback to loading
+        policy = self._policy
+        if not policy:
+            config = load_domain_config(self._domain)
+            policy = config["policy"]
+
         return {
             "db": db,
             "toolkit": toolkit,
             "user_toolkit": user_toolkit,
-            "policy": config["policy"],
+            "policy": policy,
             "initial_db_hash": initial_db_hash,
         }
 
@@ -293,15 +302,14 @@ class Tau2Environment(Environment):
         return config
 
 
-def get_environment_constructor(domain: str, data_dir: Optional[Path] = None) -> Callable[[], Tau2Environment]:
-    """Get an environment constructor for a domain.
+def get_environment_constructor(task_data: Dict[str, Any]) -> Callable[[], Tau2Environment]:
+    """Get an environment constructor from task data.
 
     This is used by the evaluator to create fresh environment instances
     for replaying tool calls.
 
     Args:
-        domain: Domain name
-        data_dir: Optional data directory
+        task_data: Task data with domain, policy, db_path
 
     Returns:
         Callable that creates Tau2Environment instances
@@ -309,7 +317,6 @@ def get_environment_constructor(domain: str, data_dir: Optional[Path] = None) ->
 
     def constructor(solo_mode: bool = False) -> Tau2Environment:
         # solo_mode is ignored for now (telecom-specific feature)
-        task_data = {"domain": domain}
-        return Tau2Environment(task_data, data_dir=data_dir)
+        return Tau2Environment(task_data)
 
     return constructor

@@ -216,31 +216,19 @@ class Tau2Benchmark(Benchmark):
         tasks = load_tasks("retail")
         configure_model_ids(tasks, user_model_id="gpt-4o")
 
-        benchmark = MyTau2Benchmark(agent_data={})
+        benchmark = MyTau2Benchmark()
         benchmark.run(tasks)
     """
 
-    def __init__(
-        self,
-        agent_data: Optional[Dict[str, Any]] = None,
-        callbacks: Optional[List[Any]] = None,
-        n_task_repeats: int = 1,
-        max_invocations: int = 10,
-        data_dir: Optional[Path] = None,
-        **kwargs: Any,
-    ):
-        """Initialize benchmark.
+    def __init__(self, *args: Any, max_invocations: int = 50, **kwargs: Any):
+        """Initialize benchmark with tau2-specific defaults.
 
         Args:
-            agent_data: Agent configuration dict
-            callbacks: Benchmark callbacks
-            n_task_repeats: Repetitions per task (for Pass@k metrics, use k here)
-            max_invocations: Maximum agent-user interaction rounds
-            data_dir: Base data directory for domain data
-            **kwargs: Additional arguments passed to parent
+            max_invocations: Maximum agent-user interaction rounds (default: 50).
+                tau2-bench uses max_steps=200, where 1 turn ≈ 4 steps.
+            *args, **kwargs: Passed to parent Benchmark class
         """
-        super().__init__(agent_data or {}, callbacks, n_task_repeats, max_invocations, **kwargs)
-        self._data_dir = data_dir
+        super().__init__(*args, max_invocations=max_invocations, **kwargs)
 
     def _get_user_model_id(self, task: Task) -> str:
         """Get user simulator model ID from task.user_data.
@@ -279,10 +267,7 @@ class Tau2Benchmark(Benchmark):
         Returns:
             Tau2Environment instance
         """
-        return Tau2Environment(
-            task_data=task.environment_data,
-            data_dir=self._data_dir,
-        )
+        return Tau2Environment(task_data=task.environment_data)
 
     def setup_user(  # type: ignore[override]
         self,
@@ -391,7 +376,6 @@ class Tau2Benchmark(Benchmark):
             Tau2Evaluator(
                 task=task,
                 environment=environment,
-                data_dir=self._data_dir,
             )
         ]
 
@@ -852,30 +836,13 @@ class DefaultAgentTau2Benchmark(Tau2Benchmark):
         results = benchmark.run(tasks)
     """
 
-    def __init__(
-        self,
-        agent_data: Optional[Dict[str, Any]] = None,
-        callbacks: Optional[List[Any]] = None,
-        n_task_repeats: int = 1,
-        max_invocations: int = 10,
-        data_dir: Optional[Path] = None,
-        **kwargs: Any,
-    ):
-        """Initialize the default agent benchmark.
+    # Cache for model adapters
+    _model_cache: Dict[str, ModelAdapter]
 
-        Args:
-            agent_data: Agent configuration containing:
-                - model_id: LLM model identifier (required)
-                - llm_args: Optional dict of additional LLM arguments
-                - max_tool_calls: Maximum tool calls per turn (default: 50)
-            callbacks: Benchmark callbacks
-            n_task_repeats: Repetitions per task
-            max_invocations: Maximum agent-user interaction rounds
-            data_dir: Base data directory for domain data
-            **kwargs: Additional arguments passed to parent
-        """
-        super().__init__(agent_data, callbacks, n_task_repeats, max_invocations, data_dir, **kwargs)
-        self._model_cache: Dict[str, ModelAdapter] = {}
+    def __init__(self, *args: Any, **kwargs: Any):
+        """Initialize the default agent benchmark. See Tau2Benchmark for args."""
+        super().__init__(*args, **kwargs)
+        self._model_cache = {}
 
     def _get_agent_model_id(self, agent_data: Dict[str, Any]) -> str:
         """Get agent model ID from agent_data.

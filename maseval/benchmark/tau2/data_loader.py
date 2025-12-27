@@ -306,10 +306,13 @@ def load_tasks(
     if limit:
         raw_tasks = raw_tasks[:limit]
 
+    # Load domain config once and embed in each task
+    domain_config = load_domain_config(domain, data_dir)
+
     # Convert to MASEval Task objects
     tasks = []
     for raw_task in raw_tasks:
-        task = _convert_tau2_task_to_maseval(raw_task, domain, split)
+        task = _convert_tau2_task_to_maseval(raw_task, domain, split, domain_config)
         tasks.append(task)
 
     return TaskCollection(tasks)
@@ -319,6 +322,7 @@ def _convert_tau2_task_to_maseval(
     raw_task: Dict[str, Any],
     domain: str,
     split: str,
+    domain_config: Dict[str, Any],
 ) -> Task:
     """Convert a tau2-bench task dict to MASEval Task.
 
@@ -326,6 +330,7 @@ def _convert_tau2_task_to_maseval(
         raw_task: Raw task dict from tasks.json
         domain: Domain name
         split: Split name
+        domain_config: Domain configuration with policy and db_path
 
     Returns:
         MASEval Task object
@@ -342,10 +347,12 @@ def _convert_tau2_task_to_maseval(
     else:
         query = ""
 
-    # Build environment_data (tools will be added by Tau2Environment)
+    # Build environment_data with embedded domain config
     environment_data: Dict[str, Any] = {
         "domain": domain,
         "initial_state": raw_task.get("initial_state"),
+        "policy": domain_config["policy"],
+        "db_path": str(domain_config["db_path"]),
     }
 
     # Build evaluation_data from evaluation_criteria

@@ -118,7 +118,7 @@ class Benchmark(ABC):
 
     def __init__(
         self,
-        agent_data: Dict[str, Any] | Iterable[Dict[str, Any]],
+        agent_data: Optional[Dict[str, Any] | Iterable[Dict[str, Any]]] = None,
         callbacks: Optional[List[BenchmarkCallback]] = None,
         n_task_repeats: int = 1,
         max_invocations: int = 1,
@@ -131,8 +131,8 @@ class Benchmark(ABC):
 
         Args:
             agent_data: Configuration for agents. Either a single dict applied to all tasks, or
-                an iterable of dicts with one configuration per task. Agent data typically includes
-                model parameters, agent architecture details, and tool specifications.
+                an iterable of dicts with one configuration per task. If None, defaults to empty dict.
+                Agent data typically includes model parameters, agent architecture details, and tool specifications.
             callbacks: Optional list of callback handlers for monitoring execution, tracing messages,
                 or collecting custom metrics during the benchmark run.
             n_task_repeats: Number of times to repeat each task. Useful for measuring variance in
@@ -206,8 +206,8 @@ class Benchmark(ABC):
             )
             ```
         """
-        # Store agent_data as-is (will be normalized in run())
-        self.agent_data = agent_data
+        # Store agent_data, defaulting to empty dict if None
+        self.agent_data = agent_data if agent_data is not None else {}
 
         # Initialize tasks to empty collection (will be set in run())
         self.tasks = TaskCollection([])
