@@ -9,7 +9,7 @@ Copyright (c) 2025 Sierra Research (MIT License)
 Adapted from: src/tau2/domains/telecom/user_tools.py
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from maseval.benchmark.tau2.domains.base import ToolKitBase, ToolType, is_tool
 from maseval.benchmark.tau2.domains.telecom.db import TelecomDB
@@ -18,6 +18,7 @@ from maseval.benchmark.tau2.domains.telecom.user_models import (
     APNSettings,
     NetworkModePreference,
     NetworkStatus,
+    NetworkTechnology,
     PerformanceLevel,
     SignalStrength,
     SimStatus,
@@ -50,6 +51,130 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
         if self.db is None or self.db.user_db is None:
             raise ValueError("User database not initialized")
         return self.db.user_db.surroundings
+
+    # =========================================================================
+    # Internal Helpers
+    # =========================================================================
+
+    def _get_mobile_data_working(self) -> bool:
+        """Check if mobile data connection is working.
+
+        Checks all required conditions for mobile data to function:
+        - Mobile data enabled
+        - Not in airplane mode
+        - SIM is active
+        - Network is connected
+        - Signal is available
+        - If abroad: roaming must be enabled and supported
+
+        Returns:
+            True if mobile data is working, False otherwise
+        """
+        device = self._device
+        surroundings = self._surroundings
+
+        # Basic requirements
+        if not device.mobile_data_enabled:
+            return False
+        if device.airplane_mode:
+            return False
+        if device.sim_status != SimStatus.ACTIVE:
+            return False
+        if device.network_status != NetworkStatus.CONNECTED:
+            return False
+        if surroundings.signal_strength == SignalStrength.NONE:
+            return False
+
+        # Roaming requirements
+        if surroundings.is_abroad:
+            if not device.roaming_enabled:
+                return False
+            if not surroundings.roaming_allowed_in_location:
+                return False
+
+        return True
+
+    def _run_speed_test(self) -> Tuple[Optional[float], str]:
+        """Run speed test and return numeric speed and description.
+
+        Calculates speed based on:
+        - Network technology (2G-5G have different speed ranges)
+        - Signal strength multiplier
+        - VPN impact (90% reduction if poor performance)
+        - Data saver mode (80% reduction)
+
+        Returns:
+            Tuple of (speed_mbps, description). Speed is None if no connection.
+        """
+        if not self._get_mobile_data_working():
+            return None, "No Connection"
+
+        device = self._device
+        surroundings = self._surroundings
+
+        # Base factor starts at 1.0
+        base_factor = 1.0
+
+        # VPN impact - poor VPN performance reduces speed by 90%
+        if device.vpn_status and device.vpn_details:
+            if device.vpn_details.server_performance == PerformanceLevel.POOR:
+                base_factor *= 0.1
+
+        # Data saver mode reduces speed by 80%
+        if device.data_saver_mode:
+            base_factor *= 0.2
+
+        # Network technology speed ranges (Mbps)
+        tech_speeds: Dict[NetworkTechnology, Tuple[float, float]] = {
+            NetworkTechnology.TWO_G: (0.1, 0.4),
+            NetworkTechnology.THREE_G: (1.0, 5.0),
+            NetworkTechnology.FOUR_G: (10.0, 100.0),
+            NetworkTechnology.FIVE_G: (50.0, 500.0),
+        }
+
+        min_speed, max_speed = tech_speeds.get(device.network_technology, (0.0, 0.0))
+
+        # Signal strength factor
+        signal_factors: Dict[SignalStrength, float] = {
+            SignalStrength.NONE: 0.0,
+            SignalStrength.POOR: 0.2,
+            SignalStrength.FAIR: 0.5,
+            SignalStrength.GOOD: 0.8,
+            SignalStrength.EXCELLENT: 1.0,
+        }
+        signal_factor = signal_factors.get(surroundings.signal_strength, 0.0)
+
+        # Calculate final speed
+        speed = (min_speed + max_speed) / 2 * signal_factor * base_factor
+
+        # Determine description based on speed thresholds
+        if speed < 1:
+            desc = "Very Poor"
+        elif speed < 5:
+            desc = "Poor"
+        elif speed < 25:
+            desc = "Fair"
+        elif speed < 100:
+            desc = "Good"
+        else:
+            desc = "Excellent"
+
+        return speed, desc
+
+    def _can_send_mms(self) -> bool:
+        """Check if MMS can be sent.
+
+        Returns:
+            True if MMS sending is possible, False otherwise
+        """
+        if not self._get_mobile_data_working():
+            return False
+
+        # Check APN MMSC URL
+        if not self._device.apn_settings.mmsc_url:
+            return False
+
+        return True
 
     # =========================================================================
     # Status Bar
@@ -128,27 +253,27 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
     def run_speed_test(self) -> str:
         """Run a network speed test.
 
+        Calculates speed based on network technology, signal strength,
+        VPN performance, and data saver mode.
+
         Returns:
-            Description of network speed based on signal and technology.
+            Description of network speed with download/upload values.
         """
-        if not self._device.mobile_data_enabled and not self._device.wifi_connected:
+        speed, desc = self._run_speed_test()
+
+        if speed is None:
+            # Check specific failure reasons for better error messages
+            if self._device.airplane_mode:
+                return "Airplane mode is on. No connection."
+            if not self._device.mobile_data_enabled and not self._device.wifi_connected:
+                return "No internet connection available."
+            if self._surroundings.signal_strength == SignalStrength.NONE:
+                return "Speed test failed: No signal."
             return "No internet connection available."
 
-        if self._device.airplane_mode:
-            return "Airplane mode is on. No connection."
-
-        # Simple logic: better signal/tech = better speed
-        if self._surroundings.signal_strength == SignalStrength.NONE:
-            return "Speed test failed: No signal."
-
-        if self._surroundings.signal_strength == SignalStrength.POOR:
-            return "Download: 0.5 Mbps, Upload: 0.1 Mbps (Very Slow)"
-        elif self._surroundings.signal_strength == SignalStrength.FAIR:
-            return "Download: 5.0 Mbps, Upload: 1.0 Mbps (Fair)"
-        elif self._surroundings.signal_strength == SignalStrength.GOOD:
-            return "Download: 25.0 Mbps, Upload: 5.0 Mbps (Good)"
-        else:
-            return "Download: 100.0 Mbps, Upload: 20.0 Mbps (Excellent)"
+        # Format output with download speed and upload (estimated as 1/5 of download)
+        upload = speed / 5
+        return f"Download: {speed:.1f} Mbps, Upload: {upload:.1f} Mbps ({desc})"
 
     # =========================================================================
     # Airplane Mode
@@ -586,3 +711,69 @@ class TelecomUserTools(ToolKitBase[TelecomDB]):
             return f"Payment of {amount} for bill {bill_id} successful."
 
         return f"Payment of {amount} for bill {bill_id} successful."
+
+    # =========================================================================
+    # Assertion Methods (for evaluation)
+    # =========================================================================
+
+    @is_tool(ToolType.READ)
+    def assert_internet_speed(self, expected_speed: float, expected_desc: Optional[str] = None) -> bool:
+        """Assert that internet speed meets expectations.
+
+        Used by evaluator to verify task completion for mobile data issues.
+
+        Args:
+            expected_speed: Minimum expected speed in Mbps
+            expected_desc: Expected description (e.g., "excellent", "good")
+
+        Returns:
+            True if speed meets or exceeds expectations, False otherwise
+        """
+        speed, desc = self._run_speed_test()
+
+        if speed is None:
+            return False
+
+        if expected_desc:
+            return speed >= expected_speed and desc.lower() == expected_desc.lower()
+
+        return speed >= expected_speed
+
+    @is_tool(ToolType.READ)
+    def assert_mobile_data_status(self, expected_status: bool) -> bool:
+        """Assert that mobile data working status matches expected.
+
+        Args:
+            expected_status: True if data should be working, False otherwise
+
+        Returns:
+            True if actual status matches expected, False otherwise
+        """
+        actual = self._get_mobile_data_working()
+        return actual == expected_status
+
+    @is_tool(ToolType.READ)
+    def assert_service_status(self, expected_status: str) -> bool:
+        """Assert that network service status matches expected.
+
+        Args:
+            expected_status: Expected status (connected, searching, no_service, emergency_only)
+
+        Returns:
+            True if actual status matches expected, False otherwise
+        """
+        actual = self._device.network_status.value
+        return actual == expected_status
+
+    @is_tool(ToolType.READ)
+    def assert_can_send_mms(self, expected_status: bool) -> bool:
+        """Assert that MMS sending capability matches expected.
+
+        Args:
+            expected_status: True if MMS should be sendable, False otherwise
+
+        Returns:
+            True if actual capability matches expected, False otherwise
+        """
+        actual = self._can_send_mms()
+        return actual == expected_status

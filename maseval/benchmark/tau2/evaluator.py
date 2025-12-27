@@ -303,9 +303,13 @@ class Tau2Evaluator(Evaluator):
     def _run_env_assertion(self, env: Tau2Environment, assertion: Dict[str, Any]) -> bool:
         """Run an environment assertion.
 
+        Routes assertion to the appropriate toolkit based on env_type:
+        - "user": Routes to user_toolkit (for user device assertions)
+        - "assistant" or default: Routes to agent toolkit
+
         Args:
             env: Environment to check
-            assertion: Assertion spec with func_name, arguments, assert_value
+            assertion: Assertion spec with func_name, arguments, assert_value, env_type
 
         Returns:
             True if assertion passes, False otherwise
@@ -318,9 +322,19 @@ class Tau2Evaluator(Evaluator):
             arguments = assertion.get("arguments", {})
             expected_value = assertion.get("assert_value", True)
 
-            # Call the assertion function on the toolkit
-            if env.toolkit.has_tool(func_name):
-                result = env.toolkit.use_tool(func_name, **arguments)
+            # Determine which toolkit to use based on env_type
+            env_type = assertion.get("env_type", "assistant")
+            if env_type == "user":
+                toolkit = env.user_toolkit
+            else:
+                toolkit = env.toolkit
+
+            if toolkit is None:
+                return False
+
+            # Call the assertion function on the appropriate toolkit
+            if toolkit.has_tool(func_name):
+                result = toolkit.use_tool(func_name, **arguments)
                 return bool(result) == expected_value
             else:
                 return False
