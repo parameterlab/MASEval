@@ -80,14 +80,16 @@ class Tau2User(AgenticUser):
     - Domain-aware responses (airline, retail, telecom)
     - Multi-turn interaction support
     - Tool usage capabilities
+    - Tau2-specific prompt template and stop tokens
 
     Note: This is a base class. Framework-specific subclasses should override
     get_tool() to return a compatible tool.
     """
 
-    DEFAULT_MAX_TURNS = 10  # Higher than MACS due to more complex tasks
-    DEFAULT_STOP_TOKEN = "</stop>"
-    DEFAULT_EARLY_STOPPING_CONDITION = "The user's issue has been fully resolved by the agent"
+    DEFAULT_MAX_TURNS = 50  # tau2-bench uses max_steps=200, ~4 steps per turn
+    DEFAULT_STOP_TOKEN = "###STOP###"  # Match tau2-bench tokens
+    DEFAULT_EARLY_STOPPING_CONDITION = "The instruction goal is satisfied"
+    DEFAULT_TEMPLATE_PATH = Path(__file__).parent / "prompt_templates" / "user_simulator.txt"
 
     def __init__(
         self,
@@ -108,12 +110,16 @@ class Tau2User(AgenticUser):
             scenario: Full scenario text containing user instructions
             initial_query: The initial query to the agent
             name: User name for identification (default: "Customer")
-            template: Optional custom prompt template
+            template: Optional custom prompt template (uses tau2-specific template by default)
             max_turns: Maximum conversation turns
-            stop_token: Token indicating user satisfaction
+            stop_token: Token indicating user satisfaction (default: ###STOP###)
             early_stopping_condition: Description of when to emit stop token
             tools: Optional dictionary of tools available to the user
         """
+        # Load tau2-specific template if not provided
+        if template is None:
+            template = self.DEFAULT_TEMPLATE_PATH.read_text()
+
         # Extract user profile from scenario
         user_profile = self._extract_user_profile(scenario)
 
@@ -292,7 +298,7 @@ class Tau2Benchmark(Benchmark):
         Returns:
             Tau2User instance
         """
-        # Build scenario from user instructions
+        # Build scenario from user instructions (matching tau2-bench format)
         user_data = task.user_data
         instructions = user_data.get("instructions", {})
 
@@ -300,12 +306,14 @@ class Tau2Benchmark(Benchmark):
             scenario = instructions
         elif isinstance(instructions, dict):
             parts = []
+            if instructions.get("task_instructions"):
+                parts.append(f"Persona/Style: {instructions['task_instructions']}")
             if instructions.get("reason_for_call"):
                 parts.append(f"Reason for call: {instructions['reason_for_call']}")
             if instructions.get("known_info"):
-                parts.append(f"Known info: {instructions['known_info']}")
-            if instructions.get("task_instructions"):
-                parts.append(f"Task: {instructions['task_instructions']}")
+                parts.append(f"Information you know: {instructions['known_info']}")
+            if instructions.get("unknown_info"):
+                parts.append(f"Information you do NOT know: {instructions['unknown_info']}")
             scenario = "\n".join(parts)
         else:
             scenario = ""
