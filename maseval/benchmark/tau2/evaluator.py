@@ -21,7 +21,6 @@ of LLM-based assertion evaluation.
 """
 
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from maseval import Evaluator, Task

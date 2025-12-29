@@ -715,10 +715,12 @@ class TestRetailModifyItemsSuccess:
         if not pending_order:
             pytest.skip("No pending orders with items")
 
+        assert pending_order is not None  # type narrowing after skip
         user = retail_toolkit.db.users.get(pending_order.user_id)
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
+        assert user is not None  # type narrowing after skip
         payment_id = list(user.payment_methods.keys())[0]
         item = pending_order.items[0]
 
@@ -758,10 +760,12 @@ class TestRetailModifyItemsSuccess:
         if not pending_order:
             pytest.skip("No pending orders with items")
 
+        assert pending_order is not None  # type narrowing after skip
         user = retail_toolkit.db.users.get(pending_order.user_id)
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
+        assert user is not None  # type narrowing after skip
         payment_id = list(user.payment_methods.keys())[0]
         item = pending_order.items[0]
 
@@ -796,10 +800,12 @@ class TestRetailModifyPaymentSuccess:
         if not pending_order:
             pytest.skip("No suitable pending orders")
 
+        assert pending_order is not None  # type narrowing after skip
         user = retail_toolkit.db.users.get(pending_order.user_id)
         if not user or len(user.payment_methods) < 2:
             pytest.skip("User needs at least 2 payment methods")
 
+        assert user is not None  # type narrowing after skip
         # Find a different payment method
         current_payment_id = pending_order.payment_history[0].payment_method_id
         new_payment_id = None
@@ -832,6 +838,7 @@ class TestRetailModifyPaymentSuccess:
         if not pending_order:
             pytest.skip("No suitable pending orders")
 
+        assert pending_order is not None  # type narrowing after skip
         current_payment_id = pending_order.payment_history[0].payment_method_id
 
         with pytest.raises(ValueError, match="different"):
@@ -863,10 +870,12 @@ class TestRetailExchangeSuccess:
         if not delivered_order:
             pytest.skip("No delivered orders with items")
 
+        assert delivered_order is not None  # type narrowing after skip
         user = retail_toolkit.db.users.get(delivered_order.user_id)
         if not user or not user.payment_methods:
             pytest.skip("Order user has no payment methods")
 
+        assert user is not None  # type narrowing after skip
         payment_id = list(user.payment_methods.keys())[0]
         item = delivered_order.items[0]
 

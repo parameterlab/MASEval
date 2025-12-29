@@ -2,8 +2,8 @@
 
 import json
 import pytest
-from unittest.mock import MagicMock, patch, call
-from typing import Any, Dict, List
+from unittest.mock import MagicMock, patch
+from typing import Any, Dict
 
 from maseval import Task, AgentAdapter
 from maseval.core.model import ChatResponse
@@ -11,7 +11,6 @@ from maseval.benchmark.tau2 import (
     DefaultTau2Agent,
     DefaultTau2AgentAdapter,
     DefaultAgentTau2Benchmark,
-    Tau2Benchmark,
     Tau2Environment,
     Tau2User,
     Tau2Evaluator,
@@ -237,7 +236,7 @@ class TestDefaultTau2AgentRun:
         resp2.tool_calls = []
         mock_model.chat.side_effect = [resp1, resp2]
 
-        response = default_agent.run("Do something")
+        _response = default_agent.run("Do something")
 
         # Check that the error message was added to history
         messages = default_agent.get_messages()
@@ -265,7 +264,7 @@ class TestDefaultTau2AgentRun:
         resp2.tool_calls = []
         mock_model.chat.side_effect = [resp1, resp2]
 
-        response = agent.run("Do something")
+        _response = agent.run("Do something")
 
         messages = agent.get_messages()
         tool_msg = [m for m in messages if m["role"] == "tool"][0]
@@ -570,7 +569,7 @@ class TestDefaultAgentTau2BenchmarkSetupAgents:
             None,
         )
 
-        agent = agents_dict["default_agent"]._agent
+        agent = agents_dict["default_agent"]._agent  # type: ignore[unresolved-attribute]
         assert agent.llm_args == {"temperature": 0.5}
 
     def test_setup_agents_with_max_tool_calls(self, sample_task):
@@ -588,7 +587,7 @@ class TestDefaultAgentTau2BenchmarkSetupAgents:
             None,
         )
 
-        agent = agents_dict["default_agent"]._agent
+        agent = agents_dict["default_agent"]._agent  # type: ignore[unresolved-attribute]
         assert agent.max_tool_calls == 10
 
 
@@ -729,11 +728,10 @@ class TestTau2BenchmarkMethods:
         with patch("maseval.benchmark.tau2.tau2.Tau2Environment") as mock_env_cls:
             mock_env_cls.return_value = MagicMock()
 
-            env = benchmark.setup_environment({}, sample_task)
+            _env = benchmark.setup_environment({}, sample_task)
 
             mock_env_cls.assert_called_once_with(
                 task_data=sample_task.environment_data,
-                data_dir=None,
             )
 
     def test_setup_user_with_dict_instructions(self):
@@ -787,6 +785,7 @@ class TestTau2BenchmarkMethods:
 
         user = benchmark.setup_user({}, mock_env, task)
 
+        assert user is not None
         assert user.scenario == "Simple string instructions"
 
     def test_setup_user_empty_instructions(self):

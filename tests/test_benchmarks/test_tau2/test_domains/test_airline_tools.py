@@ -520,6 +520,7 @@ class TestAirlineUpdateFlightsNewFlight:
         if not reservation or not user:
             pytest.skip("No suitable reservation for flight update")
 
+        assert reservation is not None and user is not None  # type narrowing after skip
         payment_id = list(user.payment_methods.keys())[0]
         current_flights = [{"flight_number": f.flight_number, "date": f.date} for f in reservation.flights]
         original_cabin = reservation.cabin
@@ -565,6 +566,7 @@ class TestAirlineBaggageEdgeCases:
         if not reservation or not user:
             pytest.skip("No suitable reservation with nonfree baggages")
 
+        assert reservation is not None and user is not None  # type narrowing after skip
         payment_id = list(user.payment_methods.keys())[0]
         original_history_len = len(reservation.payment_history)
 
@@ -662,6 +664,7 @@ class TestAirlineBookingSuccess:
         if not user:
             pytest.skip("No user with credit card payment method")
 
+        assert user is not None  # type narrowing after skip
         # Find an available flight with seats and price
         available_flight = None
         flight_date = None
@@ -680,6 +683,7 @@ class TestAirlineBookingSuccess:
         if not available_flight:
             pytest.skip("No available flights with seats")
 
+        assert available_flight is not None  # type narrowing after skip
         # Get the flight price
         flight_date_data = available_flight.dates[flight_date]
         price = flight_date_data.prices[cabin]
@@ -737,6 +741,7 @@ class TestAirlineBookingSuccess:
         if not user:
             pytest.skip("No user with credit card payment method")
 
+        assert user is not None  # type narrowing after skip
         # Find an available flight
         available_flight = None
         flight_date = None
@@ -755,6 +760,7 @@ class TestAirlineBookingSuccess:
         if not available_flight:
             pytest.skip("No available flights with seats")
 
+        assert available_flight is not None  # type narrowing after skip
         flight_date_data = available_flight.dates[flight_date]
         price = flight_date_data.prices[cabin]
 
@@ -803,6 +809,7 @@ class TestAirlineBookingSuccess:
         if not user:
             pytest.skip("No user with credit card payment method")
 
+        assert user is not None  # type narrowing after skip
         available_flight = None
         flight_date = None
         cabin = "economy"
@@ -820,6 +827,7 @@ class TestAirlineBookingSuccess:
         if not available_flight:
             pytest.skip("No available flights with seats")
 
+        assert available_flight is not None  # type narrowing after skip
         flight_date_data = available_flight.dates[flight_date]
         price = flight_date_data.prices[cabin]
 
@@ -870,6 +878,7 @@ class TestAirlineBookingSuccess:
         if not user:
             pytest.skip("No user with credit card payment method")
 
+        assert user is not None  # type narrowing after skip
         available_flight = None
         flight_date = None
         cabin = "economy"
@@ -887,6 +896,7 @@ class TestAirlineBookingSuccess:
         if not available_flight:
             pytest.skip("No available flights with seats")
 
+        assert available_flight is not None  # type narrowing after skip
         payment_id = None
         for pm_id, pm in user.payment_methods.items():
             if pm.source == "credit_card":
@@ -984,6 +994,7 @@ class TestAirlineUpdateReservationFlights:
         if not reservation or not user:
             pytest.skip("No suitable reservation for flight update")
 
+        assert reservation is not None and user is not None  # type narrowing after skip
         # Find a different available flight with the same route
         current_flight = reservation.flights[0]
         new_flight = None
@@ -1007,6 +1018,7 @@ class TestAirlineUpdateReservationFlights:
         if not new_flight:
             pytest.skip("No alternative flight found for same route")
 
+        assert new_flight is not None  # type narrowing after skip
         payment_id = list(user.payment_methods.keys())[0]
 
         result = airline_toolkit.use_tool(
@@ -1071,6 +1083,7 @@ class TestAirlinePaymentMethods:
         if not user:
             pytest.skip("No user with sufficient gift card balance")
 
+        assert user is not None and gift_card_id is not None  # type narrowing after skip
         # Find a cheap flight
         available_flight = None
         flight_date = None
@@ -1092,6 +1105,7 @@ class TestAirlinePaymentMethods:
         if not available_flight:
             pytest.skip("No flight cheap enough for gift card")
 
+        assert available_flight is not None  # type narrowing after skip
         flight_date_data = available_flight.dates[flight_date]
         price = flight_date_data.prices[cabin]
         original_balance = user.payment_methods[gift_card_id].amount

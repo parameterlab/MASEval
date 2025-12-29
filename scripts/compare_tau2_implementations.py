@@ -44,7 +44,6 @@ Usage:
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -201,7 +200,7 @@ def run_original_tau2_bench(config: ComparisonConfig) -> Optional[RunResult]:
         duration = time.time() - start_time
 
         if result.returncode != 0:
-            print(f"Error running tau2-bench:")
+            print("Error running tau2-bench:")
             print(result.stderr)
             return None
 
@@ -291,7 +290,7 @@ def run_maseval_tau2_bench(config: ComparisonConfig) -> Optional[RunResult]:
 
     # Check for supported providers
     if provider not in ("google", "openai"):
-        print(f"Warning: MASEval example currently only supports 'google' and 'openai' providers.")
+        print("Warning: MASEval example currently only supports 'google' and 'openai' providers.")
         print(f"Model '{config.model_id}' uses provider '{provider}'.")
         print("Skipping MASEval. To add support, implement a benchmark class for this provider.")
         return None
@@ -301,7 +300,7 @@ def run_maseval_tau2_bench(config: ComparisonConfig) -> Optional[RunResult]:
     try:
         # Import the run_benchmark function from the example
         sys.path.insert(0, str(Path(__file__).parent.parent / "examples" / "tau2_benchmark"))
-        from tau2_default_agent_benchmark import run_benchmark
+        from tau2_default_agent_benchmark import run_benchmark  # type: ignore[unresolved-import]
 
         # Setup output
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -522,7 +521,7 @@ def compare_results(original: Optional[RunResult], maseval: Optional[RunResult])
         print(f"  MAE:  {mae:.6f}")
 
         # RMSE
-        rmse = mse ** 0.5
+        rmse = mse**0.5
         print(f"  RMSE: {rmse:.6f}")
 
         # Correlation (Pearson)
@@ -553,8 +552,8 @@ def compare_results(original: Optional[RunResult], maseval: Optional[RunResult])
         fp = sum(1 for o, m in zip(orig_binary, mas_binary) if o == 0 and m == 1)
         fn = sum(1 for o, m in zip(orig_binary, mas_binary) if o == 1 and m == 0)
 
-        print(f"                    MASEval")
-        print(f"                  Pass    Fail")
+        print("                    MASEval")
+        print("                  Pass    Fail")
         print(f"  Original Pass   {tp:4d}    {fn:4d}")
         print(f"  Original Fail   {fp:4d}    {tn:4d}")
 
@@ -575,15 +574,17 @@ def compare_results(original: Optional[RunResult], maseval: Optional[RunResult])
         for i, (task_id, orig, mas) in enumerate(common_tasks):
             # Compare binary pass/fail decisions
             if orig_binary[i] != mas_binary[i]:
-                divergent_tasks.append({
-                    "task_id": task_id,
-                    "original_pass_rate": orig_passed[i],
-                    "original_reward": orig_rewards[i],
-                    "maseval_pass_rate": mas_passed[i],
-                    "maseval_reward": mas_rewards[i],
-                    "n_orig_runs": orig.get("n_valid_runs", 1),
-                    "n_mas_runs": mas.get("n_valid_runs", 1),
-                })
+                divergent_tasks.append(
+                    {
+                        "task_id": task_id,
+                        "original_pass_rate": orig_passed[i],
+                        "original_reward": orig_rewards[i],
+                        "maseval_pass_rate": mas_passed[i],
+                        "maseval_reward": mas_rewards[i],
+                        "n_orig_runs": orig.get("n_valid_runs", 1),
+                        "n_mas_runs": mas.get("n_valid_runs", 1),
+                    }
+                )
 
         print("\n--- Divergent Tasks ---")
         if not divergent_tasks:
@@ -593,13 +594,15 @@ def compare_results(original: Optional[RunResult], maseval: Optional[RunResult])
             print()
             if has_repeats:
                 print(f"  {'Task ID':<40} {'Orig Pass%':<12} {'MAS Pass%':<12} {'Reward Diff':<12}")
-                print(f"  {'-'*40} {'-'*12} {'-'*12} {'-'*12}")
+                print(f"  {'-' * 40} {'-' * 12} {'-' * 12} {'-' * 12}")
                 for dt in divergent_tasks:
                     diff = dt["maseval_reward"] - dt["original_reward"]
-                    print(f"  {dt['task_id']:<40} {dt['original_pass_rate']*100:>5.1f}%     {dt['maseval_pass_rate']*100:>5.1f}%     {diff:+.4f}")
+                    print(
+                        f"  {dt['task_id']:<40} {dt['original_pass_rate'] * 100:>5.1f}%     {dt['maseval_pass_rate'] * 100:>5.1f}%     {diff:+.4f}"
+                    )
             else:
                 print(f"  {'Task ID':<40} {'Original':<12} {'MASEval':<12} {'Reward Diff':<12}")
-                print(f"  {'-'*40} {'-'*12} {'-'*12} {'-'*12}")
+                print(f"  {'-' * 40} {'-' * 12} {'-' * 12} {'-' * 12}")
                 for dt in divergent_tasks:
                     orig_status = "PASS" if dt["original_pass_rate"] >= 0.5 else "FAIL"
                     mas_status = "PASS" if dt["maseval_pass_rate"] >= 0.5 else "FAIL"

@@ -234,7 +234,7 @@ class Tau2Benchmark(Benchmark):
                 tau2-bench uses max_steps=200, where 1 turn ≈ 4 steps.
             *args, **kwargs: Passed to parent Benchmark class
         """
-        super().__init__(*args, max_invocations=max_invocations, **kwargs)
+        super().__init__(*args, max_invocations=max_invocations, **kwargs)  # type: ignore[parameter-already-assigned]
 
     def _get_user_model_id(self, task: Task) -> str:
         """Get user simulator model ID from task.user_data.
@@ -875,7 +875,7 @@ class DefaultAgentTau2Benchmark(Tau2Benchmark):
             )
         return model_id
 
-    def setup_agents(
+    def setup_agents(  # type: ignore[invalid-method-override]
         self,
         agent_data: Dict[str, Any],
         environment: Tau2Environment,

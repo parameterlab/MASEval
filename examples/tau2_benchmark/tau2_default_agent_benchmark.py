@@ -37,6 +37,7 @@ from typing import Any, Dict, Literal, Optional, Union
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass  # dotenv not installed, rely on environment variables

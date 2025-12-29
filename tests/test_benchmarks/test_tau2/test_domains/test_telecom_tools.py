@@ -680,6 +680,7 @@ class TestTelecomPaymentRequest:
         if not target_bill:
             pytest.skip("No issued bills in database")
 
+        assert customer is not None and target_bill is not None  # type narrowing after skip
         result = telecom_toolkit.use_tool(
             "send_payment_request",
             customer_id=customer.customer_id,
@@ -722,6 +723,7 @@ class TestTelecomPaymentRequest:
         if not customer:
             pytest.skip("No customer with multiple bills")
 
+        assert customer is not None  # type narrowing after skip
         # Set first bill to awaiting payment
         first_bill = telecom_toolkit._get_bill_by_id(customer.bill_ids[0])
         original_status = first_bill.status
@@ -967,6 +969,7 @@ class TestTelecomAssertions:
         if not paid_bill:
             pytest.skip("No paid bills in database")
 
+        assert paid_bill is not None  # type narrowing after skip
         result = telecom_toolkit.assert_no_overdue_bill(paid_bill.bill_id)
         assert result is True
 
@@ -993,6 +996,7 @@ class TestTelecomAssertions:
         if not overdue_bill:
             pytest.skip("No overdue bills in database")
 
+        assert overdue_bill is not None  # type narrowing after skip
         result = telecom_toolkit.assert_no_overdue_bill(overdue_bill.bill_id)
         assert result is False
 
@@ -1047,6 +1051,7 @@ class TestTelecomDataModification:
         if not target_bill:
             pytest.skip("No issued bills in database")
 
+        assert target_bill is not None  # type narrowing after skip
         original_status = target_bill.status
         try:
             result = telecom_toolkit._set_bill_to_paid(target_bill.bill_id)

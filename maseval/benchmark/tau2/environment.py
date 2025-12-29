@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional, Type
 
 from maseval import Environment
 
-from maseval.benchmark.tau2.data_loader import DEFAULT_DATA_DIR, load_domain_config
+from maseval.benchmark.tau2.data_loader import load_domain_config
 from maseval.benchmark.tau2.domains import VALID_DOMAINS, DB, ToolKitBase
 from maseval.benchmark.tau2.domains.retail import RetailDB, RetailTools
 from maseval.benchmark.tau2.domains.airline import AirlineDB, AirlineTools
