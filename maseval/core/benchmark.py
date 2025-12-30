@@ -1161,8 +1161,9 @@ class Benchmark(ABC):
                     }
 
                     # Create a minimal report for this failed setup
+                    # Use metadata task_id if available (e.g., tau2), else fall back to UUID
                     report = {
-                        "task_id": str(task.id),
+                        "task_id": task.metadata.get("task_id", str(task.id)),
                         "repeat_idx": repeat_idx,
                         "status": execution_status.value,
                         "error": error_info,
@@ -1301,8 +1302,9 @@ class Benchmark(ABC):
                     eval_results = None
 
                 # 5. Store results with status and error info
+                # Use metadata task_id if available (e.g., tau2), else fall back to UUID
                 report = {
-                    "task_id": str(task.id),
+                    "task_id": task.metadata.get("task_id", str(task.id)),
                     "repeat_idx": repeat_idx,
                     "status": execution_status.value,
                     "traces": execution_traces,
@@ -1324,7 +1326,8 @@ class Benchmark(ABC):
 
             # Callbacks at the end of each task
             # Pass the last report for this task to the callback
-            task_reports = [r for r in self.reports if r["task_id"] == str(task.id)]
+            current_task_id = task.metadata.get("task_id", str(task.id))
+            task_reports = [r for r in self.reports if r["task_id"] == current_task_id]
             last_report = task_reports[-1] if task_reports else {}
             for cb in self.callbacks:
                 cb.on_task_end(self, task, last_report)
@@ -1429,5 +1432,6 @@ class Benchmark(ABC):
                 failed_task_ids.add(report["task_id"])
 
         # Build TaskCollection from original tasks that failed
-        failed_tasks = [task for task in self.tasks if str(task.id) in failed_task_ids]
+        # Use metadata task_id if available (e.g., tau2), else fall back to UUID
+        failed_tasks = [task for task in self.tasks if task.metadata.get("task_id", str(task.id)) in failed_task_ids]
         return TaskCollection(failed_tasks)

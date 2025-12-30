@@ -96,8 +96,9 @@ class ResultLogger(BenchmarkCallback, ABC):
         self._n_repeats = benchmark.n_task_repeats
 
         # Calculate all expected iterations
+        # Use metadata task_id if available (e.g., tau2), else fall back to UUID
         for task_idx, task in enumerate(benchmark.tasks):
-            task_id = str(task.id)
+            task_id = task.metadata.get("task_id", str(task.id))
             for repeat_idx in range(benchmark.n_task_repeats):
                 self._expected_iterations.add((task_id, repeat_idx))
 
