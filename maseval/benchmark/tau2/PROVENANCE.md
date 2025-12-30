@@ -129,14 +129,14 @@ MASEval normalizes order IDs by adding the `#` prefix if missing. The original t
 2. **LLM-based evaluators** (communicate, NL): Within ±3% of upstream v0.2.0
 3. **Contract tests**: Tool sequences produce identical state changes
 
-## Critical Differences from MACS Benchmark
+## Key Characteristics
 
-| Aspect          | MACS                    | Tau2                          |
-| --------------- | ----------------------- | ----------------------------- |
-| Tools           | LLM-simulated responses | Real Python implementations   |
-| State           | No actual state changes | Modifies database state       |
-| Evaluation      | LLM judges assertions   | Deterministic DB verification |
-| Reproducibility | ±2-3% tolerance         | Exact state matching required |
+| Aspect          | Description                                       |
+| --------------- | ------------------------------------------------- |
+| Tools           | Real Python implementations with business logic   |
+| State           | Modifies actual database state during execution   |
+| Evaluation      | Deterministic database state verification         |
+| Reproducibility | Exact state matching for consistent results       |
 
 ## License
 

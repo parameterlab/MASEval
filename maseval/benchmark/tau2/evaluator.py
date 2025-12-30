@@ -16,8 +16,8 @@ Adapted from:
 - src/tau2/evaluator/evaluator_action.py
 - src/tau2/evaluator/evaluator_communicate.py
 
-Key difference from MACS: Uses deterministic DB state comparison instead
-of LLM-based assertion evaluation.
+Uses deterministic database state comparison for reproducible evaluation,
+with optional LLM-based natural language assertion checking.
 """
 
 from enum import Enum

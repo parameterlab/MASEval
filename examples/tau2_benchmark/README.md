@@ -14,7 +14,7 @@ The Tau 2 benchmark evaluates single-agent customer service tasks across three d
 
 ## Key Features
 
-- **Real tool implementations** - Unlike MACS, tools actually modify database state
+- **Real tool implementations** - Tools execute actual business logic and modify database state
 - **Deterministic evaluation** - Success is measured by database state comparison
 - **Pass@k metrics** - Recommended for robust evaluation
 

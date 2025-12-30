@@ -10,11 +10,11 @@ The Tau 2 benchmark evaluates single-agent customer service tasks across three d
 - retail: E-commerce order management (114 base tasks)
 - telecom: Telecom customer service (114 base tasks)
 
-Key Differences from MACS:
-- Real tool implementations that modify database state (not LLM-simulated)
+Key Features:
+- Real tool implementations that modify actual database state
 - Deterministic evaluation via database state comparison
-- Single-agent tasks (customer service representative)
-- Pass@k metrics recommended for evaluation
+- Single-agent customer service representative tasks
+- Pass@k metrics recommended for robust evaluation
 
 Reference:
     Paper: https://arxiv.org/abs/2506.07982

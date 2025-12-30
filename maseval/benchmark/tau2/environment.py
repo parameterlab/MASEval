@@ -9,8 +9,8 @@ Copyright (c) 2025 Sierra Research (MIT License)
 
 Adapted from: src/tau2/environment/environment.py
 
-Key difference from MACS: This environment uses REAL tools that modify
-actual database state, not LLM-simulated responses.
+This environment uses real tools that modify actual database state,
+providing deterministic and reproducible evaluation.
 """
 
 from pathlib import Path

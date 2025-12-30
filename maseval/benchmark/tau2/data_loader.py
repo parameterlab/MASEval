@@ -447,8 +447,8 @@ def configure_model_ids(
 ) -> Union[TaskCollection, List[Task]]:
     """Configure model IDs for benchmark components in task data.
 
-    Unlike MACS, Tau2 tools execute real business logic and don't need
-    a tool_model_id. Only user simulation and evaluation use LLMs.
+    Tau2 tools execute real business logic and don't need a tool_model_id.
+    Only user simulation and evaluation use LLMs.
 
     Args:
         tasks: TaskCollection or list of Tasks to configure
