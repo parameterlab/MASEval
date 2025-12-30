@@ -455,6 +455,7 @@ def run_benchmark(
     limit: Optional[int] = None,
     n_task_repeats: int = 1,
     output_dir: Optional[Path] = None,
+    temperature: float = 0.0,
 ) -> Dict[str, Any]:
     """Run the Tau2 benchmark with the default agent.
 
@@ -464,6 +465,7 @@ def run_benchmark(
         limit: Maximum number of tasks to run
         n_task_repeats: Number of times to repeat each task (for Pass@k)
         output_dir: Directory for results
+        temperature: LLM temperature (default: 0.0 for deterministic output)
 
     Returns:
         Summary metrics from the benchmark run
@@ -502,7 +504,11 @@ def run_benchmark(
 
     # Create benchmark with verbose agent for debugging
     benchmark = BenchmarkClass(
-        agent_data={"model_id": model_id, "verbose": 2},
+        agent_data={
+            "model_id": model_id,
+            "verbose": 2,
+            "llm_args": {"temperature": temperature},
+        },
         callbacks=[logger],
         n_task_repeats=n_task_repeats,
         fail_on_setup_error=True,
@@ -591,6 +597,12 @@ Examples:
         help="Number of times to repeat each task for Pass@k (default: 1)",
     )
     parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="LLM temperature (default: 0.0 for deterministic output)",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=None,
@@ -605,6 +617,7 @@ Examples:
         limit=args.limit,
         n_task_repeats=args.repeats,
         output_dir=args.output_dir,
+        temperature=args.temperature,
     )
 
 

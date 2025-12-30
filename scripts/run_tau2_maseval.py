@@ -45,6 +45,7 @@ def run_maseval_benchmark(
     limit: Optional[int],
     n_repeat: int,
     output_dir: Path,
+    temperature: float = 0.0,
 ) -> Optional[Path]:
     """Run the MASEval tau2-bench implementation.
 
@@ -64,10 +65,11 @@ def run_maseval_benchmark(
         from tau2_default_agent_benchmark import run_benchmark  # type: ignore[unresolved-import]
 
         print("Running MASEval benchmark...")
-        print(f"  Domain: {domain}")
-        print(f"  Model:  {model_id}")
-        print(f"  Limit:  {limit or 'all'}")
-        print(f"  Repeat: {n_repeat}")
+        print(f"  Domain:      {domain}")
+        print(f"  Model:       {model_id}")
+        print(f"  Limit:       {limit or 'all'}")
+        print(f"  Repeat:      {n_repeat}")
+        print(f"  Temperature: {temperature}")
         print()
 
         start_time = time.time()
@@ -79,6 +81,7 @@ def run_maseval_benchmark(
             limit=limit,
             n_task_repeats=n_repeat,
             output_dir=output_dir,
+            temperature=temperature,
         )
 
         duration = time.time() - start_time
@@ -148,6 +151,14 @@ def main():
     )
 
     parser.add_argument(
+        "--temperature",
+        "-t",
+        type=float,
+        default=0.0,
+        help="LLM temperature (default: 0.0 for deterministic output)",
+    )
+
+    parser.add_argument(
         "--output-dir",
         "-o",
         type=Path,
@@ -170,6 +181,7 @@ def main():
         limit=args.limit,
         n_repeat=args.n_repeat,
         output_dir=args.output_dir,
+        temperature=args.temperature,
     )
 
     if output_file:
