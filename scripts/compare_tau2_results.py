@@ -149,7 +149,7 @@ def get_maseval_run_command(
     num_tasks: Optional[int] = None,
 ) -> str:
     """Generate the command to run MASEval."""
-    cmd = f"uv run python scripts/run_tau2_maseval.py --model {model_id} --domain {domain}"
+    cmd = f"uv run python examples/tau2_benchmark/tau2_benchmark.py --framework default --model {model_id} --domain {domain}"
     if num_tasks:
         cmd += f" --limit {num_tasks}"
     return cmd
