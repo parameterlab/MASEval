@@ -10,4 +10,6 @@ Simulators in MASEval are used to create reproducible and scalable testing envir
 
 ::: maseval.core.simulator.UserLLMSimulator
 
+::: maseval.core.simulator.AgenticUserLLMSimulator
+
 ::: maseval.core.simulator.SimulatorCallStatus

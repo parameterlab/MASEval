@@ -8,6 +8,8 @@ The User is initialized with a persona and a scenario, both of which are typical
 
 ::: maseval.core.user.User
 
+::: maseval.core.user.AgenticUser
+
 ## Interfaces
 
 Some integrations provide convenience user/tool implementations for specific agent frameworks. For example:

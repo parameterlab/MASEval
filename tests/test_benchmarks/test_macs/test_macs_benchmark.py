@@ -1,7 +1,7 @@
 """Unit tests for MACSBenchmark and compute_benchmark_metrics."""
 
 import pytest
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 from unittest.mock import MagicMock
 
 from maseval import AgentAdapter, Task, User, MessageHistory
@@ -183,13 +183,13 @@ class TestRunAgents:
             def get_model_adapter(self, model_id: str, **kwargs):
                 return self._model_factory(model_id)
 
-            def setup_agents(
+            def setup_agents(  # type: ignore[override]
                 self,
                 agent_data: Dict[str, Any],
                 environment: MACSEnvironment,
                 task: Task,
                 user: Optional[User],
-            ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
+            ) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
                 agent1: AgentAdapter = MACSAgentAdapter("agent1")
                 agent2: AgentAdapter = MACSAgentAdapter("agent2")
                 return [agent1, agent2], {"agent1": agent1, "agent2": agent2}

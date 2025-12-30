@@ -108,7 +108,8 @@ class TestDataLoadingIntegration:
             },
             user_data={"model_id": "test-model"},
             evaluation_data={"model_id": "test-model", "assertions": ["user: Booking done"]},
-            metadata={"scenario": "Travel booking scenario", "task_id": "task-000001"},
+            id="task-000001",
+            metadata={"scenario": "Travel booking scenario"},
         )
 
         benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
@@ -141,7 +142,7 @@ class TestDataLoadingIntegration:
 
         # Get tools for agent from config
         agent_spec = agent_config["agents"][0]
-        agent_tools = env.get_tools_for_agent(agent_spec)
+        agent_tools = env.get_tools_for_agent(agent_spec)  # type: ignore[arg-type]
 
         assert "action1" in agent_tools
 

@@ -53,12 +53,7 @@ class GoogleGenAIModelAdapter(ModelAdapter):
     """Adapter for Google Generative AI (Gemini models).
 
     Works with Google's Gemini models through the google-genai SDK.
-
-    Supported models include:
-        - gemini-2.0-flash
-        - gemini-1.5-pro
-        - gemini-1.5-flash
-        - And other Gemini model variants
+    Pass any model ID supported by the Google GenAI API.
 
     The adapter converts OpenAI-style messages to Google's format internally,
     so you can use the same message format across all adapters.
@@ -119,23 +114,9 @@ class GoogleGenAIModelAdapter(ModelAdapter):
         system_instruction, contents = self._convert_messages(messages)
 
         # Build config
-        config_params = {}
+        config_params = dict(params)
         if system_instruction:
             config_params["system_instruction"] = system_instruction
-
-        # Map common parameter names
-        if "max_tokens" in params:
-            config_params["max_output_tokens"] = params.pop("max_tokens")
-        if "max_output_tokens" in params:
-            config_params["max_output_tokens"] = params.pop("max_output_tokens")
-        if "temperature" in params:
-            config_params["temperature"] = params.pop("temperature")
-        if "top_p" in params:
-            config_params["top_p"] = params.pop("top_p")
-        if "top_k" in params:
-            config_params["top_k"] = params.pop("top_k")
-        if "stop_sequences" in params:
-            config_params["stop_sequences"] = params.pop("stop_sequences")
 
         # Convert tools to Google format
         if tools:
@@ -187,7 +168,26 @@ class GoogleGenAIModelAdapter(ModelAdapter):
             if role == "system":
                 system_instruction = content
             elif role == "assistant":
-                contents.append({"role": "model", "parts": [{"text": content}]})
+                # Handle assistant messages with or without tool calls
+                parts = []
+                if content:
+                    parts.append({"text": content})
+                # Convert tool_calls to Google's function_call format
+                tool_calls = msg.get("tool_calls", [])
+                if tool_calls:
+                    import json
+
+                    for tc in tool_calls:
+                        if tc.get("type") == "function":
+                            func = tc.get("function", {})
+                            args_str = func.get("arguments", "{}")
+                            try:
+                                args = json.loads(args_str) if isinstance(args_str, str) else args_str
+                            except json.JSONDecodeError:
+                                args = {}
+                            parts.append({"function_call": {"name": func.get("name", ""), "args": args}})
+                if parts:
+                    contents.append({"role": "model", "parts": parts})
             elif role == "tool":
                 # Tool response in Google format
                 tool_call_id = msg.get("tool_call_id", "")
@@ -256,7 +256,7 @@ class GoogleGenAIModelAdapter(ModelAdapter):
         tool_calls = None
         if hasattr(response, "candidates") and response.candidates:
             candidate = response.candidates[0]
-            if hasattr(candidate, "content") and candidate.content:
+            if hasattr(candidate, "content") and candidate.content and candidate.content.parts:
                 for part in candidate.content.parts:
                     if hasattr(part, "function_call") and part.function_call:
                         if tool_calls is None:

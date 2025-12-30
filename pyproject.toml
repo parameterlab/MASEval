@@ -54,6 +54,7 @@ examples = [
     "langchain-google-genai>=2.1.12",
     "typing-extensions>=4.0.0",
     "mcp>=1.22.0",
+    "python-dotenv>=1.0.0",
     # Jupyter notebook support
     "jupyter>=1.0.0",
     "ipykernel>=6.0.0",

@@ -218,6 +218,7 @@ class TestOpenAIModelAdapterIntegration:
         assert response.tool_calls is not None
         assert len(response.tool_calls) == 1
         assert response.tool_calls[0]["function"]["name"] == "get_weather"
+        assert response.usage is not None
         assert response.usage["input_tokens"] == 10
         assert response.stop_reason == "tool_calls"
 
@@ -441,7 +442,7 @@ class TestGoogleGenAIModelAdapterIntegration:
                                     break
 
                     class Response:
-                        pass
+                        text: str = ""
 
                     resp = Response()
                     resp.text = f"Response to: {text}"
@@ -563,6 +564,7 @@ class TestGoogleGenAIModelAdapterIntegration:
         assert response.tool_calls is not None
         assert len(response.tool_calls) == 1
         assert response.tool_calls[0]["function"]["name"] == "search_web"
+        assert response.usage is not None
         assert response.usage["input_tokens"] == 20
 
     def test_google_genai_adapter_tools_conversion(self):
@@ -882,6 +884,7 @@ class TestHuggingFaceModelAdapterIntegration:
         adapter = HuggingFaceModelAdapter(model=mock_model, model_id="test-model")
         response = adapter.chat([{"role": "user", "content": "Test"}])
 
+        assert response.content is not None
         assert "Generated" in response.content
 
     def test_huggingface_adapter_dict_response_format(self):
@@ -1018,6 +1021,7 @@ class TestLiteLLMModelAdapterIntegration:
             assert response.tool_calls is not None
             assert len(response.tool_calls) == 1
             assert response.tool_calls[0]["function"]["name"] == "calculator"
+            assert response.usage is not None
             assert response.usage["input_tokens"] == 15
             assert response.stop_reason == "tool_calls"
         finally:
@@ -1120,6 +1124,7 @@ class TestAnthropicModelAdapterIntegration:
         response = adapter.chat([{"role": "user", "content": "Hello"}])
 
         assert response.content == "Hello! How can I help?"
+        assert response.usage is not None
         assert response.usage["input_tokens"] == 10
         assert response.stop_reason == "end_turn"
 

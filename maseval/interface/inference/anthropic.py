@@ -58,22 +58,14 @@ class AnthropicModelAdapter(ModelAdapter):
     """Adapter for Anthropic Claude models.
 
     Works with Claude models through the official Anthropic Python SDK.
-
-    Supported models include:
-        - claude-sonnet-4-5-20250514 (Claude Sonnet 4.5)
-        - claude-opus-4-5-20251101 (Claude Opus 4.5)
-        - claude-3-5-sonnet-20241022
-        - claude-3-opus-20240229
-        - And other Claude model variants
+    Pass any model ID supported by the Anthropic API.
 
     The adapter accepts OpenAI-style messages and converts them to Anthropic's
     format internally. Key differences handled automatically:
-        - System messages are passed separately (not in messages array)
-        - Tool definitions are converted to Anthropic format
-        - Tool responses are converted to tool_result content blocks
 
-    API keys can be set via ANTHROPIC_API_KEY environment variable or
-    passed to the Anthropic client directly.
+    - System messages are passed separately (not in messages array)
+    - Tool definitions are converted to Anthropic format
+    - Tool responses are converted to tool_result content blocks
     """
 
     def __init__(

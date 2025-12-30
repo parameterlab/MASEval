@@ -48,8 +48,8 @@ class TestMACSUserInit:
         assert user.max_turns == MACSUser.DEFAULT_MAX_TURNS
         assert user.max_turns == 5
 
-    def test_macs_default_stop_token(self, macs_model, sample_scenario, initial_query):
-        """MACS uses '</stop>' as stop token per MACS paper.
+    def test_macs_default_stop_tokens(self, macs_model, sample_scenario, initial_query):
+        """MACS uses ['</stop>'] as stop tokens per MACS paper.
 
         This is a MACS-specific default. If the base class default changes,
         this test ensures MACS maintains its value.
@@ -60,8 +60,8 @@ class TestMACSUserInit:
             initial_query=initial_query,
         )
 
-        assert user.stop_token == MACSUser.DEFAULT_STOP_TOKEN
-        assert user.stop_token == "</stop>"
+        assert user.stop_tokens == MACSUser.DEFAULT_STOP_TOKENS
+        assert user.stop_tokens == ["</stop>"]
 
     def test_init_with_custom_params(self, macs_model, sample_scenario, initial_query):
         """Custom name and max_turns are respected."""
@@ -84,9 +84,9 @@ class TestMACSUserInit:
             initial_query=initial_query,
         )
         # Verify early stopping is configured
-        assert user.stop_token == MACSUser.DEFAULT_STOP_TOKEN
+        assert user.stop_tokens == MACSUser.DEFAULT_STOP_TOKENS
         assert user.early_stopping_condition == MACSUser.DEFAULT_EARLY_STOPPING_CONDITION
-        # Simulator should have the same config
+        # Simulator should have the same config (uses first token from list)
         assert user.simulator.stop_token == "</stop>"
         assert user.simulator.early_stopping_condition is not None
         assert "goals have been satisfactorily addressed" in user.simulator.early_stopping_condition

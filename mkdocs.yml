@@ -121,3 +121,4 @@ nav:
               - OpenAI: interface/inference/openai.md
       - Benchmarks:
           - MACS: benchmark/macs.md
+          - Tau2: benchmark/tau2.md

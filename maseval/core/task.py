@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict
-from uuid import UUID, uuid4
+from typing import Any, Dict, overload
+from uuid import uuid4
 from collections.abc import Sequence
 from typing import Iterable, List, Union, Iterator, Optional
 import json
@@ -13,14 +13,15 @@ class Task:
 
     Attributes:
         query: The main input query or prompt for the task.
-        id: A unique identifier for the task (auto-generated if not provided).
+        id: A unique identifier for the task. Benchmarks can provide human-readable IDs
+            (e.g., "task-000001", "retail_001"). Auto-generates a UUID string if not provided.
         environment_data: A dictionary of data needed to set up the environment for the task.
         evaluation_data: A dictionary of data needed to evaluate the agent's performance on the task.
         metadata: A dictionary for any additional metadata about the task.
     """
 
     query: str
-    id: UUID = field(default_factory=uuid4)
+    id: str = field(default_factory=lambda: str(uuid4()))
     environment_data: Dict[str, Any] = field(default_factory=dict)
     user_data: Dict[str, Any] = field(default_factory=dict)
     evaluation_data: Dict[str, Any] = field(default_factory=dict)
@@ -50,7 +51,13 @@ class TaskCollection(Sequence):
     def __len__(self) -> int:
         return len(self._tasks)
 
-    def __getitem__(self, idx):
+    @overload
+    def __getitem__(self, idx: int) -> "Task": ...
+
+    @overload
+    def __getitem__(self, idx: slice) -> "TaskCollection": ...
+
+    def __getitem__(self, idx: Union[int, slice]) -> Union["Task", "TaskCollection"]:  # type: ignore[override]
         # Return a Task for int index, or a new TaskCollection for slices (pythonic behaviour)
         if isinstance(idx, slice):
             return TaskCollection(self._tasks[idx])

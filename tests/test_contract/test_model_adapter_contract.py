@@ -121,13 +121,15 @@ def assert_base_config_fields(config: Dict[str, Any], model_id: Optional[str] = 
 
 
 def create_openai_adapter(
-    model_id: str = "gpt-4", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+    model_id: str = "gpt-4",
+    responses: Optional[List[Optional[str]]] = None,
+    tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None,
 ) -> Any:
     """Create OpenAIModelAdapter instance."""
     pytest.importorskip("openai")
     from maseval.interface.inference.openai import OpenAIModelAdapter
 
-    response_list: List[str] = responses or ["Test response"]
+    response_list: List[Optional[str]] = responses or ["Test response"]
     tool_calls_list = tool_calls
     call_count = [0]
 
@@ -159,13 +161,15 @@ def create_openai_adapter(
 
 
 def create_google_genai_adapter(
-    model_id: str = "gemini-pro", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+    model_id: str = "gemini-pro",
+    responses: Optional[List[Optional[str]]] = None,
+    tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None,
 ) -> Any:
     """Create GoogleGenAIModelAdapter instance."""
     pytest.importorskip("google.genai")
     from maseval.interface.inference.google_genai import GoogleGenAIModelAdapter
 
-    response_list: List[str] = responses or ["Test response"]
+    response_list: List[Optional[str]] = responses or ["Test response"]
     tool_calls_list = tool_calls
     call_count = [0]
 
@@ -222,13 +226,15 @@ def create_google_genai_adapter(
 
 
 def create_huggingface_adapter(
-    model_id: str = "gpt2", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+    model_id: str = "gpt2",
+    responses: Optional[List[Optional[str]]] = None,
+    tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None,
 ) -> Any:
     """Create HuggingFaceModelAdapter instance."""
     pytest.importorskip("transformers")
     from maseval.interface.inference.huggingface import HuggingFaceModelAdapter
 
-    response_list: List[str] = responses or ["Test response"]
+    response_list: List[Optional[str]] = responses or ["Test response"]
     call_count = [0]
 
     def mock_model(prompt, **kwargs):
@@ -240,7 +246,9 @@ def create_huggingface_adapter(
 
 
 def create_litellm_adapter(
-    model_id: str = "gpt-3.5-turbo", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+    model_id: str = "gpt-3.5-turbo",
+    responses: Optional[List[Optional[str]]] = None,
+    tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None,
 ) -> Any:
     """Create LiteLLMModelAdapter instance."""
     pytest.importorskip("litellm")
@@ -248,7 +256,7 @@ def create_litellm_adapter(
     from maseval.interface.inference.litellm import LiteLLMModelAdapter
 
     # Mock litellm.completion
-    response_list: List[str] = responses or ["Test response"]
+    response_list: List[Optional[str]] = responses or ["Test response"]
     tool_calls_list = tool_calls
     call_count = [0]
     original_completion = litellm.completion
@@ -265,10 +273,13 @@ def create_litellm_adapter(
             for tc_dict in response_tool_calls_dicts:
 
                 class MockFunction:
-                    pass
+                    name: str = ""
+                    arguments: str = "{}"
 
                 class MockToolCall:
-                    pass
+                    id: str = ""
+                    type: str = "function"
+                    function: MockFunction
 
                 func = MockFunction()
                 func.name = tc_dict.get("function", {}).get("name", "")
@@ -316,7 +327,9 @@ def create_litellm_adapter(
 
 
 def create_dummy_adapter(
-    model_id: str = "test-model", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+    model_id: str = "test-model",
+    responses: Optional[List[Optional[str]]] = None,
+    tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None,
 ) -> DummyModelAdapter:
     """Create DummyModelAdapter instance."""
     responses = responses or ["Test response"]
@@ -325,13 +338,15 @@ def create_dummy_adapter(
 
 
 def create_anthropic_adapter(
-    model_id: str = "claude-3", responses: Optional[List[str]] = None, tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None
+    model_id: str = "claude-3",
+    responses: Optional[List[Optional[str]]] = None,
+    tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None,
 ) -> Any:
     """Create AnthropicModelAdapter instance."""
     pytest.importorskip("anthropic")
     from maseval.interface.inference.anthropic import AnthropicModelAdapter
 
-    response_list: List[str] = responses or ["Test response"]
+    response_list: List[Optional[str]] = responses or ["Test response"]
     tool_calls_list = tool_calls
     call_count = [0]
 

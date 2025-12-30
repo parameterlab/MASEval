@@ -461,7 +461,7 @@ class MACSUser(User):
     """
 
     DEFAULT_MAX_TURNS = 5
-    DEFAULT_STOP_TOKEN = "</stop>"
+    DEFAULT_STOP_TOKENS = ["</stop>"]
     DEFAULT_EARLY_STOPPING_CONDITION = "ALL goals have been satisfactorily addressed by the assistant"
 
     def __init__(
@@ -472,7 +472,7 @@ class MACSUser(User):
         name: str = "Simulated User",
         template: Optional[str] = None,
         max_turns: int = DEFAULT_MAX_TURNS,
-        stop_token: str = DEFAULT_STOP_TOKEN,
+        stop_tokens: Optional[List[str]] = None,
         early_stopping_condition: str = DEFAULT_EARLY_STOPPING_CONDITION,
     ):
         """Initialize MACS user simulator.
@@ -484,12 +484,16 @@ class MACSUser(User):
             name: User name for identification (default: "Simulated User")
             template: Optional custom prompt template (uses base UserLLMSimulator template)
             max_turns: Maximum conversation turns (default: 5, per MACS paper)
-            stop_token: Token indicating user satisfaction (default: "</stop>")
+            stop_tokens: Tokens indicating user satisfaction (default: ["</stop>"])
             early_stopping_condition: Description of when to emit stop token
                 (default: "ALL goals have been satisfactorily addressed by the assistant")
         """
         # Extract user profile from scenario text
         user_profile = self._extract_user_profile(scenario)
+
+        # Use default stop tokens if not provided
+        if stop_tokens is None:
+            stop_tokens = self.DEFAULT_STOP_TOKENS.copy()
 
         super().__init__(
             name=name,
@@ -499,7 +503,7 @@ class MACSUser(User):
             initial_query=initial_query,
             template=template,
             max_turns=max_turns,
-            stop_token=stop_token,
+            stop_tokens=stop_tokens,
             early_stopping_condition=early_stopping_condition,
         )
 
@@ -800,10 +804,10 @@ class MACSBenchmark(Benchmark):
             model_factory=tool_model_factory,
         )
 
-    def setup_user(
+    def setup_user(  # type: ignore[override]
         self,
         agent_data: Dict[str, Any],
-        environment: MACSEnvironment,  # type: ignore[override]
+        environment: MACSEnvironment,
         task: Task,
     ) -> MACSUser:
         """Create MACS user simulator.
@@ -836,13 +840,13 @@ class MACSBenchmark(Benchmark):
         )
 
     @abstractmethod
-    def setup_agents(
+    def setup_agents(  # type: ignore[override]
         self,
         agent_data: Dict[str, Any],
-        environment: MACSEnvironment,  # type: ignore[override]
+        environment: MACSEnvironment,
         task: Task,
         user: Optional[User],
-    ) -> Tuple[List[AgentAdapter], Dict[str, AgentAdapter]]:
+    ) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
         """Create agents for this task. Must be implemented by subclass.
 
         Args:
@@ -856,9 +860,9 @@ class MACSBenchmark(Benchmark):
         """
         pass
 
-    def setup_evaluators(
+    def setup_evaluators(  # type: ignore[override]
         self,
-        environment: MACSEnvironment,  # type: ignore[override]
+        environment: MACSEnvironment,
         task: Task,
         agents: Sequence[AgentAdapter],
         user: Optional[User],
@@ -888,11 +892,11 @@ class MACSBenchmark(Benchmark):
             ),
         ]
 
-    def run_agents(
+    def run_agents(  # type: ignore[override]
         self,
         agents: Sequence[AgentAdapter],
         task: Task,
-        environment: MACSEnvironment,  # type: ignore[override]
+        environment: MACSEnvironment,
         query: str = "",
     ) -> Any:
         """Execute agents and return final answer."""
@@ -928,7 +932,7 @@ class MACSBenchmark(Benchmark):
         user_result = results[0] if results else {"gsr": 0.0, "partial_gsr": 0.0, "report": []}
         system_result = results[1] if len(results) > 1 else {"gsr": 0.0, "partial_gsr": 0.0, "report": []}
 
-        combined_report = user_result.get("report", []) + system_result.get("report", [])
+        combined_report = user_result.get("report", []) + system_result.get("report", [])  # type: ignore[operator]
 
         # Compute overall metrics per AWS paper
         overall_gsr = 1.0 if (user_result.get("gsr", 0.0) == 1.0 and system_result.get("gsr", 0.0) == 1.0) else 0.0

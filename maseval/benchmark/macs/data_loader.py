@@ -99,7 +99,7 @@ def download_original_data(
         domain_dir = original_dir / d
         domain_dir.mkdir(parents=True, exist_ok=True)
 
-        for name, url in URLS["data"][d].items():
+        for name, url in URLS["data"][d].items():  # type: ignore[union-attr]
             content = download_json(url)
             out_path = domain_dir / f"{name}.json"
             with out_path.open("w") as f:
@@ -133,7 +133,7 @@ def download_prompt_templates(
     templates_dir.mkdir(parents=True, exist_ok=True)
 
     url = URLS["evaluation"]["prompt_templates"]
-    text = download_file(url)
+    text = download_file(url)  # type: ignore[arg-type]
 
     # Parse Python file to extract prompt constants
     tree = ast.parse(text)
@@ -243,14 +243,14 @@ def _create_tools_list(agents_obj: object) -> List[Dict[str, Any]]:
     """Extract and deduplicate tools from agents data."""
     tools: List[Dict[str, Any]] = []
 
-    if isinstance(agents_obj, dict) and isinstance(agents_obj.get("agents"), list):
-        agents_list = agents_obj["agents"]
+    if isinstance(agents_obj, dict) and isinstance(agents_obj.get("agents"), list):  # type: ignore[arg-type,union-attr]
+        agents_list = agents_obj["agents"]  # type: ignore[index]
     elif isinstance(agents_obj, list):
         agents_list = agents_obj
     else:
         return tools
 
-    for agent in agents_list:
+    for agent in agents_list:  # type: ignore[union-attr]
         if not isinstance(agent, dict):
             continue
         for t in agent.get("tools", []):
@@ -269,13 +269,13 @@ def _create_agents_list(agents_obj: object) -> Dict[str, Any]:
         a_copy["tools"] = tool_names
         return a_copy
 
-    if isinstance(agents_obj, dict) and isinstance(agents_obj.get("agents"), list):
-        processed = [_process_agent(a) for a in agents_obj["agents"] if isinstance(a, dict)]
+    if isinstance(agents_obj, dict) and isinstance(agents_obj.get("agents"), list):  # type: ignore[arg-type,union-attr]
+        processed = [_process_agent(a) for a in agents_obj["agents"] if isinstance(a, dict)]  # type: ignore[index,union-attr]
         out: Dict[str, Any] = {"agents": processed}
         if "primary_agent_id" in agents_obj:
-            out["primary_agent_id"] = agents_obj["primary_agent_id"]
+            out["primary_agent_id"] = agents_obj["primary_agent_id"]  # type: ignore[index]
         if "human_id" in agents_obj:
-            out["human_id"] = agents_obj["human_id"]
+            out["human_id"] = agents_obj["human_id"]  # type: ignore[index]
         return out
 
     return {}
@@ -285,14 +285,14 @@ def _create_tasks_list(scenarios_obj: object, tools: List[Dict[str, Any]]) -> Li
     """Convert scenarios to task format with sequential IDs."""
     tasks: List[Dict[str, Any]] = []
 
-    if isinstance(scenarios_obj, dict) and isinstance(scenarios_obj.get("scenarios"), list):
-        scenarios_list = scenarios_obj["scenarios"]
+    if isinstance(scenarios_obj, dict) and isinstance(scenarios_obj.get("scenarios"), list):  # type: ignore[arg-type,union-attr]
+        scenarios_list = scenarios_obj["scenarios"]  # type: ignore[index]
     elif isinstance(scenarios_obj, list):
         scenarios_list = scenarios_obj
     else:
         return tasks
 
-    for idx, scen in enumerate(scenarios_list, start=1):
+    for idx, scen in enumerate(scenarios_list, start=1):  # type: ignore[arg-type]
         if not isinstance(scen, dict):
             continue
 
@@ -453,17 +453,16 @@ def load_tasks(
     tasks = []
     for t in tasks_list:
         metadata = t.get("metadata", {})
-        # Store task ID in metadata (format: task-NNNNNN)
+        # Build task kwargs, include id if provided (format: task-NNNNNN)
+        task_kwargs: Dict[str, Any] = {
+            "query": t["query"],
+            "environment_data": t.get("environment_data", {}),
+            "evaluation_data": t.get("evaluation_data", {}),
+            "metadata": metadata,
+        }
         if t.get("id"):
-            metadata["task_id"] = t["id"]
-        tasks.append(
-            Task(
-                query=t["query"],
-                environment_data=t.get("environment_data", {}),
-                evaluation_data=t.get("evaluation_data", {}),
-                metadata=metadata,
-            )
-        )
+            task_kwargs["id"] = str(t["id"])
+        tasks.append(Task(**task_kwargs))
 
     return TaskCollection(tasks)
 
@@ -549,7 +548,7 @@ def configure_model_ids(
         if tool_model_id is not None:
             if "model_id" in task.environment_data and task.environment_data["model_id"] != tool_model_id:
                 raise ValueError(
-                    f"Task {task.metadata.get('task_id', '')} already has tool `model_id` set to '{task.environment_data['model_id']}', cannot override with '{tool_model_id}'"
+                    f"Task {task.id} already has tool `model_id` set to '{task.environment_data['model_id']}', cannot override with '{tool_model_id}'"
                 )
             task.environment_data["model_id"] = tool_model_id
 
@@ -557,7 +556,7 @@ def configure_model_ids(
         if user_model_id is not None:
             if "model_id" in task.user_data and task.user_data["model_id"] != user_model_id:
                 raise ValueError(
-                    f"Task {task.metadata.get('task_id', '')} already has user `model_id` set to '{task.user_data['model_id']}', cannot override with '{user_model_id}'"
+                    f"Task {task.id} already has user `model_id` set to '{task.user_data['model_id']}', cannot override with '{user_model_id}'"
                 )
             task.user_data["model_id"] = user_model_id
 
@@ -565,7 +564,7 @@ def configure_model_ids(
         if evaluator_model_id is not None:
             if "model_id" in task.evaluation_data and task.evaluation_data["model_id"] != evaluator_model_id:
                 raise ValueError(
-                    f"Task {task.metadata.get('task_id', '')} already has evaluator `model_id` set to '{task.evaluation_data['model_id']}', cannot override with '{evaluator_model_id}'"
+                    f"Task {task.id} already has evaluator `model_id` set to '{task.evaluation_data['model_id']}', cannot override with '{evaluator_model_id}'"
                 )
             task.evaluation_data["model_id"] = evaluator_model_id
 
