@@ -501,16 +501,13 @@ class TestDefaultAgentTau2BenchmarkInit:
 
     def test_init_basic(self):
         """Test basic initialization."""
-        benchmark = DummyDefaultAgentBenchmark(
-            agent_data={"model_id": "gpt-4o"},
-        )
+        benchmark = DummyDefaultAgentBenchmark()
 
         assert benchmark._model_cache == {}
 
     def test_init_with_all_options(self):
         """Test initialization with all options."""
         benchmark = DummyDefaultAgentBenchmark(
-            agent_data={"model_id": "gpt-4o", "llm_args": {"temperature": 0.5}},
             n_task_repeats=3,
             max_invocations=5,
         )
@@ -525,7 +522,7 @@ class TestDefaultAgentTau2BenchmarkSetupAgents:
 
     def test_setup_agents_basic(self, sample_task):
         """Test basic agent setup."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         with patch.object(Tau2Environment, "__init__", return_value=None):
             mock_env = MagicMock(spec=Tau2Environment)
@@ -545,7 +542,7 @@ class TestDefaultAgentTau2BenchmarkSetupAgents:
 
     def test_setup_agents_missing_model_id(self, sample_task):
         """Test that missing model_id raises ValueError."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={})
+        benchmark = DummyDefaultAgentBenchmark()
 
         mock_env = MagicMock(spec=Tau2Environment)
         mock_env.create_tools.return_value = {}
@@ -556,7 +553,7 @@ class TestDefaultAgentTau2BenchmarkSetupAgents:
 
     def test_setup_agents_with_llm_args(self, sample_task):
         """Test agent setup with custom llm_args."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o", "llm_args": {"temperature": 0.5}})
+        benchmark = DummyDefaultAgentBenchmark()
 
         mock_env = MagicMock(spec=Tau2Environment)
         mock_env.create_tools.return_value = {}
@@ -574,7 +571,7 @@ class TestDefaultAgentTau2BenchmarkSetupAgents:
 
     def test_setup_agents_with_max_tool_calls(self, sample_task):
         """Test agent setup with custom max_tool_calls."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o", "max_tool_calls": 10})
+        benchmark = DummyDefaultAgentBenchmark()
 
         mock_env = MagicMock(spec=Tau2Environment)
         mock_env.create_tools.return_value = {}
@@ -600,7 +597,7 @@ class TestDefaultAgentTau2BenchmarkAbstract:
         # DefaultAgentTau2Benchmark itself is still abstract
         # because get_model_adapter is abstract
         with pytest.raises(TypeError, match="abstract"):
-            DefaultAgentTau2Benchmark(agent_data={"model_id": "gpt-4o"})
+            DefaultAgentTau2Benchmark()
 
 
 # =============================================================================
@@ -723,7 +720,7 @@ class TestTau2BenchmarkMethods:
 
     def test_setup_environment(self, sample_task):
         """Test setup_environment creates Tau2Environment."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         with patch("maseval.benchmark.tau2.tau2.Tau2Environment") as mock_env_cls:
             mock_env_cls.return_value = MagicMock()
@@ -736,7 +733,7 @@ class TestTau2BenchmarkMethods:
 
     def test_setup_user_with_dict_instructions(self):
         """Test setup_user with dict instructions."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         task = Task(
             query="Hello",
@@ -767,7 +764,7 @@ class TestTau2BenchmarkMethods:
 
     def test_setup_user_with_string_instructions(self):
         """Test setup_user with string instructions."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         task = Task(
             query="Hello",
@@ -790,7 +787,7 @@ class TestTau2BenchmarkMethods:
 
     def test_setup_user_empty_instructions(self):
         """Test setup_user with no instructions."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         task = Task(
             query="Hello",
@@ -810,7 +807,7 @@ class TestTau2BenchmarkMethods:
 
     def test_setup_evaluators(self, sample_task):
         """Test setup_evaluators creates Tau2Evaluator."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         with patch("maseval.benchmark.tau2.tau2.Tau2Environment") as mock_env_cls:
             mock_env = MagicMock(spec=Tau2Environment)
@@ -823,7 +820,7 @@ class TestTau2BenchmarkMethods:
 
     def test_run_agents_single_agent(self, sample_task):
         """Test run_agents with a single agent."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         mock_agent = MagicMock(spec=AgentAdapter)
         mock_agent.run.return_value = "Response"
@@ -837,7 +834,7 @@ class TestTau2BenchmarkMethods:
 
     def test_run_agents_multiple_agents(self, sample_task):
         """Test run_agents with multiple agents."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         mock_agent1 = MagicMock(spec=AgentAdapter)
         mock_agent1.run.return_value = "Response 1"
@@ -852,7 +849,7 @@ class TestTau2BenchmarkMethods:
 
     def test_evaluate(self, sample_task):
         """Test evaluate method."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         mock_evaluator = MagicMock()
         mock_evaluator.filter_traces.return_value = {"filtered": True}
@@ -955,7 +952,7 @@ class TestDummyBenchmarkModelAdapter:
 
     def test_get_model_adapter_returns_mock(self):
         """Test that DummyDefaultAgentBenchmark returns working mock adapter."""
-        benchmark = DummyDefaultAgentBenchmark(agent_data={"model_id": "gpt-4o"})
+        benchmark = DummyDefaultAgentBenchmark()
 
         adapter = benchmark.get_model_adapter("gpt-4o")
 

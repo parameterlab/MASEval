@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-from maseval import Task, TaskCollection
+from maseval import Task, TaskQueue
 
 
 # =============================================================================
@@ -257,7 +257,7 @@ def load_tasks(
     split: str = "base",
     data_dir: Optional[Path] = None,
     limit: Optional[int] = None,
-) -> TaskCollection:
+) -> TaskQueue:
     """Load tasks for a tau2 domain.
 
     Args:
@@ -267,7 +267,7 @@ def load_tasks(
         limit: Maximum number of tasks to load
 
     Returns:
-        TaskCollection containing Task objects with:
+        TaskQueue containing Task objects with:
             - id: Task identifier from tau2 data
             - query: Initial user message (from user_scenario)
             - environment_data: Domain tools, database state, policies
@@ -316,7 +316,7 @@ def load_tasks(
         task = _convert_tau2_task_to_maseval(raw_task, domain, split, domain_config)
         tasks.append(task)
 
-    return TaskCollection(tasks)
+    return TaskQueue(tasks)
 
 
 def _convert_tau2_task_to_maseval(
@@ -440,18 +440,18 @@ def load_domain_config(
 
 
 def configure_model_ids(
-    tasks: Union[TaskCollection, List[Task]],
+    tasks: Union[TaskQueue, List[Task]],
     *,
     user_model_id: Optional[str] = None,
     evaluator_model_id: Optional[str] = None,
-) -> Union[TaskCollection, List[Task]]:
+) -> Union[TaskQueue, List[Task]]:
     """Configure model IDs for benchmark components in task data.
 
     Tau2 tools execute real business logic and don't need a tool_model_id.
     Only user simulation and evaluation use LLMs.
 
     Args:
-        tasks: TaskCollection or list of Tasks to configure
+        tasks: TaskQueue or list of Tasks to configure
         user_model_id: Model ID for user simulator (stored in user_data)
         evaluator_model_id: Model ID for evaluators (stored in evaluation_data)
 

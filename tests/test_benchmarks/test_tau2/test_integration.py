@@ -59,9 +59,11 @@ def test_tau2_dry_run():
     task.user_data = {"model_id": "mock-user", "instructions": "Test scenario"}
     task.evaluation_data = {"reward_basis": ["DB"], "actions": []}
     task.query = "Help me."
+    task.protocol = MagicMock()
+    task.protocol.timeout_seconds = None
 
     # Setup benchmark
-    benchmark = IntegrationTau2Benchmark(agent_data={}, n_task_repeats=1)
+    benchmark = IntegrationTau2Benchmark(n_task_repeats=1)
 
     # Mock Environment
     env_mock = MagicMock()
@@ -88,7 +90,7 @@ def test_tau2_dry_run():
 
     # Patch setup_evaluators to return our mock
     benchmark.setup_evaluators = MagicMock(return_value=[mock_evaluator])  # type: ignore[assignment]
-    results = benchmark.run([task])
+    results = benchmark.run([task], agent_data={})
 
     # Debug info if failed
     if results[0]["status"] != "success":
