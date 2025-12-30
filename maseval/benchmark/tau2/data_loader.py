@@ -268,11 +268,12 @@ def load_tasks(
 
     Returns:
         TaskCollection containing Task objects with:
+            - id: Task identifier from tau2 data
             - query: Initial user message (from user_scenario)
             - environment_data: Domain tools, database state, policies
             - evaluation_data: Assertions, expected outcomes
             - user_data: User profile, instructions
-            - metadata: task_id, domain, split
+            - metadata: domain, split, description
 
     Raises:
         ValueError: If domain or split is invalid
@@ -373,20 +374,24 @@ def _convert_tau2_task_to_maseval(
 
     # Build metadata
     metadata: Dict[str, Any] = {
-        "task_id": raw_task.get("id", ""),
         "domain": domain,
         "split": split,
         "description": raw_task.get("description"),
         "ticket": raw_task.get("ticket"),  # For solo mode (not used)
     }
 
-    return Task(
-        query=query,
-        environment_data=environment_data,
-        evaluation_data=evaluation_data,
-        user_data=user_data,
-        metadata=metadata,
-    )
+    # Build task kwargs, only include id if provided in raw task
+    task_kwargs: Dict[str, Any] = {
+        "query": query,
+        "environment_data": environment_data,
+        "evaluation_data": evaluation_data,
+        "user_data": user_data,
+        "metadata": metadata,
+    }
+    if raw_task.get("id"):
+        task_kwargs["id"] = str(raw_task["id"])
+
+    return Task(**task_kwargs)
 
 
 def load_domain_config(
@@ -466,8 +471,7 @@ def configure_model_ids(
         if user_model_id is not None:
             if "model_id" in task.user_data and task.user_data["model_id"] != user_model_id:
                 raise ValueError(
-                    f"Task {task.metadata.get('task_id', '')} already has user `model_id` "
-                    f"set to '{task.user_data['model_id']}', cannot override with '{user_model_id}'"
+                    f"Task {task.id} already has user `model_id` set to '{task.user_data['model_id']}', cannot override with '{user_model_id}'"
                 )
             task.user_data["model_id"] = user_model_id
 
@@ -475,7 +479,7 @@ def configure_model_ids(
         if evaluator_model_id is not None:
             if "model_id" in task.evaluation_data and task.evaluation_data["model_id"] != evaluator_model_id:
                 raise ValueError(
-                    f"Task {task.metadata.get('task_id', '')} already has evaluator `model_id` "
+                    f"Task {task.id} already has evaluator `model_id` "
                     f"set to '{task.evaluation_data['model_id']}', cannot override with '{evaluator_model_id}'"
                 )
             task.evaluation_data["model_id"] = evaluator_model_id

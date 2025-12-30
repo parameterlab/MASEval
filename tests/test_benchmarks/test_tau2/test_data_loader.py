@@ -317,14 +317,12 @@ class TestTaskMetadata:
 
     def test_task_has_id(self):
         """All tasks have an id."""
-        from uuid import UUID
-
         tasks = load_tasks("retail", limit=10)
 
         for task in tasks:
             assert task.id is not None
-            # Task ID can be UUID or string
-            assert isinstance(task.id, (str, UUID))
+            # Task ID is always a string
+            assert isinstance(task.id, str)
 
     def test_task_ids_unique(self):
         """Task IDs are unique."""

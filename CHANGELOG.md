@@ -20,9 +20,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handles Anthropic-specific message format conversion (system messages, tool_use/tool_result blocks) internally while accepting OpenAI-compatible input
 - Added `anthropic` optional dependency: `pip install maseval[anthropic]`
 
+**Benchmarks**
+
+- Tau2 Benchmark: Full implementation of the tau2-bench benchmark for evaluating LLM-based agents on customer service tasks across airline, retail, and telecom domains (PR: #16)
+- `Tau2Benchmark`, `Tau2Environment`, `Tau2User`, `Tau2Evaluator` components for framework-agnostic evaluation (PR: #16)
+- `DefaultAgentTau2Benchmark` using an agent setup closely resembeling to the original tau2-bench implementation (PR: #16)
+- Data loading utilities: `load_tasks()`, `ensure_data_exists()`, `configure_model_ids()` (PR: #16)
+- Metrics: `compute_benchmark_metrics()`, `compute_pass_at_k()`, `compute_pass_hat_k()` for tau2-style scoring (PR: #16)
+- Domain implementations with tool kits: `AirlineTools`, `RetailTools`, `TelecomTools` with full database simulation (PR: #16)
+
+**User**
+
+- `AgenticUser` class for users that can use tools during conversations (PR: #16)
+- Multiple stop token support: `User` now accepts `stop_tokens` (list) instead of single `stop_token`, enabling different termination reasons (PR: #16)
+- Stop reason tracking: `User` traces now include `stop_reason`, `max_turns`, `turns_used`, and `stopped_by_user` for detailed termination analysis (PR: #16)
+
+**Simulator**
+
+- `AgenticUserLLMSimulator` for LLM-based user simulation with tool use capabilities (PR: #16)
+
+**Examples**
+
+- Tau2 benchmark example with default agent implementation and result comparison scripts (PR: #16)
+
 ### Changed
 
+**Benchmark**
+
+- `Benchmark.agent_data` parameter is now optional (defaults to empty dict) (PR: #16)
+
+**Task**
+
+- `Task.id` is now `str` type instead of `UUID`. Benchmarks can provide human-readable IDs directly (e.g., `Task(id="retail_001", ...)`). Auto-generates UUID string if not provided. (PR: #16)
+
 ### Fixed
+
+- Task reports now use `task.id` directly instead of `metadata["task_id"]` (PR: #16)
 
 ### Removed
 
