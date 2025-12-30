@@ -39,8 +39,8 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
 
     Early Stopping (User Satisfaction):
         For benchmarks where the termination criterion is "user satisfaction" rather than
-        a fixed number of turns, configure a stop_token. When the LLM-generated user
-        response contains this token, is_done() returns True, ending the interaction early.
+        a fixed number of turns, configure stop_tokens. When the LLM-generated user
+        response contains any of these tokens, is_done() returns True, ending the interaction early.
 
         Example: MACS benchmark uses "</stop>" to signal the user is satisfied with the
         agent's response, allowing natural conversation endings before max_turns.
@@ -53,7 +53,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         simulator (UserLLMSimulator): The simulator instance used to generate responses.
         messages (MessageHistory): The conversation history between the user and the MAS.
         max_turns (int): Maximum number of user response turns.
-        stop_token (Optional[str]): Token that triggers early stopping when detected.
+        stop_tokens (List[str]): Tokens that trigger early stopping when detected.
         early_stopping_condition (Optional[str]): Description of when to emit the stop token.
     """
 
@@ -67,7 +67,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         template: Optional[str] = None,
         max_try: int = 3,
         max_turns: int = 1,
-        stop_token: Optional[str] = None,
+        stop_tokens: Optional[List[str]] = None,
         early_stopping_condition: Optional[str] = None,
     ):
         """Initializes the User.
@@ -91,25 +91,28 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
                 conversation. Each user message counts as one turn, including the
                 initial_query. Use max_turns=1 for single-turn benchmarks, or higher
                 values for multi-turn interaction. Defaults to 1.
-            stop_token (Optional[str], optional): Token that signals user satisfaction,
-                enabling early termination. When the user's LLM-generated response contains
-                this token, is_done() returns True regardless of remaining turns. Use this
-                for benchmarks where termination is based on user satisfaction rather than
-                a fixed turn count. The token is stripped from the response. Defaults to
-                None (early stopping disabled).
+            stop_tokens (Optional[List[str]], optional): List of tokens that signal user
+                satisfaction, enabling early termination. When the user's LLM-generated
+                response contains any of these tokens, is_done() returns True regardless
+                of remaining turns. The matched token is stripped from the response.
+                Defaults to None (early stopping disabled).
             early_stopping_condition (Optional[str], optional): A description of when the
                 user should stop the conversation (e.g., "all goals have been accomplished").
-                Used with stop_token to instruct the LLM when to emit the stop token.
-                Must be provided if stop_token is set. Defaults to None.
+                Used with stop_tokens to instruct the LLM when to emit a stop token.
+                Must be provided if stop_tokens is set. Defaults to None.
 
         Raises:
-            ValueError: If only one of stop_token or early_stopping_condition is provided.
+            ValueError: If stop_tokens is set but early_stopping_condition is not provided.
         """
+        # Normalize stop_tokens to list
+        stop_tokens = stop_tokens or []
+
         # Validate early stopping configuration
-        if (stop_token is None) != (early_stopping_condition is None):
+        has_stop_tokens = len(stop_tokens) > 0
+        if has_stop_tokens != (early_stopping_condition is not None):
             raise ValueError(
-                "stop_token and early_stopping_condition must both be set or both be None. "
-                f"Got stop_token={stop_token!r}, early_stopping_condition={early_stopping_condition!r}"
+                "stop_tokens and early_stopping_condition must both be set or both be None. "
+                f"Got stop_tokens={stop_tokens!r}, early_stopping_condition={early_stopping_condition!r}"
             )
 
         self.name = name
@@ -117,13 +120,15 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         self.user_profile = user_profile
         self.scenario = scenario
 
+        # Pass first stop token to simulator (it only uses one for prompt instructions)
+        primary_stop_token = stop_tokens[0] if stop_tokens else None
         self.simulator = UserLLMSimulator(
             model=self.model,
             user_profile=self.user_profile,
             scenario=self.scenario,
             template=template,
             max_try=max_try,
-            stop_token=stop_token,
+            stop_token=primary_stop_token,
             early_stopping_condition=early_stopping_condition,
         )
         # Initialize message history - empty or with initial query
@@ -137,10 +142,11 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
 
         # Multi-turn configuration
         self.max_turns = max_turns
-        self.stop_token = stop_token
+        self.stop_tokens = stop_tokens
         self.early_stopping_condition = early_stopping_condition
         self._turn_count = self._initial_turn_count
         self._stopped = False
+        self._stop_reason: Optional[str] = None  # Which token triggered the stop
 
     def simulate_response(self, question: str) -> str:
         """Simulates a user response to a given question from the MAS.
@@ -261,7 +267,13 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
             - name: User name
             - profile: User profile data
             - message_count: Number of messages in conversation history
-            - history: Full conversation history as list of messages
+            - messages: Full conversation history as list of messages
+            - logs: Execution logs
+            - termination_reason: Why the interaction ended
+            - stop_reason: Which stop token triggered termination (if any)
+            - max_turns: Maximum allowed turns
+            - turns_used: Actual turns used
+            - stopped_by_user: Whether user emitted a stop token
         """
         return {
             **super().gather_traces(),
@@ -271,6 +283,10 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
             "messages": self.messages.to_list(),
             "logs": self.logs,
             "termination_reason": self.termination_reason.value,
+            "stop_reason": self._stop_reason,
+            "max_turns": self.max_turns,
+            "turns_used": self._turn_count,
+            "stopped_by_user": self._stopped,
         }
 
     @staticmethod
@@ -313,7 +329,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         return self.termination_reason != TerminationReason.NOT_TERMINATED
 
     def _check_stop_token(self, response: str) -> tuple[bool, str]:
-        """Check if response contains stop token and clean it up.
+        """Check if response contains any stop token and clean it up.
 
         Args:
             response: The user's response to check.
@@ -321,11 +337,14 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         Returns:
             Tuple of (should_stop, cleaned_response).
         """
-        if self.stop_token and self.stop_token.lower() in response.lower():
-            self._stopped = True
-            # Remove the stop token from the response
-            cleaned = response.replace(self.stop_token, "").replace(self.stop_token.lower(), "").strip()
-            return True, cleaned if cleaned else "Thank you, that's all I needed!"
+        response_lower = response.lower()
+        for token in self.stop_tokens:
+            if token.lower() in response_lower:
+                self._stopped = True
+                self._stop_reason = token  # Track which token triggered the stop
+                # Remove the stop token from the response
+                cleaned = response.replace(token, "").replace(token.lower(), "").strip()
+                return True, cleaned if cleaned else "Thank you, that's all I needed!"
         return False, response
 
     def increment_turn(self) -> None:
@@ -346,7 +365,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
             - profile: User profile data
             - scenario: Task scenario description
             - max_turns: Maximum interaction turns
-            - stop_token: Early stopping token (if configured)
+            - stop_tokens: Early stopping tokens (if configured)
         """
         return {
             **super().gather_config(),
@@ -354,7 +373,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
             "profile": self.user_profile,
             "scenario": self.scenario,
             "max_turns": self.max_turns,
-            "stop_token": self.stop_token,
+            "stop_tokens": self.stop_tokens,
         }
 
     @abstractmethod
@@ -402,13 +421,15 @@ class AgenticUser(User):
         tool_definitions = self._generate_tool_definitions() if self.tools else None
 
         # Replace the standard simulator with AgenticUserLLMSimulator
+        # Use first stop token for simulator (for prompt instructions)
+        primary_stop_token = self.stop_tokens[0] if self.stop_tokens else None
         self.simulator = AgenticUserLLMSimulator(
             model=self.model,
             user_profile=self.user_profile,
             scenario=self.scenario,
             template=kwargs.get("template"),
             max_try=kwargs.get("max_try", 3),
-            stop_token=kwargs.get("stop_token"),
+            stop_token=primary_stop_token,
             early_stopping_condition=kwargs.get("early_stopping_condition"),
             tools=tool_definitions,
         )

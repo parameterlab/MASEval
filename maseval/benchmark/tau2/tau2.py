@@ -87,7 +87,8 @@ class Tau2User(AgenticUser):
     """
 
     DEFAULT_MAX_TURNS = 50  # tau2-bench uses max_steps=200, ~4 steps per turn
-    DEFAULT_STOP_TOKEN = "###STOP###"  # Match tau2-bench tokens
+    # Match tau2-bench tokens - user can stop, transfer, or go out of scope
+    DEFAULT_STOP_TOKENS = ["###STOP###", "###TRANSFER###", "###OUT-OF-SCOPE###"]
     DEFAULT_EARLY_STOPPING_CONDITION = "The instruction goal is satisfied"
     DEFAULT_TEMPLATE_PATH = Path(__file__).parent / "prompt_templates" / "user_simulator.txt"
 
@@ -99,7 +100,7 @@ class Tau2User(AgenticUser):
         name: str = "Customer",
         template: Optional[str] = None,
         max_turns: int = DEFAULT_MAX_TURNS,
-        stop_token: str = DEFAULT_STOP_TOKEN,
+        stop_tokens: Optional[List[str]] = None,
         early_stopping_condition: str = DEFAULT_EARLY_STOPPING_CONDITION,
         tools: Optional[Dict[str, Callable]] = None,
     ):
@@ -112,7 +113,7 @@ class Tau2User(AgenticUser):
             name: User name for identification (default: "Customer")
             template: Optional custom prompt template (uses tau2-specific template by default)
             max_turns: Maximum conversation turns
-            stop_token: Token indicating user satisfaction (default: ###STOP###)
+            stop_tokens: List of tokens indicating termination (default: ###STOP###, ###TRANSFER###, ###OUT-OF-SCOPE###)
             early_stopping_condition: Description of when to emit stop token
             tools: Optional dictionary of tools available to the user
         """
@@ -123,6 +124,10 @@ class Tau2User(AgenticUser):
         # Extract user profile from scenario
         user_profile = self._extract_user_profile(scenario)
 
+        # Use default stop tokens if not provided
+        if stop_tokens is None:
+            stop_tokens = self.DEFAULT_STOP_TOKENS.copy()
+
         super().__init__(
             name=name,
             model=model,
@@ -131,7 +136,7 @@ class Tau2User(AgenticUser):
             initial_query=initial_query,
             template=template,
             max_turns=max_turns,
-            stop_token=stop_token,
+            stop_tokens=stop_tokens,
             early_stopping_condition=early_stopping_condition,
             tools=tools,
         )

@@ -54,6 +54,7 @@ def test_tau2_dry_run():
     # Setup task
     task = MagicMock(spec=Task)
     task.id = "test_1"
+    task.metadata = {"task_id": "test_1"}
     task.environment_data = {"domain": "retail"}
     task.user_data = {"model_id": "mock-user", "instructions": "Test scenario"}
     task.evaluation_data = {"reward_basis": ["DB"], "actions": []}
