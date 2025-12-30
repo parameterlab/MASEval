@@ -221,7 +221,7 @@ class TestExecutionLoopWithUser:
         assert len(benchmark.run_agents_calls) == 2
 
     def test_stops_when_user_done_via_stop_token(self, dummy_model):
-        """Stops early when user.is_done() returns True (stop_token)."""
+        """Stops early when user.is_done() returns True (stop_tokens)."""
         from conftest import DummyUser
 
         task = Task(query="Task query", environment_data={})
@@ -230,7 +230,7 @@ class TestExecutionLoopWithUser:
             model=dummy_model,
             initial_query="Start",
             max_turns=10,
-            stop_token="</stop>",
+            stop_tokens=["</stop>"],
             early_stopping_condition="goals are met",
         )
         # User stops on second response

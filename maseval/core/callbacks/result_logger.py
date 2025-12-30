@@ -96,10 +96,9 @@ class ResultLogger(BenchmarkCallback, ABC):
         self._n_repeats = benchmark.n_task_repeats
 
         # Calculate all expected iterations
-        for task_idx, task in enumerate(benchmark.tasks):
-            task_id = str(task.id)
+        for task in benchmark.tasks:
             for repeat_idx in range(benchmark.n_task_repeats):
-                self._expected_iterations.add((task_id, repeat_idx))
+                self._expected_iterations.add((task.id, repeat_idx))
 
     def on_task_repeat_end(self, benchmark: "Benchmark", report: Dict) -> None:
         """Called after each task iteration completes.

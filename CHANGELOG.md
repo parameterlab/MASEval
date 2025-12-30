@@ -11,27 +11,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Parallel Execution**
 
-- Added parallel task execution with `max_workers` parameter in `Benchmark.run()` using `ThreadPoolExecutor` (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `ComponentRegistry` class for thread-safe component registration with thread-local storage (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `TaskContext` for cooperative timeout checking with `check_timeout()`, `elapsed`, `remaining`, and `is_expired` properties (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `TaskProtocol` dataclass with `timeout_seconds`, `timeout_action`, `max_retries`, `priority`, and `tags` fields for task-level execution control (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `TimeoutAction` enum (`SKIP`, `RETRY`, `RAISE`) for configurable timeout behavior (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `TaskTimeoutError` exception with `elapsed`, `timeout`, and `partial_traces` attributes (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `TASK_TIMEOUT` to `TaskExecutionStatus` enum for timeout classification (PR: #PR_NUMBER_PLACEHOLDER)
+- Added parallel task execution with `max_workers` parameter in `Benchmark.run()` using `ThreadPoolExecutor` (PR: #14)
+- Added `ComponentRegistry` class for thread-safe component registration with thread-local storage (PR: #14)
+- Added `TaskContext` for cooperative timeout checking with `check_timeout()`, `elapsed`, `remaining`, and `is_expired` properties (PR: #14)
+- Added `TaskProtocol` dataclass with `timeout_seconds`, `timeout_action`, `max_retries`, `priority`, and `tags` fields for task-level execution control (PR: #14)
+- Added `TimeoutAction` enum (`SKIP`, `RETRY`, `RAISE`) for configurable timeout behavior (PR: #14)
+- Added `TaskTimeoutError` exception with `elapsed`, `timeout`, and `partial_traces` attributes (PR: #14)
+- Added `TASK_TIMEOUT` to `TaskExecutionStatus` enum for timeout classification (PR: #14)
 
 **Task Queue Abstraction**
 
-- Added `TaskQueue` abstract base class with iterator interface for flexible task scheduling (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `SequentialQueue` for simple FIFO task ordering (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `PriorityQueue` for priority-based task scheduling using `TaskProtocol.priority` (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `AdaptiveQueue` placeholder for future feedback-based scheduling (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `TaskQueue` abstract base class with iterator interface for flexible task scheduling (PR: #14)
+- Added `SequentialQueue` for simple FIFO task ordering (PR: #14)
+- Added `PriorityQueue` for priority-based task scheduling using `TaskProtocol.priority` (PR: #14)
+- Added `AdaptiveQueue` placeholder for future feedback-based scheduling (PR: #14)
+
+**ModelAdapter Chat Interface**
+
+- Added `chat()` method to `ModelAdapter` as the primary interface for LLM inference, accepting a list of messages in OpenAI format and returning a `ChatResponse` object and accepting tools
+- Added `ChatResponse` dataclass containing `content`, `tool_calls`, `role`, `usage`, `model`, and `stop_reason` fields for structured response handling
+
+**AnthropicModelAdapter**
+
+- New `AnthropicModelAdapter` for direct integration with Anthropic Claude models via the official Anthropic SDK
+- Handles Anthropic-specific message format conversion (system messages, tool_use/tool_result blocks) internally while accepting OpenAI-compatible input
+- Added `anthropic` optional dependency: `pip install maseval[anthropic]`
+
+**Benchmarks**
+
+- Tau2 Benchmark: Full implementation of the tau2-bench benchmark for evaluating LLM-based agents on customer service tasks across airline, retail, and telecom domains (PR: #16)
+- `Tau2Benchmark`, `Tau2Environment`, `Tau2User`, `Tau2Evaluator` components for framework-agnostic evaluation (PR: #16)
+- `DefaultAgentTau2Benchmark` using an agent setup closely resembeling to the original tau2-bench implementation (PR: #16)
+- Data loading utilities: `load_tasks()`, `ensure_data_exists()`, `configure_model_ids()` (PR: #16)
+- Metrics: `compute_benchmark_metrics()`, `compute_pass_at_k()`, `compute_pass_hat_k()` for tau2-style scoring (PR: #16)
+- Domain implementations with tool kits: `AirlineTools`, `RetailTools`, `TelecomTools` with full database simulation (PR: #16)
+
+**User**
+
+- `AgenticUser` class for users that can use tools during conversations (PR: #16)
+- Multiple stop token support: `User` now accepts `stop_tokens` (list) instead of single `stop_token`, enabling different termination reasons (PR: #16)
+- Stop reason tracking: `User` traces now include `stop_reason`, `max_turns`, `turns_used`, and `stopped_by_user` for detailed termination analysis (PR: #16)
+
+**Simulator**
+
+- `AgenticUserLLMSimulator` for LLM-based user simulation with tool use capabilities (PR: #16)
+
+**Examples**
+
+- Tau2 benchmark example with default agent implementation and result comparison scripts (PR: #16)
 
 ### Changed
 
-- Refactored `Benchmark` to delegate registry operations to `ComponentRegistry` class (PR: #PR_NUMBER_PLACEHOLDER)
-- `Benchmark.run()` now accepts optional `queue` parameter for custom task scheduling (PR: #PR_NUMBER_PLACEHOLDER)
+**Benchmark**
+
+- `Benchmark.agent_data` parameter is now optional (defaults to empty dict) (PR: #16)
+- Refactored `Benchmark` to delegate registry operations to `ComponentRegistry` class (PR: #)
+- `Benchmark.run()` now accepts optional `queue` parameter for custom task scheduling (PR: #14)
+
+**Task**
+
+- `Task.id` is now `str` type instead of `UUID`. Benchmarks can provide human-readable IDs directly (e.g., `Task(id="retail_001", ...)`). Auto-generates UUID string if not provided. (PR: #16)
 
 ### Fixed
+
+- Task reports now use `task.id` directly instead of `metadata["task_id"]` (PR: #16)
 
 ### Removed
 

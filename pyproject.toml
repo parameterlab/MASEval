@@ -21,7 +21,12 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-dependencies = ["gitpython>=3.1.0", "tqdm>=4.66.0", "rich>=14.1.0"]
+dependencies = [
+    "gitpython>=3.1.0",
+    "tqdm>=4.66.0",
+    "rich>=14.1.0",
+    "pydantic>=2.12.5",
+]
 
 # Enable optional dependencies for end users
 [project.optional-dependencies]
@@ -31,6 +36,7 @@ langgraph = ["langgraph>=0.6.0"]
 llamaindex = ["llama-index-core>=0.12.0"]
 
 # Inference engines
+anthropic = ["anthropic>=0.40.0"]
 openai = ["openai>=1.107.2"]
 google-genai = ["google-genai>=1.37.0"]
 transformers = ["transformers>=4.37.0"]
@@ -42,12 +48,13 @@ langfuse = ["langfuse>=3.3.4"]
 
 # Dependencies for running examples (only what's actually used)
 examples = [
-    "maseval[smolagents,langgraph,llamaindex,openai,google-genai,litellm,langfuse]",
+    "maseval[smolagents,langgraph,llamaindex,anthropic,openai,google-genai,litellm,langfuse]",
     # Additional integrations used in examples
     "langchain>=0.3.27",
     "langchain-google-genai>=2.1.12",
     "typing-extensions>=4.0.0",
     "mcp>=1.22.0",
+    "python-dotenv>=1.0.0",
     # Jupyter notebook support
     "jupyter>=1.0.0",
     "ipykernel>=6.0.0",

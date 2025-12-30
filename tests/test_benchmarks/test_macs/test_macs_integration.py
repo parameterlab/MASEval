@@ -108,7 +108,8 @@ class TestDataLoadingIntegration:
             },
             user_data={"model_id": "test-model"},
             evaluation_data={"model_id": "test-model", "assertions": ["user: Booking done"]},
-            metadata={"scenario": "Travel booking scenario", "task_id": "task-000001"},
+            id="task-000001",
+            metadata={"scenario": "Travel booking scenario"},
         )
 
         benchmark = ConcreteMACSBenchmark(macs_model)

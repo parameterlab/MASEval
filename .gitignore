@@ -1,6 +1,7 @@
 # Custom
 .idea/
 .DS_Store
+.devcontainer/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

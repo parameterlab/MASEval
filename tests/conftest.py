@@ -12,29 +12,92 @@ from maseval import (
     Evaluator,
     MessageHistory,
 )
-from maseval.core.model import ModelAdapter
+from maseval.core.model import ModelAdapter, ChatResponse
 
 
 # ==================== Dummy Components ====================
 
 
 class DummyModelAdapter(ModelAdapter):
-    """Minimal model adapter for testing."""
+    """Minimal model adapter for testing.
 
-    def __init__(self, model_id: str = "test-model", responses: Optional[List[str]] = None):
+    Simulates model responses without making actual API calls. Useful for
+    unit tests and integration tests that don't require real LLM inference.
+
+    Supports both chat() and generate() methods, returning responses from
+    a predefined list in round-robin fashion.
+    """
+
+    def __init__(
+        self,
+        model_id: str = "test-model",
+        responses: Optional[List[Optional[str]]] = None,
+        tool_calls: Optional[List[Optional[List[Dict[str, Any]]]]] = None,
+        usage: Optional[Dict[str, int]] = None,
+        stop_reason: Optional[str] = None,
+    ):
+        """Initialize DummyModelAdapter.
+
+        Args:
+            model_id: Identifier for this model instance.
+            responses: List of text responses to return. Cycles through the list.
+                Can include None for tool-only responses.
+            tool_calls: Optional list of tool call lists. If provided, each call
+                returns the corresponding tool_calls (cycling through the list).
+                Can include None for text-only responses.
+            usage: Optional usage dict to include in all responses. Should have
+                input_tokens, output_tokens, total_tokens.
+            stop_reason: Optional stop_reason to include in all responses.
+        """
         super().__init__()
         self._model_id = model_id
-        self._responses = responses or ["test response"]
+        self._responses: List[Optional[str]] = responses or ["test response"]
+        self._tool_calls = tool_calls
+        self._usage = usage
+        self._stop_reason = stop_reason
         self._call_count = 0
 
     @property
     def model_id(self) -> str:
         return self._model_id
 
-    def _generate_impl(self, prompt: str, generation_params: Optional[Dict[str, Any]] = None, **kwargs: Any) -> str:
+    def _chat_impl(
+        self,
+        messages: List[Dict[str, Any]],
+        generation_params: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> ChatResponse:
+        """Return a mock response.
+
+        Args:
+            messages: Input messages (ignored for mock).
+            generation_params: Generation parameters (ignored for mock).
+            tools: Tool definitions (ignored for mock).
+            tool_choice: Tool choice (ignored for mock).
+            **kwargs: Additional arguments (ignored for mock).
+
+        Returns:
+            ChatResponse with mock content and optional tool_calls.
+        """
         response = self._responses[self._call_count % len(self._responses)]
+
+        # Get tool_calls for this response if provided
+        response_tool_calls = None
+        if self._tool_calls:
+            response_tool_calls = self._tool_calls[self._call_count % len(self._tool_calls)]
+
         self._call_count += 1
-        return response
+
+        return ChatResponse(
+            content=response,
+            tool_calls=response_tool_calls,
+            role="assistant",
+            model=self._model_id,
+            usage=self._usage,
+            stop_reason=self._stop_reason,
+        )
 
 
 class DummyAgent:
@@ -157,7 +220,7 @@ class DummyUser(User):
                 - scenario: Scenario description
                 - initial_query: Optional initial message
                 - max_turns: Max interaction turns (default: 1)
-                - stop_token: Early termination token (default: None)
+                - stop_tokens: Early termination tokens (default: None)
                 - early_stopping_condition: Description of when to stop (default: None)
         """
         super().__init__(
@@ -167,7 +230,7 @@ class DummyUser(User):
             scenario=kwargs.get("scenario", "test scenario"),
             initial_query=kwargs.get("initial_query"),
             max_turns=kwargs.get("max_turns", 1),
-            stop_token=kwargs.get("stop_token"),
+            stop_tokens=kwargs.get("stop_tokens"),
             early_stopping_condition=kwargs.get("early_stopping_condition"),
         )
         # Replace simulator with a mock to avoid LLM calls

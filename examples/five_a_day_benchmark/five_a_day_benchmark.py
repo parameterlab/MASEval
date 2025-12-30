@@ -873,10 +873,11 @@ def load_benchmark_data(
         task_id = task_dict["metadata"]["task_id"]
         task_dict["environment_data"]["agent_framework"] = framework
 
-        # Create task
+        # Create task with id from metadata
         tasks_data.append(
             Task(
                 query=task_dict["query"],
+                id=task_id,
                 environment_data=task_dict["environment_data"],
                 evaluation_data=task_dict["evaluation_data"],
                 metadata=task_dict["metadata"],
