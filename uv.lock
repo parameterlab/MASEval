@@ -2448,6 +2448,7 @@ all = [
     { name = "llama-index-core" },
     { name = "mcp" },
     { name = "openai" },
+    { name = "python-dotenv" },
     { name = "smolagents" },
     { name = "transformers" },
     { name = "typing-extensions" },
@@ -2470,6 +2471,7 @@ examples = [
     { name = "llama-index-core" },
     { name = "mcp" },
     { name = "openai" },
+    { name = "python-dotenv" },
     { name = "smolagents" },
     { name = "typing-extensions" },
 ]
@@ -2536,6 +2538,7 @@ requires-dist = [
     { name = "mcp", marker = "extra == 'examples'", specifier = ">=1.22.0" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1.107.2" },
     { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "python-dotenv", marker = "extra == 'examples'", specifier = ">=1.0.0" },
     { name = "rich", specifier = ">=14.1.0" },
     { name = "smolagents", marker = "extra == 'smolagents'", specifier = ">=1.21.3" },
     { name = "tqdm", specifier = ">=4.66.0" },
