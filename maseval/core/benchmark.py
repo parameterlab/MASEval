@@ -109,7 +109,7 @@ class Benchmark(ABC):
                 retry_reports = benchmark.run(tasks=failed_tasks, agent_data=config)
 
             # Parallel execution for I/O-bound workloads
-            benchmark = MyBenchmark(max_workers=4)
+            benchmark = MyBenchmark(num_workers=4)
             reports = benchmark.run(tasks=my_tasks, agent_data=config)
 
             # Or use strict mode for debugging (fail fast)
@@ -131,7 +131,7 @@ class Benchmark(ABC):
         callbacks: Optional[List[BenchmarkCallback]] = None,
         n_task_repeats: int = 1,
         max_invocations: int = 1,
-        max_workers: int = 1,
+        num_workers: int = 1,
         fail_on_setup_error: bool = False,
         fail_on_task_error: bool = False,
         fail_on_evaluation_error: bool = False,
@@ -148,7 +148,7 @@ class Benchmark(ABC):
                 For simple benchmarks, the default (1) means agents run once per task. For interactive
                 benchmarks with user feedback loops, set higher (e.g., 5 for MACS) to allow multiple
                 agent-user interaction rounds.
-            max_workers: Maximum number of parallel task executions. Default 1 (sequential).
+            num_workers: Number of parallel task executions. Default 1 (sequential).
                 Set higher for I/O-bound workloads (e.g., LLM API calls). This controls the
                 ThreadPoolExecutor worker count for concurrent task processing.
             fail_on_setup_error: If True, raise exceptions when setup fails (environment, agents, evaluators).
@@ -180,7 +180,7 @@ class Benchmark(ABC):
             benchmark = MyBenchmark()
 
             # Parallel execution for faster I/O-bound workloads
-            benchmark = MyBenchmark(max_workers=4)
+            benchmark = MyBenchmark(num_workers=4)
 
             # Strict mode - fail fast on any error (useful for debugging)
             benchmark = MyBenchmark(
@@ -225,7 +225,7 @@ class Benchmark(ABC):
 
         # Execution configuration
         self.max_invocations = max_invocations
-        self.max_workers = max_workers
+        self.num_workers = num_workers
 
         # Failure handling configuration
         self.fail_on_task_error = fail_on_task_error
@@ -1193,16 +1193,16 @@ class Benchmark(ABC):
         self,
         queue: BaseTaskQueue,
         agent_data_lookup: Dict[str, Dict[str, Any]],
-        max_workers: int,
+        num_workers: int,
     ) -> None:
         """Execute tasks in parallel with thread pool.
 
         Args:
             queue: Task queue providing task ordering.
             agent_data_lookup: Mapping from task_id to agent_data configuration.
-            max_workers: Maximum number of concurrent workers.
+            num_workers: Number of concurrent workers.
         """
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
             futures: Dict[Any, Tuple[Task, int]] = {}
             task_repeat_counts: Dict[str, int] = {}  # Track submitted repeats per task
 
@@ -1233,7 +1233,7 @@ class Benchmark(ABC):
 
             # Submit initial batch
             try:
-                while len(futures) < max_workers * 2:
+                while len(futures) < num_workers * 2:
                     task = next(queue_iter)
                     submit_task_repeats(task)
                     submitted_tasks.append(task)
@@ -1291,7 +1291,7 @@ class Benchmark(ABC):
                         self._invoke_callbacks("on_task_end", self, task, last_report)
 
                 # Submit more work if queue not exhausted
-                if not queue_exhausted and len(futures) < max_workers:
+                if not queue_exhausted and len(futures) < num_workers:
                     try:
                         task = next(queue_iter)
                         submit_task_repeats(task)
@@ -1396,7 +1396,7 @@ class Benchmark(ABC):
                 print(f"Traces: {report['traces']}")
 
             # Parallel execution with 4 workers
-            benchmark = MyBenchmark(max_workers=4)
+            benchmark = MyBenchmark(num_workers=4)
             reports = benchmark.run(tasks=tasks, agent_data=config)
 
             # Single agent config for all tasks
@@ -1454,11 +1454,11 @@ class Benchmark(ABC):
             # Callbacks at the start of the run
             self._invoke_callbacks("on_run_start", self)
 
-            # Execute based on max_workers
-            if self.max_workers == 1:
+            # Execute based on num_workers
+            if self.num_workers == 1:
                 self._run_sequential(queue, agent_data_lookup)
             else:
-                self._run_parallel(queue, agent_data_lookup, self.max_workers)
+                self._run_parallel(queue, agent_data_lookup, self.num_workers)
 
             # Callbacks at the end of the run
             self._invoke_callbacks("on_run_end", self, self.reports)

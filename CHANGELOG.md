@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Parallel Execution**
 
-- Added parallel task execution with `max_workers` parameter in `Benchmark.run()` using `ThreadPoolExecutor` (PR: #14)
+- Added parallel task execution with `num_workers` parameter in `Benchmark.run()` using `ThreadPoolExecutor` (PR: #14)
 - Added `ComponentRegistry` class for thread-safe component registration with thread-local storage (PR: #14)
 - Added `TaskContext` for cooperative timeout checking with `check_timeout()`, `elapsed`, `remaining`, and `is_expired` properties (PR: #14)
 - Added `TaskProtocol` dataclass with `timeout_seconds`, `timeout_action`, `max_retries`, `priority`, and `tags` fields for task-level execution control (PR: #14)

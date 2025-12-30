@@ -1,6 +1,6 @@
 """Tests for parallel task execution in Benchmark.
 
-These tests verify that parallel execution with max_workers > 1 works correctly,
+These tests verify that parallel execution with num_workers > 1 works correctly,
 including thread safety, report collection, and callback serialization.
 """
 
@@ -123,7 +123,7 @@ class TestParallelExecutionBasics:
 
     def test_parallel_reports_have_correct_structure(self, parallel_tasks):
         """Verify parallel reports have expected fields."""
-        benchmark = DummyBenchmark(max_workers=3)
+        benchmark = DummyBenchmark(num_workers=3)
 
         reports = benchmark.run(parallel_tasks, agent_data={"model": "test"})
 
@@ -136,7 +136,7 @@ class TestParallelExecutionBasics:
             assert "eval" in report
 
     def test_single_worker_uses_sequential(self, parallel_tasks):
-        """max_workers=1 should behave identically to sequential."""
+        """num_workers=1 should behave identically to sequential."""
         callback = OrderTrackingCallback()
         benchmark = DummyBenchmark(
             callbacks=[callback],
@@ -191,7 +191,7 @@ class TestParallelThreadSafety:
 
     def test_traces_not_cross_contaminated(self, parallel_tasks):
         """Traces from one task should not appear in another's report."""
-        benchmark = DummyBenchmark(max_workers=4)
+        benchmark = DummyBenchmark(num_workers=4)
 
         reports = benchmark.run(parallel_tasks, agent_data={"model": "test"})
 
@@ -273,7 +273,7 @@ class TestParallelConcurrency:
         time_seq = time.time() - start_seq
 
         # Parallel timing
-        benchmark_par = SlowBenchmark(delay_seconds=delay, max_workers=4)
+        benchmark_par = SlowBenchmark(delay_seconds=delay, num_workers=4)
         start_par = time.time()
         benchmark_par.run(tasks, agent_data={"model": "test"})
         time_par = time.time() - start_par
@@ -287,7 +287,7 @@ class TestParallelConcurrency:
 
         benchmark = SlowBenchmark(
             delay_seconds=0.05,
-            max_workers=3,
+            num_workers=3,
         )
 
         benchmark.run(tasks, agent_data={"model": "test"})
@@ -404,7 +404,7 @@ class TestParallelQueueIntegration:
             callbacks=[OrderTracker()],
         )
 
-        # With max_workers=1, order should be strictly by priority
+        # With num_workers=1, order should be strictly by priority
         benchmark.run(queue, agent_data={"model": "test"})
 
         assert execution_order == ["P5", "P4", "P3", "P2", "P1"]
