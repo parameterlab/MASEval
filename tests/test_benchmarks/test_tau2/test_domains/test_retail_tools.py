@@ -27,9 +27,9 @@ class TestRetailToolkitBasic:
         """Toolkit provides statistics."""
         stats = retail_toolkit.get_statistics()
 
-        assert stats["num_tools"] > 0
-        assert stats["num_read_tools"] >= 0
-        assert stats["num_write_tools"] >= 0
+        assert stats["num_tools"] == 15
+        assert stats["num_read_tools"] == 6
+        assert stats["num_write_tools"] == 7
 
     def test_toolkit_descriptions(self, retail_toolkit):
         """Toolkit provides tool descriptions."""

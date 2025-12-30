@@ -51,28 +51,15 @@ class TestConstants:
 class TestLoadDomainConfig:
     """Tests for load_domain_config function."""
 
-    def test_loads_retail_config(self):
-        """Loads retail domain configuration."""
-        config = load_domain_config("retail")
+    @pytest.mark.parametrize("domain", VALID_DOMAINS)
+    def test_loads_domain_config(self, domain):
+        """Loads domain configuration successfully."""
+        config = load_domain_config(domain)
 
         assert "policy" in config
         assert "db_path" in config
         assert config["db_path"].exists()
         assert len(config["policy"]) > 0
-
-    def test_loads_airline_config(self):
-        """Loads airline domain configuration."""
-        config = load_domain_config("airline")
-
-        assert "policy" in config
-        assert config["db_path"].exists()
-
-    def test_loads_telecom_config(self):
-        """Loads telecom domain configuration."""
-        config = load_domain_config("telecom")
-
-        assert "policy" in config
-        assert config["db_path"].exists()
 
     def test_invalid_domain_raises(self):
         """Invalid domain raises ValueError."""
@@ -89,38 +76,21 @@ class TestLoadDomainConfig:
 class TestLoadTasks:
     """Tests for load_tasks function."""
 
-    def test_loads_retail_tasks(self):
-        """Loads retail domain tasks."""
-        tasks = load_tasks("retail", split="base", limit=5)
+    @pytest.mark.parametrize("domain", VALID_DOMAINS)
+    def test_loads_domain_tasks(self, domain):
+        """Loads domain tasks with limit."""
+        tasks = load_tasks(domain, split="base", limit=5)
 
-        assert len(tasks) <= 5
-        assert len(tasks) > 0
-
-        task = tasks[0]
-        assert task.query is not None
-        assert "domain" in task.environment_data or task.metadata.get("domain") == "retail"
-
-    def test_loads_airline_tasks(self):
-        """Loads airline domain tasks."""
-        tasks = load_tasks("airline", split="base", limit=5)
-
-        assert len(tasks) <= 5
-        assert len(tasks) > 0
-
-    def test_loads_telecom_tasks(self):
-        """Loads telecom domain tasks."""
-        tasks = load_tasks("telecom", split="base", limit=5)
-
-        assert len(tasks) <= 5
-        assert len(tasks) > 0
+        assert len(tasks) == 5
+        assert tasks[0].query is not None
 
     def test_limit_parameter(self):
         """Limit parameter restricts number of tasks."""
         tasks_3 = load_tasks("retail", limit=3)
         tasks_10 = load_tasks("retail", limit=10)
 
-        assert len(tasks_3) <= 3
-        assert len(tasks_10) <= 10
+        assert len(tasks_3) == 3
+        assert len(tasks_10) == 10
 
     def test_invalid_domain_raises(self):
         """Invalid domain raises ValueError."""
@@ -181,31 +151,22 @@ class TestConfigureModelIds:
 class TestEnsureDataExists:
     """Tests for ensure_data_exists function."""
 
-    def test_retail_data_exists(self):
-        """Retail data exists after ensure_data_exists."""
-        result = ensure_data_exists(domain="retail")
+    @pytest.mark.parametrize(
+        "domain,db_ext",
+        [
+            ("retail", ".json"),
+            ("airline", ".json"),
+            ("telecom", ".toml"),
+        ],
+    )
+    def test_domain_data_exists(self, domain, db_ext):
+        """Domain data files exist after ensure_data_exists."""
+        result = ensure_data_exists(domain=domain)
 
         assert result.exists()
-        assert (result / "retail" / "db.json").exists()
-        assert (result / "retail" / "tasks.json").exists()
-        assert (result / "retail" / "policy.md").exists()
-
-    def test_airline_data_exists(self):
-        """Airline data exists after ensure_data_exists."""
-        result = ensure_data_exists(domain="airline")
-
-        assert (result / "airline" / "db.json").exists()
-        assert (result / "airline" / "tasks.json").exists()
-        assert (result / "airline" / "policy.md").exists()
-
-    def test_telecom_data_exists(self):
-        """Telecom data exists after ensure_data_exists."""
-        result = ensure_data_exists(domain="telecom")
-
-        # Telecom uses db.toml instead of db.json
-        assert (result / "telecom" / "db.toml").exists()
-        assert (result / "telecom" / "tasks.json").exists()
-        assert (result / "telecom" / "policy.md").exists()
+        assert (result / domain / f"db{db_ext}").exists()
+        assert (result / domain / "tasks.json").exists()
+        assert (result / domain / "policy.md").exists()
 
 
 # =============================================================================
@@ -270,7 +231,7 @@ class TestTaskSplits:
         """Load hard split returns hard tasks."""
         tasks = load_tasks("retail", split="hard", limit=10)
 
-        assert len(tasks) >= 0  # May be empty if no hard tasks
+        # Hard split may be empty if all tasks are in base split
         for task in tasks:
             # Hard tasks should have hard indicator in metadata or split
             if hasattr(task, "metadata") and "split" in task.metadata:
@@ -331,13 +292,14 @@ class TestTaskMetadata:
         ids = [task.id for task in tasks]
         assert len(ids) == len(set(ids)), "Task IDs are not unique"
 
-    def test_task_environment_data_has_domain(self):
-        """Task environment_data includes domain."""
-        tasks = load_tasks("retail", limit=5)
+    @pytest.mark.parametrize("domain", VALID_DOMAINS)
+    def test_task_environment_data_has_domain(self, domain):
+        """Task environment_data includes correct domain."""
+        tasks = load_tasks(domain, limit=5)
 
         for task in tasks:
             assert "domain" in task.environment_data
-            assert task.environment_data["domain"] == "retail"
+            assert task.environment_data["domain"] == domain
 
 
 # =============================================================================
@@ -348,20 +310,6 @@ class TestTaskMetadata:
 @pytest.mark.benchmark
 class TestDomainTasks:
     """Tests for domain-specific task loading."""
-
-    def test_airline_tasks_have_domain(self):
-        """Airline tasks have correct domain."""
-        tasks = load_tasks("airline", limit=5)
-
-        for task in tasks:
-            assert task.environment_data.get("domain") == "airline"
-
-    def test_telecom_tasks_have_domain(self):
-        """Telecom tasks have correct domain."""
-        tasks = load_tasks("telecom", limit=5)
-
-        for task in tasks:
-            assert task.environment_data.get("domain") == "telecom"
 
     def test_cross_domain_tasks_different(self):
         """Tasks from different domains have different content."""
@@ -422,28 +370,14 @@ class TestTaskFiltering:
 class TestPolicyLoading:
     """Tests for policy loading in domain config."""
 
-    def test_retail_policy_content(self):
-        """Retail policy contains expected content."""
-        config = load_domain_config("retail")
+    @pytest.mark.parametrize("domain", VALID_DOMAINS)
+    def test_policy_content(self, domain):
+        """Domain policy contains content."""
+        config = load_domain_config(domain)
 
         policy = config.get("policy", "")
         assert len(policy) > 0
-        # Policy should mention retail-related terms
         assert isinstance(policy, str)
-
-    def test_airline_policy_content(self):
-        """Airline policy contains expected content."""
-        config = load_domain_config("airline")
-
-        policy = config.get("policy", "")
-        assert len(policy) > 0
-
-    def test_telecom_policy_content(self):
-        """Telecom policy contains expected content."""
-        config = load_domain_config("telecom")
-
-        policy = config.get("policy", "")
-        assert len(policy) > 0
 
 
 # =============================================================================
@@ -455,29 +389,21 @@ class TestPolicyLoading:
 class TestDatabasePaths:
     """Tests for database path handling."""
 
-    def test_retail_db_is_json(self):
-        """Retail database uses JSON format."""
-        config = load_domain_config("retail")
+    @pytest.mark.parametrize(
+        "domain,expected_suffix",
+        [
+            ("retail", ".json"),
+            ("airline", ".json"),
+            ("telecom", ".toml"),
+        ],
+    )
+    def test_db_format(self, domain, expected_suffix):
+        """Database uses correct format for domain."""
+        config = load_domain_config(domain)
 
         db_path = config.get("db_path")
         assert db_path is not None
-        assert db_path.suffix == ".json"
-
-    def test_airline_db_is_json(self):
-        """Airline database uses JSON format."""
-        config = load_domain_config("airline")
-
-        db_path = config.get("db_path")
-        assert db_path is not None
-        assert db_path.suffix == ".json"
-
-    def test_telecom_db_is_toml(self):
-        """Telecom database uses TOML format."""
-        config = load_domain_config("telecom")
-
-        db_path = config.get("db_path")
-        assert db_path is not None
-        assert db_path.suffix == ".toml"
+        assert db_path.suffix == expected_suffix
 
 
 # =============================================================================

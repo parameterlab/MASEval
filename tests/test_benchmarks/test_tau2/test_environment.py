@@ -3,6 +3,7 @@
 import pytest
 
 from maseval.benchmark.tau2 import Tau2Environment
+from maseval.benchmark.tau2.data_loader import VALID_DOMAINS
 
 
 # =============================================================================
@@ -14,30 +15,15 @@ from maseval.benchmark.tau2 import Tau2Environment
 class TestEnvironmentCreation:
     """Tests for Tau2Environment creation."""
 
-    def test_creates_retail_environment(self):
-        """Creates retail environment successfully."""
-        env = Tau2Environment({"domain": "retail"})
+    @pytest.mark.parametrize("domain", VALID_DOMAINS)
+    def test_creates_environment(self, domain):
+        """Creates environment successfully for each domain."""
+        env = Tau2Environment({"domain": domain})
 
-        assert env.domain == "retail"
+        assert env.domain == domain
         assert env.db is not None
         assert env.toolkit is not None
         assert env.policy is not None
-
-    def test_creates_airline_environment(self):
-        """Creates airline environment successfully."""
-        env = Tau2Environment({"domain": "airline"})
-
-        assert env.domain == "airline"
-        assert env.db is not None
-        assert env.toolkit is not None
-
-    def test_creates_telecom_environment(self):
-        """Creates telecom environment successfully."""
-        env = Tau2Environment({"domain": "telecom"})
-
-        assert env.domain == "telecom"
-        assert env.db is not None
-        assert env.toolkit is not None
 
     def test_invalid_domain_raises(self):
         """Invalid domain raises ValueError."""
@@ -50,28 +36,33 @@ class TestEnvironmentCreation:
 # =============================================================================
 
 
+# Expected tool counts per domain
+DOMAIN_TOOL_COUNTS = {
+    "retail": 15,
+    "airline": 14,
+    "telecom": 13,
+}
+
+
 @pytest.mark.benchmark
 class TestEnvironmentTools:
     """Tests for environment tool creation."""
 
-    def test_retail_has_tools(self, retail_environment):
-        """Retail environment has tools."""
-        tools = retail_environment.create_tools()
+    @pytest.mark.parametrize(
+        "domain,expected_count",
+        [
+            ("retail", 15),
+            ("airline", 14),
+            ("telecom", 13),
+        ],
+    )
+    def test_domain_has_correct_tool_count(self, domain, expected_count):
+        """Each domain has the expected number of tools."""
+        env = Tau2Environment({"domain": domain})
+        tools = env.create_tools()
 
-        assert len(tools) > 0
+        assert len(tools) == expected_count
         assert isinstance(tools, dict)
-
-    def test_airline_has_tools(self, airline_environment):
-        """Airline environment has tools."""
-        tools = airline_environment.create_tools()
-
-        assert len(tools) > 0
-
-    def test_telecom_has_tools(self, telecom_environment):
-        """Telecom environment has tools."""
-        tools = telecom_environment.create_tools()
-
-        assert len(tools) > 0
 
     def test_tools_are_callable(self, retail_environment):
         """All tools are callable."""
@@ -186,26 +177,22 @@ class TestToolExecution:
 class TestToolkitStatistics:
     """Tests for toolkit statistics."""
 
-    def test_retail_toolkit_stats(self, retail_environment):
-        """Retail toolkit has expected statistics."""
-        stats = retail_environment.toolkit.get_statistics()
+    @pytest.mark.parametrize(
+        "domain,num_tools,num_read,num_write",
+        [
+            ("retail", 15, 6, 7),
+            ("airline", 14, 6, 6),
+            ("telecom", 13, 6, 6),
+        ],
+    )
+    def test_toolkit_stats(self, domain, num_tools, num_read, num_write):
+        """Toolkit has expected statistics for each domain."""
+        env = Tau2Environment({"domain": domain})
+        stats = env.toolkit.get_statistics()
 
-        assert "num_tools" in stats
-        assert stats["num_tools"] > 0
-        assert "num_read_tools" in stats
-        assert "num_write_tools" in stats
-
-    def test_airline_toolkit_stats(self, airline_environment):
-        """Airline toolkit has expected statistics."""
-        stats = airline_environment.toolkit.get_statistics()
-
-        assert stats["num_tools"] > 0
-
-    def test_telecom_toolkit_stats(self, telecom_environment):
-        """Telecom toolkit has expected statistics."""
-        stats = telecom_environment.toolkit.get_statistics()
-
-        assert stats["num_tools"] > 0
+        assert stats["num_tools"] == num_tools
+        assert stats["num_read_tools"] == num_read
+        assert stats["num_write_tools"] == num_write
 
 
 # =============================================================================
@@ -286,23 +273,13 @@ class TestTraceGathering:
 class TestUserTools:
     """Tests for user tool creation."""
 
-    def test_create_user_tools_retail(self, retail_environment):
-        """Retail environment can create user tools."""
-        user_tools = retail_environment.create_user_tools()
+    @pytest.mark.parametrize("domain", VALID_DOMAINS)
+    def test_create_user_tools(self, domain):
+        """Each domain can create user tools."""
+        env = Tau2Environment({"domain": domain})
+        user_tools = env.create_user_tools()
 
-        # User tools should be dict (may be empty for retail)
-        assert isinstance(user_tools, dict)
-
-    def test_create_user_tools_airline(self, airline_environment):
-        """Airline environment can create user tools."""
-        user_tools = airline_environment.create_user_tools()
-
-        assert isinstance(user_tools, dict)
-
-    def test_create_user_tools_telecom(self, telecom_environment):
-        """Telecom environment can create user tools."""
-        user_tools = telecom_environment.create_user_tools()
-
+        # User tools should be dict (may be empty for some domains)
         assert isinstance(user_tools, dict)
 
 
@@ -395,23 +372,20 @@ class TestEnvironmentReset:
 class TestToolDescriptions:
     """Tests for tool descriptions."""
 
-    def test_retail_tool_descriptions(self, retail_environment):
-        """Retail tools have descriptions."""
-        descriptions = retail_environment.toolkit.get_tool_descriptions()
+    @pytest.mark.parametrize(
+        "domain,expected_count",
+        [
+            ("retail", 15),
+            ("airline", 14),
+            ("telecom", 13),
+        ],
+    )
+    def test_tool_descriptions(self, domain, expected_count):
+        """Each domain has descriptions for all tools."""
+        env = Tau2Environment({"domain": domain})
+        descriptions = env.toolkit.get_tool_descriptions()
 
-        assert len(descriptions) > 0
+        assert len(descriptions) == expected_count
         for name, desc in descriptions.items():
             assert isinstance(desc, str)
-            assert len(desc) > 0
-
-    def test_airline_tool_descriptions(self, airline_environment):
-        """Airline tools have descriptions."""
-        descriptions = airline_environment.toolkit.get_tool_descriptions()
-
-        assert len(descriptions) > 0
-
-    def test_telecom_tool_descriptions(self, telecom_environment):
-        """Telecom tools have descriptions."""
-        descriptions = telecom_environment.toolkit.get_tool_descriptions()
-
-        assert len(descriptions) > 0
+            assert len(desc) > 0, f"Tool {name} has empty description"

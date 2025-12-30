@@ -28,9 +28,9 @@ class TestTelecomToolkitBasic:
         """Toolkit provides statistics."""
         stats = telecom_toolkit.get_statistics()
 
-        assert stats["num_tools"] > 0
-        assert stats["num_read_tools"] >= 0
-        assert stats["num_write_tools"] >= 0
+        assert stats["num_tools"] == 13
+        assert stats["num_read_tools"] == 6
+        assert stats["num_write_tools"] == 6
 
     def test_toolkit_descriptions(self, telecom_toolkit):
         """Toolkit provides tool descriptions."""

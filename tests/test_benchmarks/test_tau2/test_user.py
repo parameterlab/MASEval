@@ -110,8 +110,12 @@ def test_gather_traces(mock_model):
     traces = user.gather_traces()
 
     assert isinstance(traces, dict)
-    # Should have at least some trace information
-    assert "internal_history" in traces or "messages" in traces or len(traces) >= 0
+    # Should have expected trace fields
+    assert "type" in traces
+    assert "messages" in traces
+    assert "message_count" in traces
+    assert traces["type"] == "Tau2User"
+    assert traces["message_count"] == 1
 
 
 @pytest.mark.benchmark

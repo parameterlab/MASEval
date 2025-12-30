@@ -31,9 +31,9 @@ class TestAirlineToolkitInfrastructure:
     def test_toolkit_statistics(self, airline_toolkit):
         """Toolkit reports correct statistics."""
         stats = airline_toolkit.get_statistics()
-        assert stats["num_tools"] > 0
-        assert stats["num_read_tools"] > 0
-        assert stats["num_write_tools"] > 0
+        assert stats["num_tools"] == 14
+        assert stats["num_read_tools"] == 6
+        assert stats["num_write_tools"] == 6
 
     def test_tool_descriptions_complete(self, airline_toolkit):
         """All tools have non-empty descriptions."""
