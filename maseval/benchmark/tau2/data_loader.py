@@ -19,6 +19,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 from maseval import Task, TaskQueue
+from maseval.core.task import TaskProtocol
 
 
 # =============================================================================
@@ -35,6 +36,10 @@ BASE_SPLIT_COUNTS = {
     "retail": 114,
     "telecom": 114,
 }
+
+# Default execution protocol settings
+DEFAULT_TIMEOUT_SECONDS = 600.0  # 10 minutes per task
+DEFAULT_MAX_RETRIES = 1  # Skip on first failure
 
 # GitHub raw content URLs for v0.2.0 tag
 GITHUB_BASE = "https://raw.githubusercontent.com/sierra-research/tau2-bench"
@@ -257,6 +262,8 @@ def load_tasks(
     split: str = "base",
     data_dir: Optional[Path] = None,
     limit: Optional[int] = None,
+    timeout_seconds: Optional[float] = DEFAULT_TIMEOUT_SECONDS,
+    max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> TaskQueue:
     """Load tasks for a tau2 domain.
 
@@ -265,6 +272,9 @@ def load_tasks(
         split: One of "base", "hard", "all" (base recommended for reproducibility)
         data_dir: Base data directory (default: module's data/)
         limit: Maximum number of tasks to load
+        timeout_seconds: Maximum execution time per task in seconds. Default 600 (10 minutes).
+            Set to None to disable timeout.
+        max_retries: Maximum retry attempts for transient failures. Default 1 (skip on failure).
 
     Returns:
         TaskQueue containing Task objects with:
@@ -274,6 +284,7 @@ def load_tasks(
             - evaluation_data: Assertions, expected outcomes
             - user_data: User profile, instructions
             - metadata: domain, split, description
+            - protocol: Execution settings (timeout, retries, tags)
 
     Raises:
         ValueError: If domain or split is invalid
@@ -283,6 +294,9 @@ def load_tasks(
         >>> tasks = load_tasks("retail", split="base", limit=5)
         >>> len(tasks)
         5
+
+        >>> # Custom timeout and retries
+        >>> tasks = load_tasks("retail", timeout_seconds=300, max_retries=2)
     """
     if domain not in VALID_DOMAINS:
         raise ValueError(f"Invalid domain '{domain}'. Must be one of {VALID_DOMAINS}")
@@ -313,7 +327,9 @@ def load_tasks(
     # Convert to MASEval Task objects
     tasks = []
     for raw_task in raw_tasks:
-        task = _convert_tau2_task_to_maseval(raw_task, domain, split, domain_config)
+        task = _convert_tau2_task_to_maseval(
+            raw_task, domain, split, domain_config, timeout_seconds, max_retries
+        )
         tasks.append(task)
 
     return TaskQueue(tasks)
@@ -324,6 +340,8 @@ def _convert_tau2_task_to_maseval(
     domain: str,
     split: str,
     domain_config: Dict[str, Any],
+    timeout_seconds: Optional[float],
+    max_retries: int,
 ) -> Task:
     """Convert a tau2-bench task dict to MASEval Task.
 
@@ -332,6 +350,8 @@ def _convert_tau2_task_to_maseval(
         domain: Domain name
         split: Split name
         domain_config: Domain configuration with policy and db_path
+        timeout_seconds: Maximum execution time per task in seconds
+        max_retries: Maximum retry attempts for transient failures
 
     Returns:
         MASEval Task object
@@ -380,6 +400,13 @@ def _convert_tau2_task_to_maseval(
         "ticket": raw_task.get("ticket"),  # For solo mode (not used)
     }
 
+    # Build execution protocol with timeout, retries, and tags
+    protocol = TaskProtocol(
+        timeout_seconds=timeout_seconds,
+        max_retries=max_retries,
+        tags={"domain": domain, "split": split},
+    )
+
     # Build task kwargs, only include id if provided in raw task
     task_kwargs: Dict[str, Any] = {
         "query": query,
@@ -387,6 +414,7 @@ def _convert_tau2_task_to_maseval(
         "evaluation_data": evaluation_data,
         "user_data": user_data,
         "metadata": metadata,
+        "protocol": protocol,
     }
     if raw_task.get("id"):
         task_kwargs["id"] = str(raw_task["id"])

@@ -237,7 +237,33 @@ class Tau2Benchmark(Benchmark):
         Args:
             max_invocations: Maximum agent-user interaction rounds (default: 50).
                 tau2-bench uses max_steps=200, where 1 turn ≈ 4 steps.
-            *args, **kwargs: Passed to parent Benchmark class
+
+        Inherited from Benchmark (pass via kwargs):
+            num_workers: Number of parallel task executions. Default 1 (sequential).
+                Set higher for I/O-bound workloads (e.g., LLM API calls).
+            n_task_repeats: Number of times to repeat each task. Default 1.
+                Useful for measuring variance or computing pass@k metrics.
+            callbacks: List of callback handlers for monitoring execution.
+            progress_bar: Progress display. True (default) for tqdm, "rich" for Rich,
+                or False to disable.
+            fail_on_task_error: If True, raise on task execution errors. Default False.
+            fail_on_evaluation_error: If True, raise on evaluation errors. Default False.
+            fail_on_setup_error: If True, raise on setup errors. Default False.
+
+        Example:
+            ```python
+            # Parallel execution for faster evaluation
+            benchmark = MyTau2Benchmark(num_workers=4)
+
+            # Multiple repeats for pass@k metrics
+            benchmark = MyTau2Benchmark(n_task_repeats=4)
+
+            # Debug mode - fail fast on errors
+            benchmark = MyTau2Benchmark(
+                fail_on_task_error=True,
+                fail_on_evaluation_error=True,
+            )
+            ```
         """
         super().__init__(*args, max_invocations=max_invocations, **kwargs)  # type: ignore[parameter-already-assigned]
 
