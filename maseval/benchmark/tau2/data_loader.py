@@ -327,9 +327,7 @@ def load_tasks(
     # Convert to MASEval Task objects
     tasks = []
     for raw_task in raw_tasks:
-        task = _convert_tau2_task_to_maseval(
-            raw_task, domain, split, domain_config, timeout_seconds, max_retries
-        )
+        task = _convert_tau2_task_to_maseval(raw_task, domain, split, domain_config, timeout_seconds, max_retries)
         tasks.append(task)
 
     return TaskQueue(tasks)

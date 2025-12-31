@@ -503,7 +503,8 @@ class TestDefaultAgentTau2BenchmarkInit:
         """Test basic initialization."""
         benchmark = DummyDefaultAgentBenchmark()
 
-        assert benchmark._model_cache == {}
+        # Benchmark should be initialized successfully
+        assert benchmark.max_invocations == 50  # Tau2 default
 
     def test_init_with_all_options(self):
         """Test initialization with all options."""
@@ -514,6 +515,13 @@ class TestDefaultAgentTau2BenchmarkInit:
 
         assert benchmark.n_task_repeats == 3
         assert benchmark.max_invocations == 5
+
+    def test_default_max_invocations(self):
+        """Test that default max_invocations is 50 from class attribute."""
+        benchmark = DummyDefaultAgentBenchmark()
+
+        assert benchmark.max_invocations == 50
+        assert benchmark.MAX_INVOCATIONS == 50
 
 
 @pytest.mark.benchmark

@@ -62,6 +62,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Callable
 
 from maseval import AgentAdapter, Benchmark, Evaluator, ModelAdapter, Task, User
 from maseval.core.user import AgenticUser
+from maseval.core.callback import BenchmarkCallback
 
 from maseval.benchmark.tau2.environment import Tau2Environment
 from maseval.benchmark.tau2.evaluator import Tau2Evaluator
@@ -231,41 +232,44 @@ class Tau2Benchmark(Benchmark):
         benchmark.run(tasks)
     """
 
-    def __init__(self, *args: Any, max_invocations: int = 50, **kwargs: Any):
+    # Maximum agent-user interaction rounds (tau2-bench uses max_steps=200, where 1 turn ≈ 4 steps)
+    MAX_INVOCATIONS = 50
+
+    def __init__(
+        self,
+        callbacks: Optional[List[BenchmarkCallback]] = None,
+        n_task_repeats: int = 1,
+        max_invocations: int = MAX_INVOCATIONS,
+        num_workers: int = 1,
+        fail_on_setup_error: bool = False,
+        fail_on_task_error: bool = False,
+        fail_on_evaluation_error: bool = False,
+        progress_bar: bool | str = True,
+    ):
         """Initialize benchmark with tau2-specific defaults.
 
         Args:
+            callbacks: Optional list of callback handlers for monitoring execution.
+            n_task_repeats: Number of times to repeat each task. Default 1.
             max_invocations: Maximum agent-user interaction rounds (default: 50).
                 tau2-bench uses max_steps=200, where 1 turn ≈ 4 steps.
-
-        Inherited from Benchmark (pass via kwargs):
             num_workers: Number of parallel task executions. Default 1 (sequential).
-                Set higher for I/O-bound workloads (e.g., LLM API calls).
-            n_task_repeats: Number of times to repeat each task. Default 1.
-                Useful for measuring variance or computing pass@k metrics.
-            callbacks: List of callback handlers for monitoring execution.
-            progress_bar: Progress display. True (default) for tqdm, "rich" for Rich,
-                or False to disable.
+            fail_on_setup_error: If True, raise on setup errors. Default False.
             fail_on_task_error: If True, raise on task execution errors. Default False.
             fail_on_evaluation_error: If True, raise on evaluation errors. Default False.
-            fail_on_setup_error: If True, raise on setup errors. Default False.
-
-        Example:
-            ```python
-            # Parallel execution for faster evaluation
-            benchmark = MyTau2Benchmark(num_workers=4)
-
-            # Multiple repeats for pass@k metrics
-            benchmark = MyTau2Benchmark(n_task_repeats=4)
-
-            # Debug mode - fail fast on errors
-            benchmark = MyTau2Benchmark(
-                fail_on_task_error=True,
-                fail_on_evaluation_error=True,
-            )
-            ```
+            progress_bar: Progress display. True (default) for tqdm, "rich" for Rich,
+                or False to disable.
         """
-        super().__init__(*args, max_invocations=max_invocations, **kwargs)  # type: ignore[parameter-already-assigned]
+        super().__init__(
+            callbacks=callbacks,
+            n_task_repeats=n_task_repeats,
+            max_invocations=max_invocations,
+            num_workers=num_workers,
+            fail_on_setup_error=fail_on_setup_error,
+            fail_on_task_error=fail_on_task_error,
+            fail_on_evaluation_error=fail_on_evaluation_error,
+            progress_bar=progress_bar,
+        )
 
     def _get_user_model_id(self, task: Task) -> str:
         """Get user simulator model ID from task.user_data.
@@ -875,14 +879,6 @@ class DefaultAgentTau2Benchmark(Tau2Benchmark):
         results = benchmark.run(tasks)
     """
 
-    # Cache for model adapters
-    _model_cache: Dict[str, ModelAdapter]
-
-    def __init__(self, *args: Any, **kwargs: Any):
-        """Initialize the default agent benchmark. See Tau2Benchmark for args."""
-        super().__init__(*args, **kwargs)
-        self._model_cache = {}
-
     def _get_agent_model_id(self, agent_data: Dict[str, Any]) -> str:
         """Get agent model ID from agent_data.
 
@@ -965,5 +961,9 @@ class DefaultAgentTau2Benchmark(Tau2Benchmark):
 
         Returns:
             ModelAdapter instance
+
+        Note:
+            DefaultAgentTau2Benchmark uses lazy initialization for model caching.
+            Access via `getattr(self, '_model_cache', {})` in subclass implementations.
         """
         pass
