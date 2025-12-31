@@ -53,6 +53,7 @@ from maseval import (
     MessageHistory,
     ModelAdapter,
     Task,
+    TaskExecutionStatus,
     ToolInvocationHistory,
     ToolLLMSimulator,
     User,
@@ -62,6 +63,17 @@ from maseval import (
 )
 from maseval.core.config import ConfigurableMixin
 from maseval.core.tracing import TraceableMixin
+
+
+# Statuses where agent is accountable (included in scoring)
+# Note: task_timeout is included - timeouts count as failures in MACS
+SCOREABLE_STATUSES = frozenset(
+    {
+        TaskExecutionStatus.SUCCESS.value,
+        TaskExecutionStatus.AGENT_ERROR.value,
+        TaskExecutionStatus.TASK_TIMEOUT.value,
+    }
+)
 
 
 # =============================================================================
@@ -987,15 +999,6 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             - excluded: Dict with counts of excluded tasks by category
             - status_counts: Dict with counts of each status type
     """
-    # Status values that indicate infrastructure failures (not agent's fault)
-    INFRASTRUCTURE_STATUSES = {
-        "environment_error",
-        "user_error",
-        "unknown_execution_error",
-        "evaluation_failed",
-        "setup_failed",
-    }
-
     if not results:
         return {
             "total_tasks": 0,
@@ -1003,13 +1006,7 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             "successful_tasks": 0,
             "success_rate": 0.0,
             "mean_metrics": {},
-            "excluded": {
-                "environment_error": 0,
-                "user_error": 0,
-                "unknown_execution_error": 0,
-                "evaluation_failed": 0,
-                "setup_failed": 0,
-            },
+            "excluded": {},
             "status_counts": {},
         }
 
@@ -1019,14 +1016,14 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     successful_tasks = 0
     scored_tasks = 0
     status_counts: Dict[str, int] = {}
-    excluded_counts: Dict[str, int] = {s: 0 for s in INFRASTRUCTURE_STATUSES}
+    excluded_counts: Dict[str, int] = {}
 
     for res in results:
         status = res.get("status", "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
 
-        # Skip infrastructure failures from scoring
-        if status in INFRASTRUCTURE_STATUSES:
+        # Skip infrastructure failures from scoring (use module-level SCOREABLE_STATUSES)
+        if status not in SCOREABLE_STATUSES:
             excluded_counts[status] = excluded_counts.get(status, 0) + 1
             continue
 

@@ -365,18 +365,12 @@ class TestComputeBenchmarkMetrics:
         assert result["successful_tasks"] == 0
         assert result["success_rate"] == 0.0
         assert result["mean_metrics"] == {}
-        assert result["excluded"] == {
-            "environment_error": 0,
-            "user_error": 0,
-            "unknown_execution_error": 0,
-            "evaluation_failed": 0,
-            "setup_failed": 0,
-        }
+        assert result["excluded"] == {}
         assert result["status_counts"] == {}
 
     def test_single_successful_result(self):
         """Single successful result counted."""
-        results = [{"status": "completed", "eval": [{"overall_gsr": 1.0, "user_gsr": 1.0, "system_gsr": 1.0}]}]
+        results = [{"status": "success", "eval": [{"overall_gsr": 1.0, "user_gsr": 1.0, "system_gsr": 1.0}]}]
 
         metrics = compute_benchmark_metrics(results)
 
@@ -387,7 +381,7 @@ class TestComputeBenchmarkMetrics:
 
     def test_single_failed_result(self):
         """Single failed result counted."""
-        results = [{"status": "completed", "eval": [{"overall_gsr": 0.0, "user_gsr": 0.0, "system_gsr": 0.0}]}]
+        results = [{"status": "success", "eval": [{"overall_gsr": 0.0, "user_gsr": 0.0, "system_gsr": 0.0}]}]
 
         metrics = compute_benchmark_metrics(results)
 
@@ -399,9 +393,9 @@ class TestComputeBenchmarkMetrics:
     def test_multiple_results(self):
         """Multiple results aggregated correctly."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},  # Success
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},  # Fail
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},  # Success
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},  # Success
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},  # Fail
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},  # Success
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -414,10 +408,10 @@ class TestComputeBenchmarkMetrics:
     def test_success_rate_calculation(self):
         """success_rate = successful/scored (not total)."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -427,8 +421,8 @@ class TestComputeBenchmarkMetrics:
     def test_mean_metrics_calculation(self):
         """Mean of numeric metrics computed."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0, "partial_gsr": 0.8}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0, "partial_gsr": 0.4}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0, "partial_gsr": 0.8}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0, "partial_gsr": 0.4}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -439,9 +433,9 @@ class TestComputeBenchmarkMetrics:
     def test_handles_missing_eval(self):
         """Handles results with no eval key."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
-            {"status": "completed", "no_eval_key": True},  # Missing eval
-            {"status": "completed", "eval": None},  # None eval
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "no_eval_key": True},  # Missing eval
+            {"status": "success", "eval": None},  # None eval
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -454,7 +448,7 @@ class TestComputeBenchmarkMetrics:
         """Non-numeric values in eval are ignored for mean."""
         results = [
             {
-                "status": "completed",
+                "status": "success",
                 "eval": [
                     {
                         "overall_gsr": 1.0,
@@ -475,15 +469,15 @@ class TestComputeBenchmarkMetrics:
     def test_excludes_environment_errors_from_scoring(self):
         """Environment errors are excluded from scoring."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
             {"status": "environment_error", "eval": None},  # Should be excluded
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
 
         assert metrics["total_tasks"] == 3
-        assert metrics["scored_tasks"] == 2  # Only completed tasks
+        assert metrics["scored_tasks"] == 2  # Only success tasks
         assert metrics["successful_tasks"] == 1
         assert metrics["success_rate"] == 0.5  # 1/2, not 1/3
         assert metrics["excluded"]["environment_error"] == 1
@@ -491,7 +485,7 @@ class TestComputeBenchmarkMetrics:
     def test_excludes_user_errors_from_scoring(self):
         """User simulator errors are excluded from scoring."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
             {"status": "user_error", "eval": None},
         ]
 
@@ -500,14 +494,14 @@ class TestComputeBenchmarkMetrics:
         assert metrics["total_tasks"] == 2
         assert metrics["scored_tasks"] == 1
         assert metrics["successful_tasks"] == 1
-        assert metrics["success_rate"] == 1.0  # Only the completed one
+        assert metrics["success_rate"] == 1.0  # Only the success one
         assert metrics["excluded"]["user_error"] == 1
 
     def test_excludes_unknown_errors_from_scoring(self):
         """Unknown execution errors are excluded from scoring."""
         results = [
             {"status": "unknown_execution_error", "eval": None},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -521,7 +515,7 @@ class TestComputeBenchmarkMetrics:
         """Setup failures are excluded from scoring."""
         results = [
             {"status": "setup_failed", "eval": None},
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -534,21 +528,21 @@ class TestComputeBenchmarkMetrics:
         """Evaluation failures are excluded from scoring."""
         results = [
             {"status": "evaluation_failed", "eval": None},
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
 
         assert metrics["total_tasks"] == 2
         assert metrics["scored_tasks"] == 1
-        assert metrics["success_rate"] == 1.0  # Only the completed one
+        assert metrics["success_rate"] == 1.0  # Only the success one
         assert metrics["excluded"]["evaluation_failed"] == 1
 
     def test_includes_agent_errors_in_scoring(self):
         """Agent errors ARE included in scoring (agent's fault)."""
         results = [
             {"status": "agent_error", "eval": [{"overall_gsr": 0.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -561,23 +555,23 @@ class TestComputeBenchmarkMetrics:
     def test_status_counts_tracked(self):
         """Status counts are tracked for all tasks."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
             {"status": "agent_error", "eval": None},
             {"status": "environment_error", "eval": None},
         ]
 
         metrics = compute_benchmark_metrics(results)
 
-        assert metrics["status_counts"]["completed"] == 2
+        assert metrics["status_counts"]["success"] == 2
         assert metrics["status_counts"]["agent_error"] == 1
         assert metrics["status_counts"]["environment_error"] == 1
 
     def test_mixed_errors_comprehensive(self):
         """Comprehensive test with various error types."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0, "accuracy": 0.9}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0, "accuracy": 0.3}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0, "accuracy": 0.9}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0, "accuracy": 0.3}]},
             {"status": "agent_error", "eval": [{"overall_gsr": 0.0, "accuracy": 0.0}]},
             {"status": "environment_error", "eval": None},  # Excluded
             {"status": "user_error", "eval": None},  # Excluded
@@ -588,7 +582,7 @@ class TestComputeBenchmarkMetrics:
         metrics = compute_benchmark_metrics(results)
 
         assert metrics["total_tasks"] == 7
-        assert metrics["scored_tasks"] == 3  # completed(2) + agent_error(1)
+        assert metrics["scored_tasks"] == 3  # success(2) + agent_error(1)
         assert metrics["successful_tasks"] == 1
         assert metrics["success_rate"] == pytest.approx(1 / 3)
         assert metrics["mean_metrics"]["accuracy"] == pytest.approx((0.9 + 0.3 + 0.0) / 3)
