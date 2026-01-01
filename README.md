@@ -21,21 +21,40 @@ Analogous to pytest for testing or MLflow for ML experimentation, MASEval focuse
 
 ## Why MASEval?
 
-| Library         | Multi-Agent Native | Cross-Framework Eval | Framework Agnostic | Ready Benchmarks | Multi-turn Users | Open Source | Flexible (BYO) | Trace-First Eval | Error Attribution |
-| --------------- | :----------------: | :------------------: | :----------------: | :--------------: | :--------------: | :---------: | :------------: | :--------------: | :---------------: |
-| **MASEval**     |         ✅         |          ✅          |         ✅         |        ✅        |        ✅        |     ✅      |       🟢       |        ✅        |        ✅         |
-| **Inspect-AI**  |         🟡         |          ✅          |         ✅         |        ✅        |        🟡        |     ✅      |       🟡       |        🟡        |        ❌         |
-| **HAL Harness** |         🟡         |          ✅          |         ✅         |        ✅        |        🟡        |     ✅      |       🟢       |        🟡        |        ❌         |
-| **AnyAgent**    |         🟡         |          ✅          |         ✅         |        🟡        |        🟡        |     ✅      |       🟢       |        🟡        |        ❌         |
-| **DeepEval**    |         🟡         |          ❌          |         🟡         |        🟡        |        🟡        |     🟡      |       🟡       |        🟡        |        ❌         |
-| **MARBLE**      |         ✅         |          ❌          |         ❌         |        ✅        |        ✅        |     ✅      |       ❌       |        🟡        |        ❌         |
-| **AgentGym**    |         🟡         |          ❌          |         ❌         |        ✅        |        🟡        |     ✅      |       ❌       |        🟡        |        ❌         |
-| **AgentBeats**  |         ✅         |          ❌          |         🟡         |        🟡        |        🟡        |     ✅      |       🟢       |        🟡        |        ❌         |
-| **MCPEval**     |         ❌         |          ❌          |         🟡         |        🟡        |        🟡        |     ✅      |       🟡       |        🟡        |        ❌         |
-| **Phoenix**     |         🟡         |          ❌          |         ✅         |        🟡        |        🟡        |     🟡      |       🟡       |        🟡        |        ❌         |
-| **LangSmith**   |         🟡         |          ✅          |         🟡         |        🟡        |        🟡        |     ❌      |       🟡       |        🟡        |        ❌         |
+Compare multi-agent evaluation frameworks across key capabilities.
 
-Compare multi-agent evaluation frameworks across key capabilities. **✅** Full/Native · **🟢** Flexible for BYO · **🟡** Partial/Limited · **❌** Not possible
+| Library         | Multi-Agent Native | System-Level Comparison | Framework Agnostic | Ready Benchmarks | Multi-turn Users | Open Source | Flexible (BYO) | Trace-First Eval | Error Attribution |
+| --------------- | :----------------: | :---------------------: | :----------------: | :--------------: | :--------------: | :---------: | :------------: | :--------------: | :---------------: |
+| **MASEval**     |         ✅         |           ✅            |         ✅         |        ✅        |        ✅        |     ✅      |       🟢       |        ✅        |        ✅         |
+| **Inspect-AI**  |         🟡         |           ✅            |         ✅         |        ✅        |        🟡        |     ✅      |       🟡       |        🟡        |        ❌         |
+| **HAL Harness** |         🟡         |           ✅            |         ✅         |        ✅        |        🟡        |     ✅      |       🟢       |        🟡        |        ❌         |
+| **AnyAgent**    |         🟡         |           ✅            |         ✅         |        🟡        |        🟡        |     ✅      |       🟢       |        🟡        |        ❌         |
+| **DeepEval**    |         🟡         |           ❌            |         🟡         |        🟡        |        🟡        |     🟡      |       🟡       |        🟡        |        ❌         |
+| **MARBLE**      |         ✅         |           ❌            |         ❌         |        ✅        |        ✅        |     ✅      |       ❌       |        🟡        |        ❌         |
+| **AgentGym**    |         🟡         |           ❌            |         ❌         |        ✅        |        🟡        |     ✅      |       ❌       |        🟡        |        ❌         |
+| **AgentBeats**  |         ✅         |           ❌            |         🟡         |        🟡        |        🟡        |     ✅      |       🟢       |        🟡        |        ❌         |
+| **MCPEval**     |         ❌         |           ❌            |         🟡         |        🟡        |        🟡        |     ✅      |       🟡       |        🟡        |        ❌         |
+| **Phoenix**     |         🟡         |           ❌            |         ✅         |        🟡        |        🟡        |     🟡      |       🟡       |        🟡        |        ❌         |
+| **LangSmith**   |         🟡         |           ✅            |         🟡         |        🟡        |        🟡        |     ❌      |       🟡       |        🟡        |        ❌         |
+
+**✅** Full/Native · **🟢** Flexible for BYO · **🟡** Partial/Limited · **❌** Not possible
+
+<details>
+<summary>Expand for Column Explanation</summary>
+
+| Feature                     | Explanation                                                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Multi-Agent Native**      | Native orchestration with per-agent tracing, independent message histories, and explicit coordination patterns. |
+| **System-Level Comparison** | Compare different framework implementations on the same benchmark (not just swapping LLMs).                     |
+| **Framework Agnostic**      | Evaluate agents from any framework via thin adapters without requiring protocol adoption or code recreation.    |
+| **Ready Benchmarks**        | Ships complete, ready-to-run benchmarks with environments, tools, and evaluators (not just templates).          |
+| **Multi-turn Users**        | First-class user simulation with personas, stop tokens, and tool access for realistic multi-turn conversations. |
+| **Open Source**             | Fully open-source, works offline, permissive license (MIT/Apache), no mandatory cloud services or telemetry.    |
+| **Flexible (BYO)**          | Bring your own logging, agents, environments, and tools — flexibility over opinionated defaults.                |
+| **Trace-First Eval**        | Evaluate intermediate steps and tool usage patterns via trace filtering, not just final output scoring.         |
+| **Error Attribution**       | Distinguish agent faults from infrastructure/user errors for fair scoring (`AgentError` vs `EnvironmentError`). |
+
+</details>
 
 ## Core Principles:
 
