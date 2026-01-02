@@ -23,19 +23,19 @@ Analogous to pytest for testing or MLflow for ML experimentation, MASEval focuse
 
 Compare multi-agent evaluation frameworks across key capabilities.
 
-| Library         | Multi-Agent Native | System-Level Comparison | Framework Agnostic | Ready Benchmarks | Multi-turn Users | Open Source | Flexible (BYO) | Trace-First Eval | Error Attribution |
-| --------------- | :----------------: | :---------------------: | :----------------: | :--------------: | :--------------: | :---------: | :------------: | :--------------: | :---------------: |
-| **MASEval**     |         ✅         |           ✅            |         ✅         |        ✅        |        ✅        |     ✅      |       🟢       |        ✅        |        ✅         |
-| **Inspect-AI**  |         🟡         |           ✅            |         ✅         |        ✅        |        🟡        |     ✅      |       🟡       |        🟡        |        ❌         |
-| **HAL Harness** |         🟡         |           ✅            |         ✅         |        ✅        |        🟡        |     ✅      |       🟢       |        🟡        |        ❌         |
-| **AnyAgent**    |         🟡         |           ✅            |         ✅         |        🟡        |        🟡        |     ✅      |       🟢       |        🟡        |        ❌         |
-| **DeepEval**    |         🟡         |           ❌            |         🟡         |        🟡        |        🟡        |     🟡      |       🟡       |        🟡        |        ❌         |
-| **MARBLE**      |         ✅         |           ❌            |         ❌         |        ✅        |        ✅        |     ✅      |       ❌       |        🟡        |        ❌         |
-| **AgentGym**    |         🟡         |           ❌            |         ❌         |        ✅        |        🟡        |     ✅      |       ❌       |        🟡        |        ❌         |
-| **AgentBeats**  |         ✅         |           ❌            |         🟡         |        🟡        |        🟡        |     ✅      |       🟢       |        🟡        |        ❌         |
-| **MCPEval**     |         ❌         |           ❌            |         🟡         |        🟡        |        🟡        |     ✅      |       🟡       |        🟡        |        ❌         |
-| **Phoenix**     |         🟡         |           ❌            |         ✅         |        🟡        |        🟡        |     🟡      |       🟡       |        🟡        |        ❌         |
-| **LangSmith**   |         🟡         |           ✅            |         🟡         |        🟡        |        🟡        |     ❌      |       🟡       |        🟡        |        ❌         |
+| Library         | Multi-Agent Native | System-Level Comparison | Framework Agnostic | Ready Benchmarks | Multi-turn Users | Open Source | Flexible (BYO) | Action / State Eval | Error Attribution |
+| --------------- | :----------------: | :---------------------: | :----------------: | :--------------: | :--------------: | :---------: | :------------: | :-----------------: | :---------------: |
+| **MASEval**     |         ✅         |           ✅            |         ✅         |        ✅        |        ✅        |     ✅      |       🟢       |         ✅          |        ✅         |
+| **Inspect-AI**  |         🟡         |           ✅            |         ✅         |        ✅        |        🟡        |     ✅      |       🟡       |         🟡          |        ❌         |
+| **HAL Harness** |         🟡         |           ✅            |         ✅         |        ✅        |        🟡        |     ✅      |       🟢       |         🟡          |        ❌         |
+| **AnyAgent**    |         🟡         |           ✅            |         ✅         |        🟡        |        🟡        |     ✅      |       🟢       |         🟡          |        ❌         |
+| **DeepEval**    |         🟡         |           ❌            |         🟡         |        🟡        |        🟡        |     🟡      |       🟡       |         🟡          |        ❌         |
+| **MARBLE**      |         ✅         |           ❌            |         ❌         |        ✅        |        ✅        |     ✅      |       ❌       |         🟡          |        🟡         |
+| **AgentGym**    |         🟡         |           ❌            |         ❌         |        ✅        |        🟡        |     ✅      |       ❌       |         🟡          |        ❌         |
+| **AgentBeats**  |         ✅         |           ❌            |         🟡         |        🟡        |        🟡        |     ✅      |       🟢       |         🟡          |        🟡         |
+| **MCPEval**     |         ❌         |           ❌            |         🟡         |        🟡        |        🟡        |     ✅      |       🟡       |         🟡          |        ❌         |
+| **Phoenix**     |         🟡         |           ❌            |         ✅         |        🟡        |        🟡        |     🟡      |       🟡       |         🟡          |        ❌         |
+| **LangSmith**   |         🟡         |           ✅            |         🟡         |        🟡        |        🟡        |     ❌      |       🟡       |         🟡          |        ❌         |
 
 **✅** Full/Native · **🟢** Flexible for BYO · **🟡** Partial/Limited · **❌** Not possible
 
@@ -51,7 +51,7 @@ Compare multi-agent evaluation frameworks across key capabilities.
 | **Multi-turn Users**        | First-class user simulation with personas, stop tokens, and tool access for realistic multi-turn conversations. |
 | **Open Source**             | Fully open-source, works offline, permissive license (MIT/Apache), no mandatory cloud services or telemetry.    |
 | **Flexible (BYO)**          | Bring your own logging, agents, environments, and tools — flexibility over opinionated defaults.                |
-| **Trace-First Eval**        | Evaluate intermediate steps and tool usage patterns via trace filtering, not just final output scoring.         |
+| **Action / State Eval**     | Evaluate intermediate steps and tool usage patterns via trace filtering, not just final output scoring.         |
 | **Error Attribution**       | Distinguish agent faults from infrastructure/user errors for fair scoring (`AgentError` vs `EnvironmentError`). |
 
 </details>
