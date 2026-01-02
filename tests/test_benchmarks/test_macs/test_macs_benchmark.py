@@ -31,7 +31,6 @@ class TestMACSBenchmarkSetup:
         callbacks = [MagicMock()]
         benchmark = ConcreteMACSBenchmark(macs_model, callbacks=callbacks, n_task_repeats=3)
 
-        # agent_data is now passed to run(), not __init__
         assert benchmark.callbacks == callbacks
         assert benchmark.n_task_repeats == 3
 
