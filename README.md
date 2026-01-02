@@ -23,36 +23,43 @@ Analogous to pytest for testing or MLflow for ML experimentation, MASEval focuse
 
 Compare multi-agent evaluation frameworks across key capabilities.
 
-| Library         | Multi-Agent Native | System-Level Comparison | Framework Agnostic | Ready Benchmarks | Multi-turn Users | Open Source | Flexible (BYO) | Action / State Eval | Error Attribution |
-| --------------- | :----------------: | :---------------------: | :----------------: | :--------------: | :--------------: | :---------: | :------------: | :-----------------: | :---------------: |
-| **MASEval**     |         ✅         |           ✅            |         ✅         |        ✅        |        ✅        |     ✅      |       🟢       |         ✅          |        ✅         |
-| **Inspect-AI**  |         🟡         |           ✅            |         ✅         |        ✅        |        🟡        |     ✅      |       🟡       |         🟡          |        ❌         |
-| **HAL Harness** |         🟡         |           ✅            |         ✅         |        ✅        |        🟡        |     ✅      |       🟢       |         🟡          |        ❌         |
-| **AnyAgent**    |         🟡         |           ✅            |         ✅         |        🟡        |        🟡        |     ✅      |       🟢       |         🟡          |        ❌         |
-| **DeepEval**    |         🟡         |           ❌            |         🟡         |        🟡        |        🟡        |     🟡      |       🟡       |         🟡          |        ❌         |
-| **MARBLE**      |         ✅         |           ❌            |         ❌         |        ✅        |        ✅        |     ✅      |       ❌       |         🟡          |        🟡         |
-| **AgentGym**    |         🟡         |           ❌            |         ❌         |        ✅        |        🟡        |     ✅      |       ❌       |         🟡          |        ❌         |
-| **AgentBeats**  |         ✅         |           ❌            |         🟡         |        🟡        |        🟡        |     ✅      |       🟢       |         🟡          |        🟡         |
-| **MCPEval**     |         ❌         |           ❌            |         🟡         |        🟡        |        🟡        |     ✅      |       🟡       |         🟡          |        ❌         |
-| **Phoenix**     |         🟡         |           ❌            |         ✅         |        🟡        |        🟡        |     🟡      |       🟡       |         🟡          |        ❌         |
-| **LangSmith**   |         🟡         |           ✅            |         🟡         |        🟡        |        🟡        |     ❌      |       🟡       |         🟡          |        ❌         |
+| Library           | Multi-Agent | System Evaluation | Agent-Agnostic | Benchmarks | Multi-turn User | No Lock-In | BYO | State-Action Eval | Error Attr | Lightweight | Project Maturity | Sandboxed Environment |
+| ----------------- | :---------: | :---------------: | :------------: | :--------: | :-------------: | :--------: | :-: | :---------------: | :--------: | :---------: | :--------------: | :-------------------: |
+| **MASEval**       |     ✅      |        ✅         |       ✅       |     ✅     |       ✅        |     ✅     | 🟢  |        ✅         |     ✅     |     ✅      |        ✅        |          🟢           |
+| **HAL Harness**   |     🟡      |        ✅         |       ✅       |     ✅     |       🟡        |     ✅     | 🟡  |        🟡         |     ❌     |     ✅      |        🟡        |          ✅           |
+| **AnyAgent**      |     🟡      |        ✅         |       ✅       |     ❌     |       🟡        |     ✅     | 🟢  |        🟡         |     ❌     |     ✅      |        ✅        |          ❌           |
+| **Inspect-AI**    |     🟡      |        ✅         |       🟡       |     ✅     |       🟡        |     ✅     | 🟡  |        🟡         |     ❌     |     🟡      |        ✅        |          ✅           |
+| **MLflow GenAI**  |     🟡      |        🟡         |       🟢       |     ❌     |       🟡        |     ✅     | 🟢  |        ✅         |     ❌     |     🟡      |        ✅        |          🟡           |
+| **LangSmith**     |     🟡      |        🟡         |       🟡       |     ❌     |       ✅        |     ❌     | 🟡  |        ✅         |     ❌     |     ✅      |        ✅        |          ❌           |
+| **OpenCompass**   |     ❌      |        🟡         |       ❌       |     ✅     |       🟡        |     ✅     | 🟡  |        🟡         |     ❌     |     ❌      |        ✅        |          🟡           |
+| **AgentGym**      |     ❌      |        ❌         |       ❌       |     ✅     |       🟡        |     ✅     | 🟢  |        🟡         |     ❌     |     ❌      |        🟡        |          🟡           |
+| **Arize Phoenix** |     🟡      |        ❌         |       🟡       |     ❌     |       ❌        |     🟡     | 🟢  |        ✅         |     ❌     |     🟡      |        ✅        |          ❌           |
+| **MARBLE**        |     ✅      |        ❌         |       ❌       |     ✅     |       ❌        |     ✅     | ❌  |        🟡         |     ?      |     🟡      |        🟡        |          🟡           |
+| **TruLens**       |     🟡      |        ❌         |       🟡       |     ❌     |       ❌        |     ✅     | 🟡  |        🟢         |     ❌     |     🟡      |        ✅        |          ❌           |
+| **AgentBeats**    |     🟡      |        ❌         |       🟡       |     ❌     |       ❌        |     🟡     | 🟡  |        🟡         |     ?      |     ✅      |        🟡        |          🟡           |
+| **DeepEval**      |     🟡      |        ❌         |       🟡       |     ❌     |       🟡        |     🟡     | 🟡  |        🟡         |     ❌     |     🟡      |        ✅        |          ❌           |
+| **MCPEval**       |     ❌      |        ❌         |       ❌       |     ✅     |       ❌        |     ✅     | 🟡  |        🟡         |     ❌     |     🟡      |        🟡        |          ❌           |
+| **Galileo**       |     🟡      |        ❌         |       🟡       |     ❌     |       ❌        |     ❌     | 🟡  |        🟡         |     ❌     |     🟡      |        ✅        |          ❌           |
 
 **✅** Full/Native · **🟢** Flexible for BYO · **🟡** Partial/Limited · **❌** Not possible
 
 <details>
 <summary>Expand for Column Explanation</summary>
 
-| Feature                     | Explanation                                                                                                     |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **Multi-Agent Native**      | Native orchestration with per-agent tracing, independent message histories, and explicit coordination patterns. |
-| **System-Level Comparison** | Compare different framework implementations on the same benchmark (not just swapping LLMs).                     |
-| **Framework Agnostic**      | Evaluate agents from any framework via thin adapters without requiring protocol adoption or code recreation.    |
-| **Ready Benchmarks**        | Ships complete, ready-to-run benchmarks with environments, tools, and evaluators (not just templates).          |
-| **Multi-turn Users**        | First-class user simulation with personas, stop tokens, and tool access for realistic multi-turn conversations. |
-| **Open Source**             | Fully open-source, works offline, permissive license (MIT/Apache), no mandatory cloud services or telemetry.    |
-| **Flexible (BYO)**          | Bring your own logging, agents, environments, and tools — flexibility over opinionated defaults.                |
-| **Action / State Eval**     | Evaluate intermediate steps and tool usage patterns via trace filtering, not just final output scoring.         |
-| **Error Attribution**       | Distinguish agent faults from infrastructure/user errors for fair scoring (`AgentError` vs `EnvironmentError`). |
+| Column                | Feature                      | One-Liner                                                                                                          |
+| --------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Multi-Agent**       | Multi-Agent Native           | Native orchestration with per-agent tracing, independent message histories, and explicit coordination patterns.    |
+| **System Evaluation** | System-Level Comparison      | Compare different framework implementations on the same benchmark (not just swapping LLMs).                        |
+| **Agent Agnostic**    | Agent Framework Agnostic     | Evaluate agents from any framework via thin adapters without requiring protocol adoption or code recreation.       |
+| **Benchmarks**        | Pre-Implemented Benchmarks   | Ships complete, ready-to-run benchmarks with environments, tools, and evaluators (not just templates).             |
+| **Multi-turn User**   | User-Agent Multi-turn        | First-class user simulation with personas, stop tokens, and tool access for realistic multi-turn conversations.    |
+| **No Lock-In**        | No Vendor Lock-In            | Fully open-source, works offline, permissive license (MIT/Apache), no mandatory cloud services or telemetry.       |
+| **BYO**               | BYO Philosophy               | Bring your own logging, agents, environments, and tools — flexibility over opinionated defaults.                   |
+| **State-Action Eval** | Trace-First Evaluation       | Evaluate intermediate steps and tool usage patterns via trace filtering, not just final output scoring.            |
+| **Error Attr**        | Structured Error Attribution | Structured exceptions distinguish between different failure for fair scoring (`AgentError` vs `EnvironmentError`). |
+| **Lightweight**       | Lightweight                  | Minimal dependencies, small codebase (~20k LOC), quick time to first evaluation (~5-15 min).                       |
+| **Project Maturity**  | Professional Tooling         | Published on PyPI, CI/CD, good test coverage, structured logging, active maintenance, excellent docs.              |
+| **Sandbox**           | Sandboxed Execution          | Built-in Docker/K8s/VM isolation for safe code execution (or BYO sandbox via abstract Environment).                |
 
 </details>
 
