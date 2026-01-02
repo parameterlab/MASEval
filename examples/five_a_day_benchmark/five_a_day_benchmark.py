@@ -26,7 +26,7 @@ from pathlib import Path
 
 from utils import derive_seed, sanitize_name  # type: ignore[unresolved-import]
 
-from maseval import Benchmark, Environment, Evaluator, Task, TaskCollection, AgentAdapter, ModelAdapter
+from maseval import Benchmark, Environment, Evaluator, Task, TaskQueue, AgentAdapter, ModelAdapter
 from maseval.core.callbacks.result_logger import FileResultLogger
 
 # Import tool implementations
@@ -825,7 +825,7 @@ def load_benchmark_data(
     limit: Optional[int] = None,
     specific_task: Optional[int] = None,
     seed: Optional[int] = None,
-) -> tuple[TaskCollection, List[Dict[str, Any]]]:
+) -> tuple[TaskQueue, List[Dict[str, Any]]]:
     """Load tasks and agent configurations with validation.
 
     Args:
@@ -838,7 +838,7 @@ def load_benchmark_data(
         seed: Base random seed for reproducibility (None for non-deterministic)
 
     Returns:
-        Tuple of (TaskCollection, agent_configs_list)
+        Tuple of (TaskQueue, agent_configs_list)
     """
     if limit is not None and specific_task is not None:
         raise ValueError("Cannot specify both limit and specific_task")
@@ -897,7 +897,7 @@ def load_benchmark_data(
 
     print(f"Loaded {len(tasks_data)} tasks and {len(configs_data)} agent configs\n")
 
-    return TaskCollection(tasks_data), configs_data
+    return TaskQueue(tasks_data), configs_data
 
 
 # ============================================================================
@@ -935,13 +935,12 @@ if __name__ == "__main__":
     )
 
     benchmark = FiveADayBenchmark(
-        agent_data=agent_configs,
         callbacks=[logger],
         fail_on_setup_error=True,
         fail_on_task_error=True,
         fail_on_evaluation_error=True,
     )
-    results = benchmark.run(tasks=tasks)
+    results = benchmark.run(tasks=tasks, agent_data=agent_configs)
 
     print("\n--- Benchmark Complete ---")
     print(f"Total tasks: {len(tasks)}")

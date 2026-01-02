@@ -276,7 +276,7 @@ class TestComputeBenchmarkMetrics:
         """Single successful result counted."""
         from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
 
-        results = [{"status": "completed", "eval": [{"reward": 1.0, "passed": True}]}]
+        results = [{"status": "success", "eval": [{"reward": 1.0, "passed": True}]}]
 
         metrics = compute_benchmark_metrics(results)
 
@@ -287,10 +287,10 @@ class TestComputeBenchmarkMetrics:
         assert metrics["mean_reward"] == 1.0
 
     def test_single_failure(self):
-        """Single failed result counted."""
+        """Single failed result counted (agent_error is scoreable)."""
         from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
 
-        results = [{"status": "completed", "eval": [{"reward": 0.0, "passed": False}]}]
+        results = [{"status": "agent_error", "eval": [{"reward": 0.0, "passed": False}]}]
 
         metrics = compute_benchmark_metrics(results)
 
@@ -304,9 +304,9 @@ class TestComputeBenchmarkMetrics:
         from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
 
         results = [
-            {"status": "completed", "eval": [{"reward": 1.0, "passed": True}]},
-            {"status": "completed", "eval": [{"reward": 0.0, "passed": False}]},
-            {"status": "completed", "eval": [{"reward": 0.5, "passed": False}]},
+            {"status": "success", "eval": [{"reward": 1.0, "passed": True}]},
+            {"status": "agent_error", "eval": [{"reward": 0.0, "passed": False}]},
+            {"status": "task_timeout", "eval": [{"reward": 0.5, "passed": False}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -322,7 +322,7 @@ class TestComputeBenchmarkMetrics:
         from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
 
         results = [
-            {"status": "completed", "eval": [{"reward": 1.0, "passed": True}]},
+            {"status": "success", "eval": [{"reward": 1.0, "passed": True}]},
             {"status": "environment_error", "eval": None},
             {"status": "user_error", "eval": None},
             {"status": "setup_failed", "eval": None},
@@ -331,7 +331,7 @@ class TestComputeBenchmarkMetrics:
         metrics = compute_benchmark_metrics(results)
 
         assert metrics["total_tasks"] == 4
-        assert metrics["scored_tasks"] == 1  # Only completed
+        assert metrics["scored_tasks"] == 1  # Only success
         assert metrics["successful_tasks"] == 1
         assert metrics["success_rate"] == 1.0
 
@@ -340,14 +340,15 @@ class TestComputeBenchmarkMetrics:
         from maseval.benchmark.tau2.evaluator import compute_benchmark_metrics
 
         results = [
-            {"status": "completed", "eval": [{"reward": 1.0, "passed": True}]},
-            {"status": "completed", "eval": [{"reward": 0.0, "passed": False}]},
+            {"status": "success", "eval": [{"reward": 1.0, "passed": True}]},
+            {"status": "agent_error", "eval": [{"reward": 0.0, "passed": False}]},
             {"status": "environment_error", "eval": None},
         ]
 
         metrics = compute_benchmark_metrics(results)
 
-        assert metrics["status_counts"]["completed"] == 2
+        assert metrics["status_counts"]["success"] == 1
+        assert metrics["status_counts"]["agent_error"] == 1
         assert metrics["status_counts"]["environment_error"] == 1
 
 

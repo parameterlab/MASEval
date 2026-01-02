@@ -27,11 +27,10 @@ class TestMACSBenchmarkSetup:
     """Tests for MACSBenchmark initialization and setup methods."""
 
     def test_init_configures_benchmark(self, macs_model, sample_agent_data):
-        """Benchmark initializes with agent_data and optional params."""
+        """Benchmark initializes with optional params."""
         callbacks = [MagicMock()]
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model, callbacks=callbacks, n_task_repeats=3)
+        benchmark = ConcreteMACSBenchmark(macs_model, callbacks=callbacks, n_task_repeats=3)
 
-        assert benchmark.agent_data == sample_agent_data
         assert benchmark.callbacks == callbacks
         assert benchmark.n_task_repeats == 3
 
@@ -41,13 +40,13 @@ class TestMACSBenchmarkSetup:
         This is a MACS-specific default that differs from the base class default of 1.
         The MACS paper specifies up to 5 agent-user interaction rounds.
         """
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
 
         assert benchmark.max_invocations == 5
 
     def test_setup_environment_creates_macs_environment(self, macs_model, sample_agent_data, sample_task):
         """setup_environment returns MACSEnvironment with tools."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
 
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 
@@ -56,7 +55,7 @@ class TestMACSBenchmarkSetup:
 
     def test_setup_user_creates_macs_user(self, macs_model, sample_agent_data, sample_task):
         """setup_user returns MACSUser with scenario from task."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 
         user = benchmark.setup_user(sample_agent_data, env, sample_task)
@@ -66,7 +65,7 @@ class TestMACSBenchmarkSetup:
 
     def test_setup_user_handles_no_scenario(self, macs_model, sample_agent_data, sample_task_no_scenario):
         """Handles missing scenario gracefully."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task_no_scenario)
 
         user = benchmark.setup_user(sample_agent_data, env, sample_task_no_scenario)
@@ -75,7 +74,7 @@ class TestMACSBenchmarkSetup:
 
     def test_setup_evaluators_creates_user_and_system(self, macs_model, sample_agent_data, sample_task):
         """Creates both user and system evaluators."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents = [MACSAgentAdapter()]
 
@@ -114,7 +113,7 @@ class TestRunAgents:
 
     def test_run_agents_executes_agents_with_query(self, macs_model, sample_agent_data, sample_task):
         """Agents are executed with the query parameter."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 
         agents_list, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
@@ -134,7 +133,7 @@ class TestRunAgents:
         This is critical for multi-turn interaction where the query changes
         between invocations (e.g., user's response becomes the next query).
         """
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
@@ -150,7 +149,7 @@ class TestRunAgents:
 
     def test_run_agents_returns_answer(self, macs_model, sample_agent_data, sample_task):
         """Returns final answer(s) as MessageHistory."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
@@ -164,7 +163,7 @@ class TestRunAgents:
 
     def test_run_agents_single_agent(self, macs_model, sample_agent_data, sample_task):
         """Single agent returns MessageHistory."""
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, macs_model)
+        benchmark = ConcreteMACSBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
@@ -176,14 +175,14 @@ class TestRunAgents:
         """Multiple agents return list of answers."""
 
         class MultiAgentBenchmark(MACSBenchmark):
-            def __init__(self, agent_data, model_factory, **kwargs):
+            def __init__(self, model_factory, **kwargs):
                 self._model_factory = model_factory if callable(model_factory) else lambda _: model_factory
-                super().__init__(agent_data, **kwargs)
+                super().__init__(**kwargs)
 
             def get_model_adapter(self, model_id: str, **kwargs):
                 return self._model_factory(model_id)
 
-            def setup_agents(  # type: ignore[override]
+            def setup_agents(  # type: ignore[invalid-method-override]
                 self,
                 agent_data: Dict[str, Any],
                 environment: MACSEnvironment,
@@ -194,7 +193,7 @@ class TestRunAgents:
                 agent2: AgentAdapter = MACSAgentAdapter("agent2")
                 return [agent1, agent2], {"agent1": agent1, "agent2": agent2}
 
-        benchmark = MultiAgentBenchmark(sample_agent_data, macs_model)
+        benchmark = MultiAgentBenchmark(macs_model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         agents_list, _ = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
 
@@ -221,7 +220,7 @@ class TestEvaluation:
             '[{"assertion": "System assertion", "answer": "TRUE", "evidence": "OK"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -251,7 +250,7 @@ class TestEvaluation:
             '[{"assertion": "B", "answer": "TRUE", "evidence": "OK"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -281,7 +280,7 @@ class TestEvaluation:
             '[{"assertion": "B", "answer": "FALSE", "evidence": "Fail"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -305,7 +304,7 @@ class TestEvaluation:
             '[{"assertion": "B", "answer": "FALSE", "evidence": "Fail"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -327,7 +326,7 @@ class TestEvaluation:
             '[{"assertion": "System B", "answer": "TRUE", "evidence": "OK"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
         env = benchmark.setup_environment(sample_agent_data, sample_task)
         _, agents_dict = benchmark.setup_agents(sample_agent_data, env, sample_task, None)
         evaluators = benchmark.setup_evaluators(env, sample_task, list(agents_dict.values()), None)
@@ -365,18 +364,12 @@ class TestComputeBenchmarkMetrics:
         assert result["successful_tasks"] == 0
         assert result["success_rate"] == 0.0
         assert result["mean_metrics"] == {}
-        assert result["excluded"] == {
-            "environment_error": 0,
-            "user_error": 0,
-            "unknown_execution_error": 0,
-            "evaluation_failed": 0,
-            "setup_failed": 0,
-        }
+        assert result["excluded"] == {}
         assert result["status_counts"] == {}
 
     def test_single_successful_result(self):
         """Single successful result counted."""
-        results = [{"status": "completed", "eval": [{"overall_gsr": 1.0, "user_gsr": 1.0, "system_gsr": 1.0}]}]
+        results = [{"status": "success", "eval": [{"overall_gsr": 1.0, "user_gsr": 1.0, "system_gsr": 1.0}]}]
 
         metrics = compute_benchmark_metrics(results)
 
@@ -387,7 +380,7 @@ class TestComputeBenchmarkMetrics:
 
     def test_single_failed_result(self):
         """Single failed result counted."""
-        results = [{"status": "completed", "eval": [{"overall_gsr": 0.0, "user_gsr": 0.0, "system_gsr": 0.0}]}]
+        results = [{"status": "success", "eval": [{"overall_gsr": 0.0, "user_gsr": 0.0, "system_gsr": 0.0}]}]
 
         metrics = compute_benchmark_metrics(results)
 
@@ -399,9 +392,9 @@ class TestComputeBenchmarkMetrics:
     def test_multiple_results(self):
         """Multiple results aggregated correctly."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},  # Success
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},  # Fail
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},  # Success
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},  # Success
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},  # Fail
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},  # Success
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -414,10 +407,10 @@ class TestComputeBenchmarkMetrics:
     def test_success_rate_calculation(self):
         """success_rate = successful/scored (not total)."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -427,8 +420,8 @@ class TestComputeBenchmarkMetrics:
     def test_mean_metrics_calculation(self):
         """Mean of numeric metrics computed."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0, "partial_gsr": 0.8}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0, "partial_gsr": 0.4}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0, "partial_gsr": 0.8}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0, "partial_gsr": 0.4}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -439,9 +432,9 @@ class TestComputeBenchmarkMetrics:
     def test_handles_missing_eval(self):
         """Handles results with no eval key."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
-            {"status": "completed", "no_eval_key": True},  # Missing eval
-            {"status": "completed", "eval": None},  # None eval
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "no_eval_key": True},  # Missing eval
+            {"status": "success", "eval": None},  # None eval
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -454,7 +447,7 @@ class TestComputeBenchmarkMetrics:
         """Non-numeric values in eval are ignored for mean."""
         results = [
             {
-                "status": "completed",
+                "status": "success",
                 "eval": [
                     {
                         "overall_gsr": 1.0,
@@ -475,15 +468,15 @@ class TestComputeBenchmarkMetrics:
     def test_excludes_environment_errors_from_scoring(self):
         """Environment errors are excluded from scoring."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
             {"status": "environment_error", "eval": None},  # Should be excluded
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
 
         assert metrics["total_tasks"] == 3
-        assert metrics["scored_tasks"] == 2  # Only completed tasks
+        assert metrics["scored_tasks"] == 2  # Only success tasks
         assert metrics["successful_tasks"] == 1
         assert metrics["success_rate"] == 0.5  # 1/2, not 1/3
         assert metrics["excluded"]["environment_error"] == 1
@@ -491,7 +484,7 @@ class TestComputeBenchmarkMetrics:
     def test_excludes_user_errors_from_scoring(self):
         """User simulator errors are excluded from scoring."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
             {"status": "user_error", "eval": None},
         ]
 
@@ -500,14 +493,14 @@ class TestComputeBenchmarkMetrics:
         assert metrics["total_tasks"] == 2
         assert metrics["scored_tasks"] == 1
         assert metrics["successful_tasks"] == 1
-        assert metrics["success_rate"] == 1.0  # Only the completed one
+        assert metrics["success_rate"] == 1.0  # Only the success one
         assert metrics["excluded"]["user_error"] == 1
 
     def test_excludes_unknown_errors_from_scoring(self):
         """Unknown execution errors are excluded from scoring."""
         results = [
             {"status": "unknown_execution_error", "eval": None},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -521,7 +514,7 @@ class TestComputeBenchmarkMetrics:
         """Setup failures are excluded from scoring."""
         results = [
             {"status": "setup_failed", "eval": None},
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -534,21 +527,21 @@ class TestComputeBenchmarkMetrics:
         """Evaluation failures are excluded from scoring."""
         results = [
             {"status": "evaluation_failed", "eval": None},
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
 
         assert metrics["total_tasks"] == 2
         assert metrics["scored_tasks"] == 1
-        assert metrics["success_rate"] == 1.0  # Only the completed one
+        assert metrics["success_rate"] == 1.0  # Only the success one
         assert metrics["excluded"]["evaluation_failed"] == 1
 
     def test_includes_agent_errors_in_scoring(self):
         """Agent errors ARE included in scoring (agent's fault)."""
         results = [
             {"status": "agent_error", "eval": [{"overall_gsr": 0.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
         ]
 
         metrics = compute_benchmark_metrics(results)
@@ -561,23 +554,23 @@ class TestComputeBenchmarkMetrics:
     def test_status_counts_tracked(self):
         """Status counts are tracked for all tasks."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0}]},
             {"status": "agent_error", "eval": None},
             {"status": "environment_error", "eval": None},
         ]
 
         metrics = compute_benchmark_metrics(results)
 
-        assert metrics["status_counts"]["completed"] == 2
+        assert metrics["status_counts"]["success"] == 2
         assert metrics["status_counts"]["agent_error"] == 1
         assert metrics["status_counts"]["environment_error"] == 1
 
     def test_mixed_errors_comprehensive(self):
         """Comprehensive test with various error types."""
         results = [
-            {"status": "completed", "eval": [{"overall_gsr": 1.0, "accuracy": 0.9}]},
-            {"status": "completed", "eval": [{"overall_gsr": 0.0, "accuracy": 0.3}]},
+            {"status": "success", "eval": [{"overall_gsr": 1.0, "accuracy": 0.9}]},
+            {"status": "success", "eval": [{"overall_gsr": 0.0, "accuracy": 0.3}]},
             {"status": "agent_error", "eval": [{"overall_gsr": 0.0, "accuracy": 0.0}]},
             {"status": "environment_error", "eval": None},  # Excluded
             {"status": "user_error", "eval": None},  # Excluded
@@ -588,7 +581,7 @@ class TestComputeBenchmarkMetrics:
         metrics = compute_benchmark_metrics(results)
 
         assert metrics["total_tasks"] == 7
-        assert metrics["scored_tasks"] == 3  # completed(2) + agent_error(1)
+        assert metrics["scored_tasks"] == 3  # success(2) + agent_error(1)
         assert metrics["successful_tasks"] == 1
         assert metrics["success_rate"] == pytest.approx(1 / 3)
         assert metrics["mean_metrics"]["accuracy"] == pytest.approx((0.9 + 0.3 + 0.0) / 3)
@@ -612,7 +605,7 @@ class TestMACSBenchmarkIntegration:
             '[{"assertion": "Database updated", "answer": "TRUE", "evidence": "Updated"}]',
         ]
         model = DummyModelAdapter(responses=responses)
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
 
         # Setup phase
         env = benchmark.setup_environment(sample_agent_data, sample_task)
@@ -646,7 +639,7 @@ class TestMACSBenchmarkIntegration:
     def test_benchmark_with_real_environment(self, sample_agent_data, sample_task):
         """Test with real MACSEnvironment tool creation."""
         model = DummyModelAdapter(responses=['{"text": "Default response", "details": {}}'])
-        benchmark = ConcreteMACSBenchmark(sample_agent_data, model)
+        benchmark = ConcreteMACSBenchmark(model)
 
         env = benchmark.setup_environment(sample_agent_data, sample_task)
 

@@ -23,10 +23,21 @@ with optional LLM-based natural language assertion checking.
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from maseval import Evaluator, Task
+from maseval import Evaluator, Task, TaskExecutionStatus
 
 from maseval.benchmark.tau2.environment import Tau2Environment, get_environment_constructor
 from maseval.benchmark.tau2.utils import compare_tool_calls
+
+
+# Statuses where agent is accountable (included in scoring)
+# Note: task_timeout is included - timeouts count as failures in tau2
+SCOREABLE_STATUSES = frozenset(
+    {
+        TaskExecutionStatus.SUCCESS.value,
+        TaskExecutionStatus.AGENT_ERROR.value,
+        TaskExecutionStatus.TASK_TIMEOUT.value,
+    }
+)
 
 
 class RewardType(str, Enum):
@@ -447,6 +458,7 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Compute summary metrics across all benchmark results.
 
     Infrastructure errors are excluded from scoring metrics.
+    Uses SCOREABLE_STATUSES to determine which results count toward agent score.
 
     Args:
         results: List of result dicts from benchmark.run()
@@ -454,14 +466,6 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     Returns:
         Dict with success_rate, mean_reward, pass_at_k, status_counts
     """
-    INFRASTRUCTURE_STATUSES = {
-        "environment_error",
-        "user_error",
-        "unknown_execution_error",
-        "evaluation_failed",
-        "setup_failed",
-    }
-
     if not results:
         return {
             "total_tasks": 0,
@@ -482,8 +486,8 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         status = res.get("status", "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
 
-        if status in INFRASTRUCTURE_STATUSES:
-            continue
+        if status not in SCOREABLE_STATUSES:
+            continue  # Skip infrastructure errors
 
         scored_tasks += 1
         evals = res.get("eval") or []
@@ -529,7 +533,7 @@ def compute_pass_at_k(
     task_results: Dict[str, List[bool]] = {}
     for res in results:
         task_id = res.get("task_id", "")
-        if res.get("status") not in {"success", "agent_error"}:
+        if res.get("status") not in SCOREABLE_STATUSES:
             continue  # Skip infrastructure errors
 
         evals = res.get("eval") or []
@@ -615,7 +619,7 @@ def compute_pass_hat_k(
     task_results: Dict[str, List[bool]] = {}
     for res in results:
         task_id = res.get("task_id", "")
-        if res.get("status") not in {"success", "agent_error"}:
+        if res.get("status") not in SCOREABLE_STATUSES:
             continue  # Skip infrastructure errors
 
         evals = res.get("eval") or []

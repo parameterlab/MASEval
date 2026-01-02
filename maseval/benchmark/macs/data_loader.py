@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Union
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-from maseval import Task, TaskCollection
+from maseval import Task, TaskQueue
 
 
 # =============================================================================
@@ -27,24 +27,23 @@ VALID_DOMAINS = ("travel", "mortgage", "software")
 
 # AWS Multi-Agent Collaboration Scenarios benchmark data
 # Source: https://github.com/aws-samples/multiagent-collab-scenario-benchmark
-URLS = {
-    "data": {
-        "software": {
-            "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/software/agents.json",
-            "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/software/scenarios_30.json",
-        },
-        "travel": {
-            "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/travel/agents.json",
-            "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/travel/scenarios_30.json",
-        },
-        "mortgage": {
-            "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/mortgage/agents.json",
-            "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/mortgage/scenarios_30.json",
-        },
+DATA_URLS: Dict[str, Dict[str, str]] = {
+    "software": {
+        "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/software/agents.json",
+        "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/software/scenarios_30.json",
     },
-    "evaluation": {
-        "prompt_templates": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/src/prompt_templates.py",
+    "travel": {
+        "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/travel/agents.json",
+        "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/travel/scenarios_30.json",
     },
+    "mortgage": {
+        "agents": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/mortgage/agents.json",
+        "scenarios": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/datasets/mortgage/scenarios_30.json",
+    },
+}
+
+EVALUATION_URLS: Dict[str, str] = {
+    "prompt_templates": "https://raw.githubusercontent.com/aws-samples/multiagent-collab-scenario-benchmark/refs/heads/main/src/prompt_templates.py",
 }
 
 
@@ -90,16 +89,16 @@ def download_original_data(
     data_dir = Path(data_dir) if data_dir else DEFAULT_DATA_DIR
     original_dir = data_dir / "original"
 
-    domains = [domain] if domain else list(URLS["data"].keys())
+    domains = [domain] if domain else list(DATA_URLS.keys())
 
     for d in domains:
-        if d not in URLS["data"]:
+        if d not in DATA_URLS:
             raise ValueError(f"Unknown domain: {d}")
 
         domain_dir = original_dir / d
         domain_dir.mkdir(parents=True, exist_ok=True)
 
-        for name, url in URLS["data"][d].items():  # type: ignore[union-attr]
+        for name, url in DATA_URLS[d].items():
             content = download_json(url)
             out_path = domain_dir / f"{name}.json"
             with out_path.open("w") as f:
@@ -132,8 +131,8 @@ def download_prompt_templates(
     templates_dir = data_dir.parent / "prompt_templates"
     templates_dir.mkdir(parents=True, exist_ok=True)
 
-    url = URLS["evaluation"]["prompt_templates"]
-    text = download_file(url)  # type: ignore[arg-type]
+    url = EVALUATION_URLS["prompt_templates"]
+    text = download_file(url)
 
     # Parse Python file to extract prompt constants
     tree = ast.parse(text)
@@ -239,12 +238,15 @@ def _dedupe_tools_by_name(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return deduped
 
 
-def _create_tools_list(agents_obj: object) -> List[Dict[str, Any]]:
+def _create_tools_list(agents_obj: Union[Dict[str, Any], List[Any]]) -> List[Dict[str, Any]]:
     """Extract and deduplicate tools from agents data."""
     tools: List[Dict[str, Any]] = []
 
-    if isinstance(agents_obj, dict) and isinstance(agents_obj.get("agents"), list):  # type: ignore[arg-type,union-attr]
-        agents_list = agents_obj["agents"]  # type: ignore[index]
+    agents_list: List[Any]
+    if isinstance(agents_obj, dict):
+        agents_list = agents_obj.get("agents", [])
+        if not isinstance(agents_list, list):
+            return tools
     elif isinstance(agents_obj, list):
         agents_list = agents_obj
     else:
@@ -260,7 +262,7 @@ def _create_tools_list(agents_obj: object) -> List[Dict[str, Any]]:
     return _dedupe_tools_by_name(tools)
 
 
-def _create_agents_list(agents_obj: object) -> Dict[str, Any]:
+def _create_agents_list(agents_obj: Union[Dict[str, Any], List[Any]]) -> Dict[str, Any]:
     """Create agents config with tool names only (not full tool dicts)."""
 
     def _process_agent(agent: Dict[str, Any]) -> Dict[str, Any]:
@@ -269,8 +271,11 @@ def _create_agents_list(agents_obj: object) -> Dict[str, Any]:
         a_copy["tools"] = tool_names
         return a_copy
 
-    if isinstance(agents_obj, dict) and isinstance(agents_obj.get("agents"), list):  # type: ignore[arg-type,union-attr]
-        processed = [_process_agent(a) for a in agents_obj["agents"] if isinstance(a, dict)]  # type: ignore[index,union-attr]
+    if isinstance(agents_obj, dict):
+        agents_list = agents_obj.get("agents")
+        if not isinstance(agents_list, list):
+            return {}
+        processed = [_process_agent(a) for a in agents_list if isinstance(a, dict)]
         out: Dict[str, Any] = {"agents": processed}
         if "primary_agent_id" in agents_obj:
             out["primary_agent_id"] = agents_obj["primary_agent_id"]  # type: ignore[index]
@@ -281,12 +286,15 @@ def _create_agents_list(agents_obj: object) -> Dict[str, Any]:
     return {}
 
 
-def _create_tasks_list(scenarios_obj: object, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _create_tasks_list(scenarios_obj: Union[Dict[str, Any], List[Any]], tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Convert scenarios to task format with sequential IDs."""
     tasks: List[Dict[str, Any]] = []
 
-    if isinstance(scenarios_obj, dict) and isinstance(scenarios_obj.get("scenarios"), list):  # type: ignore[arg-type,union-attr]
-        scenarios_list = scenarios_obj["scenarios"]  # type: ignore[index]
+    scenarios_list: List[Any]
+    if isinstance(scenarios_obj, dict):
+        scenarios_list = scenarios_obj.get("scenarios", [])
+        if not isinstance(scenarios_list, list):
+            return tasks
     elif isinstance(scenarios_obj, list):
         scenarios_list = scenarios_obj
     else:
@@ -422,7 +430,7 @@ def load_tasks(
     domain: str,
     data_dir: Optional[Path] = None,
     limit: Optional[int] = None,
-) -> TaskCollection:
+) -> TaskQueue:
     """Load tasks for a MACS domain.
 
     Args:
@@ -432,7 +440,7 @@ def load_tasks(
         limit: Maximum number of tasks to load
 
     Returns:
-        TaskCollection containing Task objects
+        TaskQueue containing Task objects
 
     Raises:
         ValueError: If domain is not valid
@@ -464,7 +472,7 @@ def load_tasks(
             task_kwargs["id"] = str(t["id"])
         tasks.append(Task(**task_kwargs))
 
-    return TaskCollection(tasks)
+    return TaskQueue(tasks)
 
 
 def load_agent_config(
@@ -502,12 +510,12 @@ def load_agent_config(
 
 
 def configure_model_ids(
-    tasks: Union[TaskCollection, List[Task]],
+    tasks: Union[TaskQueue, List[Task]],
     *,
     tool_model_id: Optional[str] = None,
     user_model_id: Optional[str] = None,
     evaluator_model_id: Optional[str] = None,
-) -> Union[TaskCollection, List[Task]]:
+) -> Union[TaskQueue, List[Task]]:
     """Configure model IDs for benchmark components in task data.
 
     This helper merges runtime model configuration into task data structures,
@@ -518,13 +526,13 @@ def configure_model_ids(
     task-specific overrides in the original data to take precedence.
 
     Args:
-        tasks: TaskCollection or list of Tasks to configure
+        tasks: TaskQueue or list of Tasks to configure
         tool_model_id: Model ID for tool simulators (stored in environment_data)
         user_model_id: Model ID for user simulator (stored in user_data)
         evaluator_model_id: Model ID for evaluators (stored in evaluation_data)
 
     Returns:
-        The same collection (mutated in place for convenience)
+        The same queue or list (mutated in place for convenience)
 
     Example:
         ```python

@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Parallel Execution**
+
+- Added parallel task execution with `num_workers` parameter in `Benchmark.run()` using `ThreadPoolExecutor` (PR: #14)
+- Added `ComponentRegistry` class for thread-safe component registration with thread-local storage (PR: #14)
+- Added `TaskContext` for cooperative timeout checking with `check_timeout()`, `elapsed`, `remaining`, and `is_expired` properties (PR: #14)
+- Added `TaskProtocol` dataclass with `timeout_seconds`, `timeout_action`, `max_retries`, `priority`, and `tags` fields for task-level execution control (PR: #14)
+- Added `TimeoutAction` enum (`SKIP`, `RETRY`, `RAISE`) for configurable timeout behavior (PR: #14)
+- Added `TaskTimeoutError` exception with `elapsed`, `timeout`, and `partial_traces` attributes (PR: #14)
+- Added `TASK_TIMEOUT` to `TaskExecutionStatus` enum for timeout classification (PR: #14)
+
+**Task Queue Abstraction**
+
+- Added `TaskQueue` abstract base class with iterator interface for flexible task scheduling (PR: #14)
+- Added `SequentialQueue` for simple FIFO task ordering (PR: #14)
+- Added `PriorityQueue` for priority-based task scheduling using `TaskProtocol.priority` (PR: #14)
+- Added `AdaptiveQueue` placeholder for future feedback-based scheduling (PR: #14)
+
 **ModelAdapter Chat Interface**
 
 - Added `chat()` method to `ModelAdapter` as the primary interface for LLM inference, accepting a list of messages in OpenAI format and returning a `ChatResponse` object and accepting tools
@@ -48,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Benchmark**
 
 - `Benchmark.agent_data` parameter is now optional (defaults to empty dict) (PR: #16)
+- Refactored `Benchmark` to delegate registry operations to `ComponentRegistry` class (PR: #)
+- `Benchmark.run()` now accepts optional `queue` parameter for custom task scheduling (PR: #14)
 
 **Task**
 

@@ -36,8 +36,8 @@ Usage:
             return adapter
 
     # Run
-    benchmark = MyMACSBenchmark(agent_data=agent_config)
-    results = benchmark.run(tasks)
+    benchmark = MyMACSBenchmark()
+    results = benchmark.run(tasks, agent_data=agent_config)
 """
 
 import json
@@ -53,6 +53,7 @@ from maseval import (
     MessageHistory,
     ModelAdapter,
     Task,
+    TaskExecutionStatus,
     ToolInvocationHistory,
     ToolLLMSimulator,
     User,
@@ -62,6 +63,17 @@ from maseval import (
 )
 from maseval.core.config import ConfigurableMixin
 from maseval.core.tracing import TraceableMixin
+
+
+# Statuses where agent is accountable (included in scoring)
+# Note: task_timeout is included - timeouts count as failures in MACS
+SCOREABLE_STATUSES = frozenset(
+    {
+        TaskExecutionStatus.SUCCESS.value,
+        TaskExecutionStatus.AGENT_ERROR.value,
+        TaskExecutionStatus.TASK_TIMEOUT.value,
+    }
+)
 
 
 # =============================================================================
@@ -695,7 +707,6 @@ class MACSBenchmark(Benchmark):
 
     def __init__(
         self,
-        agent_data: Dict[str, Any],
         callbacks: Optional[List[Any]] = None,
         n_task_repeats: int = 1,
         max_invocations: int = 5,
@@ -704,12 +715,11 @@ class MACSBenchmark(Benchmark):
         """Initialize benchmark.
 
         Args:
-            agent_data: Agent configuration from load_agent_config().
             callbacks: Benchmark callbacks
             n_task_repeats: Repetitions per task
             max_invocations: Maximum agent-user interaction rounds (default: 5 per MACS paper)
         """
-        super().__init__(agent_data, callbacks, n_task_repeats, max_invocations, **kwargs)
+        super().__init__(callbacks=callbacks, n_task_repeats=n_task_repeats, max_invocations=max_invocations, **kwargs)
 
     def _get_tool_model_id(self, task: Task) -> str:
         """Get tool simulator model ID from task.environment_data.
@@ -804,7 +814,7 @@ class MACSBenchmark(Benchmark):
             model_factory=tool_model_factory,
         )
 
-    def setup_user(  # type: ignore[override]
+    def setup_user(  # type: ignore[invalid-method-override]
         self,
         agent_data: Dict[str, Any],
         environment: MACSEnvironment,
@@ -840,7 +850,7 @@ class MACSBenchmark(Benchmark):
         )
 
     @abstractmethod
-    def setup_agents(  # type: ignore[override]
+    def setup_agents(  # type: ignore[invalid-method-override]
         self,
         agent_data: Dict[str, Any],
         environment: MACSEnvironment,
@@ -860,7 +870,7 @@ class MACSBenchmark(Benchmark):
         """
         pass
 
-    def setup_evaluators(  # type: ignore[override]
+    def setup_evaluators(  # type: ignore[invalid-method-override]
         self,
         environment: MACSEnvironment,
         task: Task,
@@ -892,7 +902,7 @@ class MACSBenchmark(Benchmark):
             ),
         ]
 
-    def run_agents(  # type: ignore[override]
+    def run_agents(  # type: ignore[invalid-method-override]
         self,
         agents: Sequence[AgentAdapter],
         task: Task,
@@ -932,7 +942,9 @@ class MACSBenchmark(Benchmark):
         user_result = results[0] if results else {"gsr": 0.0, "partial_gsr": 0.0, "report": []}
         system_result = results[1] if len(results) > 1 else {"gsr": 0.0, "partial_gsr": 0.0, "report": []}
 
-        combined_report = user_result.get("report", []) + system_result.get("report", [])  # type: ignore[operator]
+        user_report: List[Dict[str, Any]] = user_result.get("report", [])  # type: ignore[assignment]
+        system_report: List[Dict[str, Any]] = system_result.get("report", [])  # type: ignore[assignment]
+        combined_report = user_report + system_report
 
         # Compute overall metrics per AWS paper
         overall_gsr = 1.0 if (user_result.get("gsr", 0.0) == 1.0 and system_result.get("gsr", 0.0) == 1.0) else 0.0
@@ -987,15 +999,6 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             - excluded: Dict with counts of excluded tasks by category
             - status_counts: Dict with counts of each status type
     """
-    # Status values that indicate infrastructure failures (not agent's fault)
-    INFRASTRUCTURE_STATUSES = {
-        "environment_error",
-        "user_error",
-        "unknown_execution_error",
-        "evaluation_failed",
-        "setup_failed",
-    }
-
     if not results:
         return {
             "total_tasks": 0,
@@ -1003,13 +1006,7 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             "successful_tasks": 0,
             "success_rate": 0.0,
             "mean_metrics": {},
-            "excluded": {
-                "environment_error": 0,
-                "user_error": 0,
-                "unknown_execution_error": 0,
-                "evaluation_failed": 0,
-                "setup_failed": 0,
-            },
+            "excluded": {},
             "status_counts": {},
         }
 
@@ -1019,14 +1016,14 @@ def compute_benchmark_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     successful_tasks = 0
     scored_tasks = 0
     status_counts: Dict[str, int] = {}
-    excluded_counts: Dict[str, int] = {s: 0 for s in INFRASTRUCTURE_STATUSES}
+    excluded_counts: Dict[str, int] = {}
 
     for res in results:
         status = res.get("status", "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
 
-        # Skip infrastructure failures from scoring
-        if status in INFRASTRUCTURE_STATUSES:
+        # Skip infrastructure failures from scoring (use module-level SCOREABLE_STATUSES)
+        if status not in SCOREABLE_STATUSES:
             excluded_counts[status] = excluded_counts.get(status, 0) + 1
             continue
 

@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from unittest.mock import MagicMock
 
 from conftest import DummyModelAdapter
-from maseval import AgentAdapter, Task, User, MessageHistory, TaskCollection
+from maseval import AgentAdapter, Task, User, MessageHistory, TaskQueue
 from maseval.benchmark.macs import MACSBenchmark, MACSEnvironment
 
 
@@ -97,14 +97,12 @@ class ConcreteMACSBenchmark(MACSBenchmark):
 
     def __init__(
         self,
-        agent_data: Dict[str, Any],
         model_factory: Optional[Any] = None,
         **kwargs: Any,
     ):
         """Initialize with optional model factory.
 
         Args:
-            agent_data: Agent configuration
             model_factory: Either a callable that takes a model name and returns a ModelAdapter,
                           or a single ModelAdapter instance (for convenience in simple tests).
                           If not provided, creates DummyModelAdapter instances.
@@ -121,7 +119,7 @@ class ConcreteMACSBenchmark(MACSBenchmark):
         else:
             # Single model instance - create a factory that always returns it
             self._model_factory = lambda model_name: model_factory
-        super().__init__(agent_data, **kwargs)
+        super().__init__(**kwargs)
 
     def get_model_adapter(self, model_id: str, **kwargs):
         """Create a model adapter for the given component.
@@ -146,7 +144,7 @@ class ConcreteMACSBenchmark(MACSBenchmark):
 
         return adapter
 
-    def setup_agents(  # type: ignore[override]
+    def setup_agents(  # type: ignore[invalid-method-override]
         self,
         agent_data: Dict[str, Any],
         environment: MACSEnvironment,
@@ -415,9 +413,9 @@ Background:
 
 
 @pytest.fixture
-def macs_task_collection(sample_task, travel_task):
+def macs_task_queue(sample_task, travel_task):
     """Collection of MACS tasks for benchmark.run() tests."""
-    return TaskCollection.from_list([sample_task, travel_task])
+    return TaskQueue.from_list([sample_task, travel_task])
 
 
 # =============================================================================
@@ -589,5 +587,6 @@ def macs_benchmark(sample_agent_data, dummy_model):
     """Create a MACS benchmark with dummy model for testing.
 
     Uses dummy_model from parent conftest.py.
+    Returns tuple (benchmark, agent_data) for use with run().
     """
-    return ConcreteMACSBenchmark(sample_agent_data, dummy_model)
+    return ConcreteMACSBenchmark(dummy_model), sample_agent_data
