@@ -5,7 +5,7 @@ correctly order and iterate over tasks.
 """
 
 import pytest
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from maseval import Task
 from maseval.core.task import (
@@ -276,19 +276,19 @@ class TestPriorityTaskQueue:
 class ConcreteAdaptiveQueue(AdaptiveTaskQueue):
     """Concrete implementation of AdaptiveTaskQueue for testing."""
 
-    def __init__(self, tasks):
-        super().__init__(tasks)
-        self._selection_order: List[int] = []  # Track selection indices
+    def initial_state(self) -> Dict[str, Any]:
+        """Return empty initial state."""
+        return {}
 
-    def _select_next_task(self) -> Optional[Task]:
+    def select_next_task(self, remaining: Sequence[Task], state: Dict[str, Any]) -> Optional[Task]:
         """Select tasks in order (simple FIFO)."""
-        if not self._remaining:
+        if not remaining:
             return None
-        return self._remaining[0]
+        return remaining[0]
 
-    def _update_state(self, task: Task, report: Dict[str, Any]) -> None:
-        """Track update calls."""
-        pass
+    def update_state(self, task: Task, report: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+        """Return state unchanged."""
+        return state
 
 
 @pytest.mark.core

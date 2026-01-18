@@ -330,16 +330,23 @@ class AdaptiveTaskQueue(BaseTaskQueue, BenchmarkCallback, ABC):
     - **Queue → Benchmark**: Via callback (``on_task_repeat_end()``)
 
     The queue automatically moves completed tasks from ``_remaining`` to
-    ``_completed`` and calls ``_update_state()`` to let subclasses adapt their
+    ``_completed`` and calls ``update_state()`` to let subclasses adapt their
     scheduling strategy based on task results.
 
     Subclasses must implement:
-        - ``_select_next_task()``: Choose the next task to execute
-        - ``_update_state()``: Update internal model after task completion
+        - ``initial_state()``: Return initial state dict for adaptive algorithm
+        - ``select_next_task(remaining, state)``: Choose the next task to execute
+        - ``update_state(task, report, state)``: Update and return new state
 
-    Internal state:
+    The state dict is managed by the base class: initialized via ``initial_state()``
+    at iteration start, passed to both methods, and updated from ``update_state()``
+    return value. This functional approach keeps state flow explicit while allowing
+    subclasses to store any data they need.
+
+    Internal state (managed by base class, do not modify directly):
         - ``_remaining``: Tasks not yet executed
         - ``_completed``: Completed tasks paired with their reports
+        - ``_state``: Current adaptive state dict
         - ``_stop_flag``: Flag to signal early termination
 
     When used with ``Benchmark.run()``, the queue is automatically registered
@@ -350,23 +357,24 @@ class AdaptiveTaskQueue(BaseTaskQueue, BenchmarkCallback, ABC):
         class IRTTaskQueue(AdaptiveTaskQueue):
             '''Item Response Theory-based adaptive testing.'''
 
-            def __init__(self, tasks: Iterable[Task]):
-                super().__init__(tasks)
-                self._ability_estimate = 0.0
+            def initial_state(self) -> Dict[str, Any]:
+                return {"ability": 0.0}
 
-            def _select_next_task(self) -> Optional[Task]:
+            def select_next_task(
+                self, remaining: Sequence[Task], state: Dict[str, Any]
+            ) -> Optional[Task]:
                 # Select task with difficulty closest to current ability estimate
-                # (No need to check if _remaining is empty - guaranteed by base class)
                 return min(
-                    self._remaining,
-                    key=lambda t: abs(t.protocol.priority - self._ability_estimate)
+                    remaining,
+                    key=lambda t: abs(t.metadata.get("difficulty", 0) - state["ability"])
                 )
 
-            def _update_state(self, task: Task, report: Dict[str, Any]) -> None:
+            def update_state(
+                self, task: Task, report: Dict[str, Any], state: Dict[str, Any]
+            ) -> Dict[str, Any]:
                 # Update ability estimate based on task result
                 correct = report.get("eval", [{}])[0].get("correct", False)
-                difficulty = task.protocol.priority
-                self._ability_estimate += 0.5 if correct else -0.5
+                return {"ability": state["ability"] + (0.5 if correct else -0.5)}
 
         queue = IRTTaskQueue(tasks)
         results = benchmark.run(queue)  # Auto-registered as callback
@@ -383,18 +391,21 @@ class AdaptiveTaskQueue(BaseTaskQueue, BenchmarkCallback, ABC):
         self._remaining: List[Task] = list(self._tasks)
         self._completed: List[Tuple[Task, Dict[str, Any]]] = []
         self._stop_flag: bool = False
+        self._state: Dict[str, Any] = {}
 
     def __iter__(self) -> Iterator[Task]:
         """Yield tasks selected by the adaptive algorithm.
 
-        Continues until ``_select_next_task()`` returns None, ``_remaining``
-        is empty, or ``_stop_flag`` is set.
+        Initializes state via ``initial_state()`` at iteration start, then
+        continues until ``select_next_task()`` returns None, ``_remaining``
+        is empty, or ``stop()`` is called.
 
-        Note: ``_select_next_task()`` is only called when ``_remaining`` is
+        Note: ``select_next_task()`` is only called when ``_remaining`` is
         non-empty, so implementers don't need to check for empty list.
         """
+        self._state = self.initial_state()
         while not self._stop_flag and self._remaining:
-            next_task = self._select_next_task()
+            next_task = self.select_next_task(self._remaining, self._state)
             if next_task is not None:
                 yield next_task
             else:
@@ -404,7 +415,7 @@ class AdaptiveTaskQueue(BaseTaskQueue, BenchmarkCallback, ABC):
         """BenchmarkCallback hook called after each task repetition completes.
 
         This method extracts the task from the report, moves it from
-        ``_remaining`` to ``_completed``, and calls ``_update_state()``
+        ``_remaining`` to ``_completed``, and calls ``update_state()``
         to let the subclass update its adaptive model.
 
         Args:
@@ -433,13 +444,13 @@ class AdaptiveTaskQueue(BaseTaskQueue, BenchmarkCallback, ABC):
 
         # Update subclass state
         if task is not None:
-            self._update_state(task, report)
+            self._state = self.update_state(task, report, self._state)
 
     def stop(self) -> None:
         """Signal that no more tasks should be processed.
 
-        Call this from ``_update_state()`` or ``_select_next_task()`` to
-        trigger early termination (e.g., when confidence threshold is reached).
+        Call this from ``update_state()`` to trigger early termination
+        (e.g., when confidence threshold is reached).
 
         The ``_stop_flag`` is checked in ``__iter__``, which will stop yielding
         tasks and naturally terminate the benchmark's iteration loop via Python's
@@ -448,33 +459,59 @@ class AdaptiveTaskQueue(BaseTaskQueue, BenchmarkCallback, ABC):
         self._stop_flag = True
 
     @abstractmethod
-    def _select_next_task(self) -> Optional[Task]:
+    def initial_state(self) -> Dict[str, Any]:
+        """Return the initial state for adaptive selection.
+
+        This state dict will be passed to ``select_next_task()`` and
+        ``update_state()`` throughout the benchmark run. Store any data
+        your adaptive algorithm needs (ability estimates, history, etc.).
+
+        Returns:
+            Initial state dict. Can contain any keys/values you need.
+        """
+        pass
+
+    @abstractmethod
+    def select_next_task(self, remaining: Sequence[Task], state: Dict[str, Any]) -> Optional[Task]:
         """Select the next task to execute.
 
         Implement this method to define your adaptive selection algorithm
         (e.g., IRT-based selection, uncertainty sampling, bandit algorithms).
 
-        **Guaranteed precondition**: This method is only called when
-        ``self._remaining`` is non-empty, so you don't need to check for
-        an empty list. You can safely assume at least one task is available.
+        Args:
+            remaining: Read-only sequence of tasks not yet executed.
+                Do not modify this sequence; the queue manages task lifecycle.
+            state: Current adaptive state from ``initial_state()`` or
+                ``update_state()``.
 
         Returns:
-            The next Task to execute from ``self._remaining``, or None to
-            signal early termination (e.g., if no suitable task meets your
-            selection criteria).
+            The next Task to execute from ``remaining``, or None to
+            signal early termination.
+
+        Note:
+            This method is only called when ``remaining`` is non-empty,
+            so you don't need to check for an empty sequence.
         """
         pass
 
     @abstractmethod
-    def _update_state(self, task: Task, report: Dict[str, Any]) -> None:
-        """Update internal state after task completion.
+    def update_state(self, task: Task, report: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+        """Update state after task completion.
 
         Implement this method to update ability estimates, difficulty models,
-        or other state used by ``_select_next_task()``.
+        or other adaptive state based on task results.
 
         Args:
             task: The task that just completed.
             report: The execution report containing status and eval results.
+            state: Current state dict.
+
+        Returns:
+            Updated state dict (can be the same dict mutated, or a new dict).
+
+        Note:
+            Call ``self.stop()`` here to halt iteration before the next
+            task selection.
         """
         pass
 
