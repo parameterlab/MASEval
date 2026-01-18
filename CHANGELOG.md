@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `TaskQueue` abstract base class with iterator interface for flexible task scheduling (PR: #14)
 - Added `SequentialQueue` for simple FIFO task ordering (PR: #14)
 - Added `PriorityQueue` for priority-based task scheduling using `TaskProtocol.priority` (PR: #14)
-- Added `AdaptiveQueue` placeholder for future feedback-based scheduling (PR: #14)
+- Added `AdaptiveTaskQueue` abstract base class for feedback-based adaptive scheduling with `initial_state()`, `select_next_task(remaining, state)`, and `update_state(task, report, state)` methods (PR: #14)
 
 **ModelAdapter Chat Interface**
 
