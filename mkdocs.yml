@@ -109,7 +109,7 @@ nav:
           - History: reference/history.md
           - Model: reference/model.md
           - Simulator: reference/simulator.md
-          - Task: reference/task.md
+          - Tasks: reference/task.md
           - User: reference/user.md
           - Utilities: reference/utilities.md
       - Interface:

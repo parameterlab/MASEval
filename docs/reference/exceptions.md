@@ -10,7 +10,8 @@ Exception classes for error classification in benchmark execution.
 MASEvalError (base)
 ├── AgentError           - Agent violated contract (agent's fault)
 ├── EnvironmentError     - Environment/tool failed (not agent's fault)
-└── UserError            - User simulator failed (not agent's fault)
+├── UserError            - User simulator failed (not agent's fault)
+└── TaskTimeoutError     - Task exceeded configured timeout
 
 SimulatorError (base for simulators)
 ├── ToolSimulatorError   - Also inherits EnvironmentError
@@ -26,6 +27,8 @@ SimulatorError (base for simulators)
 ::: maseval.core.exceptions.EnvironmentError
 
 ::: maseval.core.exceptions.UserError
+
+::: maseval.core.exceptions.TaskTimeoutError
 
 ## Simulator Exceptions
 

@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Benchmark.agent_data` parameter is now optional (defaults to empty dict) (PR: #16)
 - Refactored `Benchmark` to delegate registry operations to `ComponentRegistry` class (PR: #)
-- `Benchmark.run()` now accepts optional `queue` parameter for custom task scheduling (PR: #14)
+- `Benchmark.run()` now accepts optional `queue` parameter (`BaseTaskQueue`) for custom task scheduling (PR: #14)
 
 **Task**
 
