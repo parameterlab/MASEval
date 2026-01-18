@@ -31,6 +31,11 @@ class TaskProtocol:
     task content (query, environment_data, etc.). It controls the
     interface between the task and MASEval's execution engine.
 
+    Note:
+        Timeout checking is cooperative and currently only occurs at execution phase
+        boundaries (after setup, before execution, before evaluation). Timeout detection
+        during agent execution is not yet supported.
+
     Attributes:
         timeout_seconds: Maximum execution time for this task. None means no timeout.
         timeout_action: Action to take when timeout occurs.

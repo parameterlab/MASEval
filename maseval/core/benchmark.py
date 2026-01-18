@@ -124,6 +124,11 @@ class Benchmark(ABC):
         The framework handles task iteration, repetitions for statistical robustness, callback
         notifications, and result collection. You focus on defining agent behavior and evaluation
         criteria for your specific domain.
+
+    Note:
+        Task timeout (via ``TaskProtocol.timeout_seconds``) is checked at phase boundaries
+        (after setup, before execution, before evaluation). Timeout detection during agent
+        execution is not yet supported.
     """
 
     def __init__(
