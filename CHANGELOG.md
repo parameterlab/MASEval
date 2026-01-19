@@ -11,10 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Interface**
 
-- CAMEL-AI integration: `CamelAgentAdapter` and `CamelUser` for evaluating CAMEL-AI ChatAgent-based systems (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `CamelAgentUser` for using a CAMEL ChatAgent as the user in agent-to-agent evaluation (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `camel_role_playing_execution_loop()` for benchmarks using CAMEL's RolePlaying semantics (PR: #PR_NUMBER_PLACEHOLDER)
-- Added `CamelRolePlayingTracer` and `CamelWorkforceTracer` for capturing orchestration-level traces from CAMEL's multi-agent systems (PR: #PR_NUMBER_PLACEHOLDER)
+- CAMEL-AI integration: `CamelAgentAdapter` and `CamelUser` for evaluating CAMEL-AI ChatAgent-based systems (PR: #22)
+- Added `CamelAgentUser` for using a CAMEL ChatAgent as the user in agent-to-agent evaluation (PR: #22)
+- Added `camel_role_playing_execution_loop()` for benchmarks using CAMEL's RolePlaying semantics (PR: #22)
+- Added `CamelRolePlayingTracer` and `CamelWorkforceTracer` for capturing orchestration-level traces from CAMEL's multi-agent systems (PR: #22)
 - Added `camel` optional dependency: `pip install maseval[camel]`
 
 ### Changed
