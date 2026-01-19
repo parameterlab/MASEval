@@ -10,10 +10,26 @@ Framework-agnostic implementation of the MultiAgentBench benchmark suite from MA
 
 ## Setup
 
-This benchmark requires the MARBLE source code to be cloned locally. The benchmark
-does NOT install MARBLE as a dependency - instead, it imports directly from a local copy.
+This benchmark requires the MARBLE source code. You can set it up automatically or manually.
 
-### 1. Clone MARBLE
+### Option 1: Automatic Setup (Recommended)
+
+MARBLE will be automatically downloaded when you first use it:
+
+```python
+from maseval.benchmark.multiagentbench import ensure_marble_exists, load_tasks
+
+# This downloads MARBLE if not present (about 50MB)
+ensure_marble_exists()
+
+# Now load tasks
+tasks = load_tasks("research", limit=1)
+print(f"Loaded {len(tasks)} task(s)")
+```
+
+### Option 2: Manual Clone
+
+If you prefer to clone manually:
 
 ```bash
 cd maseval/benchmark/multiagentbench
@@ -23,7 +39,7 @@ cd marble
 git checkout <pinned-commit-hash>
 ```
 
-### 2. Install MARBLE Dependencies
+### Install MARBLE Dependencies
 
 MARBLE requires additional dependencies. Add them to your environment:
 
@@ -35,7 +51,7 @@ uv add litellm ruamel.yaml
 pip install litellm ruamel.yaml
 ```
 
-### 3. Verify Setup
+### Verify Setup
 
 ```python
 from maseval.benchmark.multiagentbench import load_tasks

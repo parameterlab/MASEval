@@ -17,11 +17,17 @@ Domains:
     - worldsimulation: World simulation and interaction
 
 Setup:
-    This benchmark requires MARBLE source code to be cloned locally:
+    This benchmark requires MARBLE source code. It will be automatically
+    downloaded when you first use `load_tasks()` or you can set it up manually:
 
-    ```bash
-    cd maseval/benchmark/multiagentbench
-    git clone https://github.com/ulab-uiuc/MARBLE.git marble
+    ```python
+    # Option 1: Automatic download (recommended)
+    from maseval.benchmark.multiagentbench import ensure_marble_exists
+    ensure_marble_exists()  # Downloads MARBLE if not present
+
+    # Option 2: Manual clone
+    # cd maseval/benchmark/multiagentbench
+    # git clone https://github.com/ulab-uiuc/MARBLE.git marble
     ```
 
     See README.md in this directory for detailed setup instructions.
@@ -35,9 +41,13 @@ Usage:
         MarbleAgentAdapter,
         load_tasks,
         configure_model_ids,
+        ensure_marble_exists,
         get_domain_info,
         VALID_DOMAINS,
     )
+
+    # Ensure MARBLE is installed (auto-downloads if needed)
+    ensure_marble_exists()
 
     # Load and configure tasks
     tasks = load_tasks("research", limit=5)
@@ -103,11 +113,13 @@ from maseval.benchmark.multiagentbench.adapters.marble_adapter import (
     create_marble_agents,
 )
 
-# Data loading
+# Data loading and setup
 from maseval.benchmark.multiagentbench.data_loader import (
     load_tasks,
     configure_model_ids,
     get_domain_info,
+    ensure_marble_exists,
+    download_marble,
     VALID_DOMAINS,
     INFRASTRUCTURE_DOMAINS as INFRASTRUCTURE_REQUIRED_DOMAINS,
 )
@@ -126,10 +138,12 @@ __all__ = [
     # Agent adapters
     "MarbleAgentAdapter",
     "create_marble_agents",
-    # Data loading
+    # Data loading and setup
     "load_tasks",
     "configure_model_ids",
     "get_domain_info",
+    "ensure_marble_exists",
+    "download_marble",
     "VALID_DOMAINS",
     "INFRASTRUCTURE_REQUIRED_DOMAINS",
 ]

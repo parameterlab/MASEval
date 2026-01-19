@@ -27,9 +27,22 @@ $\tau^2$-bench is a benchmark for evaluating agentic systems in realistic, multi
 
 ---
 
-## 3. [Name of Next Benchmark]
+## 3. MultiAgentBench (MARBLE)
 
-(Description for the third benchmark...)
+MultiAgentBench is a comprehensive benchmark suite for evaluating multi-agent collaboration and competition in LLM-based systems. It includes diverse scenarios across multiple domains including research collaboration, negotiation, coding tasks, and more.
+
+### Source and License
+
+- **Original Repository:** [https://github.com/ulab-uiuc/MARBLE](https://github.com/ulab-uiuc/MARBLE)
+- **Paper:** [MultiAgentBench: Evaluating the Collaboration and Competition of LLM agents](https://arxiv.org/abs/2503.01935)
+- **Code License:** MIT
+- **Data License:** MIT
+
+---
+
+## 4. [Name of Next Benchmark]
+
+(Description for the next benchmark...)
 
 ### Source and License
 

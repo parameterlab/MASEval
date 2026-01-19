@@ -5,11 +5,19 @@ MARBLE's MultiAgentBench JSONL files.
 """
 
 import json
+import logging
 import os
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional
 
 from maseval import Task
+
+logger = logging.getLogger(__name__)
+
+# MARBLE repository configuration
+MARBLE_REPO_URL = "https://github.com/ulab-uiuc/MARBLE.git"
+MARBLE_DEFAULT_COMMIT = None  # Set to a specific commit hash for reproducibility, or None for latest
 
 # Valid domain names
 VALID_DOMAINS: FrozenSet[str] = frozenset(
@@ -26,6 +34,121 @@ VALID_DOMAINS: FrozenSet[str] = frozenset(
 
 # Domains requiring external infrastructure
 INFRASTRUCTURE_DOMAINS: FrozenSet[str] = frozenset({"database", "minecraft"})
+
+
+def _get_marble_dir() -> Path:
+    """Get the default MARBLE installation directory.
+
+    Returns:
+        Path to marble/ directory relative to this module
+    """
+    return Path(__file__).parent / "marble"
+
+
+def download_marble(
+    target_dir: Optional[Path] = None,
+    commit: Optional[str] = None,
+    force: bool = False,
+) -> Path:
+    """Clone MARBLE repository to the specified directory.
+
+    Args:
+        target_dir: Directory to clone into. Defaults to marble/ relative to this module.
+        commit: Specific commit hash to checkout. Defaults to MARBLE_DEFAULT_COMMIT or latest.
+        force: If True, remove existing directory and re-clone.
+
+    Returns:
+        Path to the cloned MARBLE directory
+
+    Raises:
+        RuntimeError: If git clone fails
+        FileExistsError: If directory exists and force=False
+    """
+    if target_dir is None:
+        target_dir = _get_marble_dir()
+
+    target_dir = Path(target_dir)
+
+    # Check if already exists
+    if target_dir.exists():
+        if not force:
+            logger.info(f"MARBLE already exists at {target_dir}")
+            return target_dir
+
+        # Remove existing directory
+        import shutil
+
+        logger.info(f"Removing existing MARBLE directory: {target_dir}")
+        shutil.rmtree(target_dir)
+
+    # Clone repository
+    logger.info(f"Cloning MARBLE from {MARBLE_REPO_URL} to {target_dir}")
+
+    try:
+        subprocess.run(
+            ["git", "clone", MARBLE_REPO_URL, str(target_dir)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to clone MARBLE: {e.stderr}") from e
+    except FileNotFoundError:
+        raise RuntimeError("git is not installed or not in PATH. Please install git and try again.")
+
+    # Checkout specific commit if requested
+    checkout_commit = commit or MARBLE_DEFAULT_COMMIT
+    if checkout_commit:
+        logger.info(f"Checking out commit: {checkout_commit}")
+        try:
+            subprocess.run(
+                ["git", "checkout", checkout_commit],
+                cwd=target_dir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to checkout commit {checkout_commit}: {e.stderr}") from e
+
+    logger.info(f"MARBLE successfully installed at {target_dir}")
+    return target_dir
+
+
+def ensure_marble_exists(auto_download: bool = True) -> Path:
+    """Ensure MARBLE is available, optionally downloading it.
+
+    This function checks if MARBLE is installed and optionally downloads it
+    if not present.
+
+    Args:
+        auto_download: If True, automatically download MARBLE if not found.
+            If False, raise an error if MARBLE is not found.
+
+    Returns:
+        Path to the MARBLE directory
+
+    Raises:
+        FileNotFoundError: If MARBLE is not found and auto_download=False
+
+    Example:
+        >>> marble_dir = ensure_marble_exists()
+        >>> # MARBLE is now available at marble_dir
+    """
+    marble_dir = _get_marble_dir()
+
+    # Check if MARBLE exists and has the expected structure
+    if marble_dir.exists() and (marble_dir / "multiagentbench").exists():
+        return marble_dir
+
+    if not auto_download:
+        raise FileNotFoundError(
+            f"MARBLE not found at {marble_dir}.\n"
+            "Run `ensure_marble_exists(auto_download=True)` to download automatically,\n"
+            "or manually clone: git clone https://github.com/ulab-uiuc/MARBLE.git marble"
+        )
+
+    return download_marble(marble_dir)
 
 
 def _resolve_data_dir(data_dir: Optional[Path] = None) -> Path:
