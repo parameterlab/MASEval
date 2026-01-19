@@ -134,8 +134,8 @@ Basic CAMEL-AI integration supporting the core `ChatAgent` class. Implementation
 - Extracts tool and model configuration in `gather_config()`
 
 **CamelUser**:
-- Extends base `User` class
-- `get_tool()` returns CAMEL `FunctionTool` wrapping `simulate_response`
+- Extends `LLMUser` class
+- `get_tool()` returns CAMEL `FunctionTool` wrapping `respond()`
 
 ### Design Decisions Made
 
@@ -151,6 +151,8 @@ Basic CAMEL-AI integration supporting the core `ChatAgent` class. Implementation
 Phase 2 consists of incremental improvements that build on each other. Core library changes come first, followed by interface-specific implementations.
 
 ### 2.1 User Abstraction (Core Library)
+
+**Status: IMPLEMENTED**
 
 **Motivation**: The current `maseval.User` forces LLM simulation via `UserLLMSimulator`. This is too restrictive for:
 - Using a smolagents agent as user
@@ -187,11 +189,13 @@ Phase 2 consists of incremental improvements that build on each other. Core libr
 
    The current `AgenticUser` (user with tool access) should be renamed to `AgenticLLMUser` to match the new naming convention.
 
-5. **Clean break, no backwards compatibility aliases**
+5. **Class naming: `User` for the abstract interface**
+
+   The abstract base class is named `User` (not `BaseUser`) to match MASEval's conventions - other abstract classes like `AgentAdapter`, `Environment`, `Evaluator` don't use a "Base" prefix. This keeps type hints clean (`user: User`) and follows Python's ABC convention (`Mapping`, `Sequence`, etc.).
+
+6. **Clean break, no backwards compatibility aliases**
 
    Per AGENTS.md: *"This project is early-release. Clean, maintainable code is the priority - not backwards compatibility."*
-
-   No `User` alias for `LLMUser`. The rename is straightforward and search-replace handles migration.
 
 **Core changes** (in `maseval/core/user.py`):
 ```python
@@ -705,7 +709,7 @@ The contract tests (`tests/test_contract/test_agent_adapter_contract.py`) valida
 
 ---
 
-### Phase 2.1: User Abstraction (Core)
+### Phase 2.1: User Abstraction (Core) ✅ IMPLEMENTED
 
 **Core changes:**
 - `maseval/core/user.py` - Refactor `User` → `User` + `LLMUser`, rename `AgenticUser` → `AgenticLLMUser`, rename `simulate_response()` → `respond()`
