@@ -1,0 +1,552 @@
+"""MultiAgentBench evaluator implementation.
+
+This module provides evaluation metrics matching MARBLE's evaluation methodology.
+"""
+
+import json
+import re
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
+from maseval import Evaluator, ModelAdapter
+
+
+@dataclass
+class MultiAgentBenchMetrics:
+    """Metrics collected during MultiAgentBench evaluation.
+
+    Attributes:
+        task_completion: Whether the task was completed
+        token_consumption: Total tokens used
+        planning_score: Score for planning/coordination (1-5)
+        communication_score: Score for inter-agent communication (1-5)
+        task_evaluation: Domain-specific evaluation results
+        agent_kpis: Per-agent key performance indicators
+        total_milestones: Number of milestones achieved
+    """
+
+    task_completion: bool = False
+    token_consumption: int = 0
+    planning_score: float = -1.0
+    communication_score: float = -1.0
+    task_evaluation: Dict[str, Any] = field(default_factory=dict)
+    agent_kpis: Dict[str, int] = field(default_factory=dict)
+    total_milestones: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert metrics to dictionary."""
+        return {
+            "task_completion": self.task_completion,
+            "token_consumption": self.token_consumption,
+            "planning_score": self.planning_score,
+            "communication_score": self.communication_score,
+            "task_evaluation": self.task_evaluation,
+            "agent_kpis": self.agent_kpis,
+            "total_milestones": self.total_milestones,
+        }
+
+
+class MultiAgentBenchEvaluator(Evaluator):
+    """Evaluator for MultiAgentBench tasks matching MARBLE's methodology.
+
+    This evaluator implements MARBLE's LLM-based evaluation metrics:
+    - Task completion assessment
+    - Communication quality scoring
+    - Planning/coordination scoring
+    - Domain-specific task evaluation (research, bargaining, etc.)
+
+    Attributes:
+        domain: The benchmark domain (research, bargaining, etc.)
+        model_adapter: Model adapter for LLM-based evaluation
+        metrics_config: Configuration for metrics to evaluate
+    """
+
+    def __init__(
+        self,
+        domain: str,
+        model_adapter: ModelAdapter,
+        metrics_config: Optional[Dict[str, Any]] = None,
+        output_format: str = "",
+    ):
+        """Initialize the evaluator.
+
+        Args:
+            domain: Benchmark domain (research, bargaining, etc.)
+            model_adapter: Model adapter for LLM evaluation
+            metrics_config: Configuration for evaluation metrics
+            output_format: Expected output format for task evaluation
+        """
+        self.domain = domain.lower()
+        self.model_adapter = model_adapter
+        self.metrics_config = metrics_config or {}
+        self.output_format = output_format
+        self._evaluation_prompts = self._load_evaluation_prompts()
+
+    def _load_evaluation_prompts(self) -> Dict[str, Any]:
+        """Load evaluation prompts (matching MARBLE's evaluator_prompts.json)."""
+        # These prompts mirror MARBLE's evaluation methodology
+        return {
+            "communication": {
+                "prompt": """Evaluate the communication between agents for the following task.
+
+Task: {task}
+
+Communication Log:
+{communications}
+
+Rate the communication quality on a scale of 1-5:
+1 - Poor: Irrelevant or confusing communication
+2 - Below Average: Some relevant communication but lacks clarity
+3 - Average: Adequate communication that addresses the task
+4 - Good: Clear and relevant communication with good coordination
+5 - Excellent: Highly effective communication with perfect coordination
+
+Respond with a JSON object: {{"rating": <score>}}"""
+            },
+            "planning": {
+                "prompt": """Evaluate the planning and coordination quality for the following task.
+
+Task Summary: {summary}
+Agent Profiles: {agent_profiles}
+Task Assignments: {agent_tasks}
+Results: {results}
+
+Rate the planning quality on a scale of 1-5:
+1 - Poor: No clear plan or coordination
+2 - Below Average: Some planning but poorly coordinated
+3 - Average: Adequate planning with basic coordination
+4 - Good: Well-planned with effective coordination
+5 - Excellent: Optimal planning and seamless coordination
+
+Respond with a JSON object: {{"rating": <score>}}"""
+            },
+            "research": {
+                "task_evaluation": {
+                    "prompt": """Evaluate the following research idea based on innovation, safety, and feasibility.
+
+Task: {task}
+
+Research Result:
+{result}
+
+Rate each dimension on a scale of 1-5:
+- Innovation: How novel and creative is the research idea?
+- Safety: Does the research consider ethical implications and safety?
+- Feasibility: How practical and achievable is the proposed research?
+
+Respond with a JSON object:
+{{"innovation": <score>, "safety": <score>, "feasibility": <score>}}"""
+                }
+            },
+            "bargaining": {
+                "task_evaluation": {
+                    "buyer_prompt": """Evaluate the buyer's negotiation performance.
+
+Task: {task}
+
+Negotiation Result:
+{result}
+
+Rate each dimension on a scale of 1-5:
+- Effectiveness of Strategies: How well did the buyer negotiate?
+- Progress and Outcome: Did the buyer achieve a favorable outcome?
+- Interaction Dynamics: How well did the buyer engage with the seller?
+
+Respond with a JSON object:
+{{"effectiveness_of_strategies": <score>, "progress_and_outcome": <score>, "interaction_dynamics": <score>}}""",
+                    "seller_prompt": """Evaluate the seller's negotiation performance.
+
+Task: {task}
+
+Negotiation Result:
+{result}
+
+Rate each dimension on a scale of 1-5:
+- Effectiveness of Strategies: How well did the seller negotiate?
+- Progress and Outcome: Did the seller achieve a favorable outcome?
+- Interaction Dynamics: How well did the seller engage with the buyer?
+
+Respond with a JSON object:
+{{"effectiveness_of_strategies": <score>, "progress_and_outcome": <score>, "interaction_dynamics": <score>}}""",
+                }
+            },
+            "coding": {
+                "task_evaluation": {
+                    "prompt": """Evaluate the code quality based on the following criteria.
+
+Task Description: {task_description}
+Implementation Requirements: {requirements}
+
+Solution:
+{solution}
+
+Rate each dimension on a scale of 1-5:
+- Instruction Following: Does the code fulfill all requirements?
+- Executability: Is the code syntactically correct and executable?
+- Consistency: Is the code consistent in naming, formatting, and logic?
+- Quality: Is the code well-documented, clear, and modular?
+
+Respond with a JSON object:
+{{"instruction_following": <score>, "executability": <score>, "consistency": <score>, "quality": <score>}}"""
+                }
+            },
+        }
+
+    def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter traces for evaluation.
+
+        Args:
+            traces: All collected traces
+
+        Returns:
+            Filtered traces relevant for evaluation
+        """
+        return {
+            "agents": traces.get("agents", {}),
+            "environment": traces.get("environment", {}),
+            "communications": self._extract_communications(traces),
+            "results": self._extract_results(traces),
+        }
+
+    def _extract_communications(self, traces: Dict[str, Any]) -> str:
+        """Extract communication logs from traces.
+
+        Args:
+            traces: Execution traces
+
+        Returns:
+            Formatted communication string
+        """
+        communications: List[str] = []
+
+        # Extract from agent traces
+        agent_traces = traces.get("agents", {})
+        for agent_id, agent_trace in agent_traces.items():
+            comm_log = agent_trace.get("communication_log", [])
+            for entry in comm_log:
+                comm = entry.get("communication", "")
+                if comm:
+                    communications.append(f"[{agent_id}]: {comm}")
+
+        return "\n".join(communications) if communications else "No communications recorded."
+
+    def _extract_results(self, traces: Dict[str, Any]) -> str:
+        """Extract agent results from traces.
+
+        Args:
+            traces: Execution traces
+
+        Returns:
+            Formatted results string
+        """
+        results: List[str] = []
+
+        agent_traces = traces.get("agents", {})
+        for agent_id, agent_trace in agent_traces.items():
+            action_log = agent_trace.get("action_log", [])
+            for entry in action_log:
+                result = entry.get("result", "")
+                if result:
+                    results.append(f"[{agent_id}]: {result}")
+
+        return "\n".join(results) if results else "No results recorded."
+
+    def __call__(self, traces: Dict[str, Any], final_answer: Any) -> Dict[str, Any]:
+        """Evaluate the task execution.
+
+        Args:
+            traces: Filtered execution traces
+            final_answer: Final output from agents
+
+        Returns:
+            Evaluation results dictionary
+        """
+        metrics = MultiAgentBenchMetrics()
+
+        # Extract filtered data
+        filtered = self.filter_traces(traces)
+        communications = filtered["communications"]
+        # Note: results are available in filtered["results"] but not used directly
+        # since we get task_desc and final_result separately
+
+        # Calculate token consumption
+        metrics.token_consumption = self._calculate_token_consumption(traces)
+
+        # Evaluate communication if present
+        if communications != "No communications recorded.":
+            metrics.communication_score = self._evaluate_communication(self._get_task_description(traces), communications)
+
+        # Domain-specific evaluation
+        task_desc = self._get_task_description(traces)
+        final_result = self._format_final_answer(final_answer)
+
+        if self.domain == "research":
+            metrics.task_evaluation = self._evaluate_research(task_desc, final_result)
+        elif self.domain == "bargaining" or self.domain == "worldsimulation":
+            metrics.task_evaluation = self._evaluate_bargaining(task_desc, final_result)
+        elif self.domain == "coding":
+            metrics.task_evaluation = self._evaluate_coding(task_desc, final_result)
+        elif self.domain == "database":
+            metrics.task_evaluation = self._evaluate_database(task_desc, final_result)
+        else:
+            # Default: check if task has a completion marker
+            metrics.task_completion = bool(final_result)
+
+        # Set task completion based on evaluation
+        metrics.task_completion = self._determine_completion(metrics)
+
+        return {
+            "passed": metrics.task_completion,
+            "metrics": metrics.to_dict(),
+            "domain": self.domain,
+        }
+
+    def _get_task_description(self, traces: Dict[str, Any]) -> str:
+        """Get task description from traces."""
+        env_traces = traces.get("environment", {})
+        state = env_traces.get("marble_state", {})
+        return state.get("task_description", "")
+
+    def _format_final_answer(self, final_answer: Any) -> str:
+        """Format final answer for evaluation."""
+        if isinstance(final_answer, dict):
+            # Handle structured output from run_agents
+            results = final_answer.get("agent_results", [])
+            if results:
+                return "\n".join(f"[{r.get('agent_id', 'unknown')}]: {r.get('result', '')}" for r in results)
+            return json.dumps(final_answer)
+        elif isinstance(final_answer, list):
+            return "\n".join(f"[{r.get('agent_id', 'unknown')}]: {r.get('result', '')}" for r in final_answer if isinstance(r, dict))
+        return str(final_answer) if final_answer else ""
+
+    def _calculate_token_consumption(self, traces: Dict[str, Any]) -> int:
+        """Calculate total token consumption."""
+        total = 0
+
+        agent_traces = traces.get("agents", {})
+        for agent_trace in agent_traces.values():
+            token_usage = agent_trace.get("token_usage", 0)
+            if isinstance(token_usage, int):
+                total += token_usage
+
+        return total
+
+    def _evaluate_communication(self, task: str, communications: str) -> float:
+        """Evaluate communication quality using LLM."""
+        prompt_template = self._evaluation_prompts["communication"]["prompt"]
+        prompt = prompt_template.format(task=task, communications=communications)
+
+        try:
+            response = self.model_adapter.generate(prompt)
+            return self._parse_score(response)
+        except Exception:
+            return -1.0
+
+    def _evaluate_research(self, task: str, result: str) -> Dict[str, Any]:
+        """Evaluate research task output."""
+        prompt_template = self._evaluation_prompts["research"]["task_evaluation"]["prompt"]
+        prompt = prompt_template.format(task=task, result=result)
+
+        try:
+            response = self.model_adapter.generate(prompt)
+            return self._parse_research_ratings(response)
+        except Exception:
+            return {"innovation": -1, "safety": -1, "feasibility": -1}
+
+    def _evaluate_bargaining(self, task: str, result: str) -> Dict[str, Any]:
+        """Evaluate bargaining/world simulation task output."""
+        # Evaluate both buyer and seller perspectives
+        buyer_prompt = self._evaluation_prompts["bargaining"]["task_evaluation"]["buyer_prompt"]
+        seller_prompt = self._evaluation_prompts["bargaining"]["task_evaluation"]["seller_prompt"]
+
+        ratings = {"buyer": {}, "seller": {}}
+
+        try:
+            buyer_response = self.model_adapter.generate(buyer_prompt.format(task=task, result=result))
+            ratings["buyer"] = self._parse_bargaining_ratings(buyer_response)
+        except Exception:
+            ratings["buyer"] = {
+                "effectiveness_of_strategies": -1,
+                "progress_and_outcome": -1,
+                "interaction_dynamics": -1,
+            }
+
+        try:
+            seller_response = self.model_adapter.generate(seller_prompt.format(task=task, result=result))
+            ratings["seller"] = self._parse_bargaining_ratings(seller_response)
+        except Exception:
+            ratings["seller"] = {
+                "effectiveness_of_strategies": -1,
+                "progress_and_outcome": -1,
+                "interaction_dynamics": -1,
+            }
+
+        return ratings
+
+    def _evaluate_coding(self, task: str, result: str) -> Dict[str, Any]:
+        """Evaluate coding task output."""
+        prompt_template = self._evaluation_prompts["coding"]["task_evaluation"]["prompt"]
+
+        # For coding, we need requirements and solution separately
+        # If not available, use task as description and result as solution
+        prompt = prompt_template.format(
+            task_description=task,
+            requirements="See task description",
+            solution=result,
+        )
+
+        try:
+            response = self.model_adapter.generate(prompt)
+            return self._parse_coding_ratings(response)
+        except Exception:
+            return {
+                "instruction_following": -1,
+                "executability": -1,
+                "consistency": -1,
+                "quality": -1,
+            }
+
+    def _evaluate_database(self, task: str, result: str) -> Dict[str, Any]:
+        """Evaluate database task output.
+
+        Database tasks have ground truth labels that would be compared
+        separately. Here we just store the prediction.
+        """
+        return {
+            "predicted": result,
+            "root_cause": [],  # Would be filled from task data
+        }
+
+    def _parse_score(self, response: str) -> float:
+        """Parse a single score from LLM response."""
+        try:
+            content = response.strip()
+
+            # Remove markdown code block markers
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+            # Find JSON object
+            json_start = content.find("{")
+            json_end = content.rfind("}") + 1
+
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                rating_data = json.loads(json_str)
+                if isinstance(rating_data, dict) and "rating" in rating_data:
+                    score = int(rating_data["rating"])
+                    if 1 <= score <= 5:
+                        return float(score)
+
+            # Fallback: find a single digit 1-5
+            numbers = re.findall(r"\b[1-5]\b", content)
+            if numbers:
+                return float(int(numbers[0]))
+
+            return 3.0  # Default middle score
+
+        except Exception:
+            return 3.0
+
+    def _parse_research_ratings(self, response: str) -> Dict[str, int]:
+        """Parse research evaluation ratings."""
+        try:
+            content = response.strip()
+            json_start = content.find("{")
+            json_end = content.rfind("}") + 1
+
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                ratings = json.loads(json_str)
+                return {k: int(v) for k, v in ratings.items()}
+        except Exception:
+            pass
+
+        return {"innovation": -1, "safety": -1, "feasibility": -1}
+
+    def _parse_bargaining_ratings(self, response: str) -> Dict[str, int]:
+        """Parse bargaining evaluation ratings."""
+        try:
+            content = response.strip()
+            json_start = content.find("{")
+            json_end = content.rfind("}") + 1
+
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                ratings = json.loads(json_str)
+                return {
+                    "effectiveness_of_strategies": int(ratings.get("effectiveness_of_strategies", -1)),
+                    "progress_and_outcome": int(ratings.get("progress_and_outcome", -1)),
+                    "interaction_dynamics": int(ratings.get("interaction_dynamics", -1)),
+                }
+        except Exception:
+            pass
+
+        return {
+            "effectiveness_of_strategies": -1,
+            "progress_and_outcome": -1,
+            "interaction_dynamics": -1,
+        }
+
+    def _parse_coding_ratings(self, response: str) -> Dict[str, int]:
+        """Parse coding evaluation ratings."""
+        try:
+            content = response.strip()
+            json_start = content.find("{")
+            json_end = content.rfind("}") + 1
+
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                ratings = json.loads(json_str)
+                return {
+                    "instruction_following": int(ratings.get("instruction_following", -1)),
+                    "executability": int(ratings.get("executability", -1)),
+                    "consistency": int(ratings.get("consistency", -1)),
+                    "quality": int(ratings.get("quality", -1)),
+                }
+        except Exception:
+            pass
+
+        return {
+            "instruction_following": -1,
+            "executability": -1,
+            "consistency": -1,
+            "quality": -1,
+        }
+
+    def _determine_completion(self, metrics: MultiAgentBenchMetrics) -> bool:
+        """Determine if task was completed based on metrics."""
+        eval_data = metrics.task_evaluation
+
+        if not eval_data:
+            return False
+
+        if self.domain == "research":
+            # Consider completed if all scores are positive
+            scores = [eval_data.get(k, -1) for k in ["innovation", "safety", "feasibility"]]
+            return all(s > 0 for s in scores)
+
+        elif self.domain in ("bargaining", "worldsimulation"):
+            # Check both buyer and seller have positive scores
+            buyer = eval_data.get("buyer", {})
+            seller = eval_data.get("seller", {})
+            buyer_scores = [buyer.get(k, -1) for k in ["effectiveness_of_strategies", "progress_and_outcome", "interaction_dynamics"]]
+            seller_scores = [seller.get(k, -1) for k in ["effectiveness_of_strategies", "progress_and_outcome", "interaction_dynamics"]]
+            return all(s > 0 for s in buyer_scores) and all(s > 0 for s in seller_scores)
+
+        elif self.domain == "coding":
+            # All coding metrics should be positive
+            scores = [eval_data.get(k, -1) for k in ["instruction_following", "executability", "consistency", "quality"]]
+            return all(s > 0 for s in scores)
+
+        elif self.domain == "database":
+            # Database completion is determined by comparing prediction to labels
+            # This requires external validation
+            return bool(eval_data.get("predicted"))
+
+        return False
