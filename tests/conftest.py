@@ -155,6 +155,172 @@ class FakeSmolagentsModel:
         return GenerationResult(text)
 
 
+# ==================== CAMEL Mock Helpers ====================
+
+
+class MockCamelMemory:
+    """Mock CAMEL memory that returns messages in OpenAI format.
+
+    Used for testing CAMEL integrations without requiring actual CAMEL agents.
+    Compatible with both contract tests and integration tests.
+    """
+
+    def __init__(self, messages=None):
+        self._messages = messages or []
+
+    def get_context(self):
+        """Return (messages, token_count) tuple like real CAMEL memory."""
+        return self._messages, len(self._messages) * 10
+
+    def add_message(self, msg):
+        self._messages.append(msg)
+
+
+class MockCamelResponse:
+    """Mock CAMEL ChatAgentResponse.
+
+    Simulates the response structure returned by CAMEL ChatAgent.step().
+    Supports both msgs list and singular msg attribute patterns.
+    """
+
+    def __init__(
+        self,
+        content="Test response",
+        terminated=False,
+        info=None,
+        use_msg=False,
+    ):
+        """Create a mock response.
+
+        Args:
+            content: Response content string
+            terminated: Whether the conversation should end
+            info: Optional info dict (can include usage, etc.)
+            use_msg: If True, use singular 'msg' instead of 'msgs' list
+        """
+        from unittest.mock import Mock
+
+        mock_msg = Mock()
+        mock_msg.content = content
+
+        if use_msg:
+            self.msgs = []
+            self.msg = mock_msg
+        else:
+            self.msgs = [mock_msg]
+            self.msg = mock_msg
+
+        self.terminated = terminated
+        self.info = info or {}
+
+
+class MockCamelAgent:
+    """Mock CAMEL ChatAgent for contract testing.
+
+    This class properly tracks messages in memory, which is required for
+    contract tests that verify message history behavior. Use this for
+    contract tests; use create_mock_camel_agent() for simpler unit tests.
+    """
+
+    def __init__(self, responses: Optional[List[str]] = None):
+        self.responses = responses or ["Test response"]
+        self.call_count = 0
+        self.memory = MockCamelMemory()
+        self.system_message = None
+        self.model = None
+        self.tools = None
+
+    def step(self, user_msg):
+        """Process a message and return a response."""
+        # Record user message in memory
+        if hasattr(user_msg, "content"):
+            content = user_msg.content
+        else:
+            content = str(user_msg)
+
+        self.memory.add_message({"role": "user", "content": content})
+
+        # Get response
+        response_content = self.responses[self.call_count % len(self.responses)]
+        self.call_count += 1
+
+        # Record assistant message in memory
+        self.memory.add_message({"role": "assistant", "content": response_content})
+
+        return MockCamelResponse(content=response_content)
+
+
+def create_mock_camel_agent(
+    responses=None,
+    memory_messages=None,
+    system_message=None,
+    model_type=None,
+    tools=None,
+    raise_on_step=None,
+):
+    """Create a mock CAMEL ChatAgent for testing.
+
+    Factory function that creates a Mock object simulating CAMEL ChatAgent
+    behavior. Unlike MockCamelAgent class, this does NOT track messages in
+    memory automatically - use MockCamelAgent for contract tests that need
+    message history tracking.
+
+    Args:
+        responses: List of response contents (cycles through)
+        memory_messages: Initial messages in memory
+        system_message: Optional system message content
+        model_type: Optional model type string
+        tools: Optional list of mock tools
+        raise_on_step: Exception to raise when step() is called
+
+    Returns:
+        Mock object simulating CAMEL ChatAgent
+    """
+    from unittest.mock import Mock
+
+    responses = responses or ["Test response"]
+    call_count = [0]  # Use list for mutable closure
+
+    mock_agent = Mock()
+
+    # Memory
+    mock_agent.memory = MockCamelMemory(memory_messages) if memory_messages else None
+
+    # System message
+    if system_message:
+        mock_sys_msg = Mock()
+        mock_sys_msg.content = system_message
+        mock_agent.system_message = mock_sys_msg
+    else:
+        mock_agent.system_message = None
+
+    # Model
+    if model_type:
+        mock_model = Mock()
+        mock_model.model_type = model_type
+        mock_agent.model = mock_model
+    else:
+        mock_agent.model = None
+
+    # Tools
+    if tools:
+        mock_agent.tools = tools
+    else:
+        mock_agent.tools = None
+
+    # Step method
+    def step_impl(user_msg):
+        if raise_on_step:
+            raise raise_on_step
+        response_content = responses[call_count[0] % len(responses)]
+        call_count[0] += 1
+        return MockCamelResponse(content=response_content)
+
+    mock_agent.step = Mock(side_effect=step_impl)
+
+    return mock_agent
+
+
 class DummyAgentAdapter(AgentAdapter):
     """Test agent adapter that populates message history."""
 

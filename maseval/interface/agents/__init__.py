@@ -40,13 +40,15 @@ try:
         CamelWorkforceTracer,
     )
 
-    __all__.extend([
-        "CamelAgentAdapter",
-        "CamelUser",
-        "CamelAgentUser",
-        "camel_role_playing_execution_loop",
-        "CamelRolePlayingTracer",
-        "CamelWorkforceTracer",
-    ])
+    __all__.extend(
+        [
+            "CamelAgentAdapter",
+            "CamelUser",
+            "CamelAgentUser",
+            "camel_role_playing_execution_loop",
+            "CamelRolePlayingTracer",
+            "CamelWorkforceTracer",
+        ]
+    )
 except ImportError:
     pass

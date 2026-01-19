@@ -5,12 +5,21 @@ Run with: pytest -m camel
 """
 
 import pytest
+from unittest.mock import Mock
+
+# Import shared CAMEL mocks from conftest
+from conftest import MockCamelMemory, MockCamelResponse, create_mock_camel_agent
 
 # Skip entire module if camel-ai not installed
 pytest.importorskip("camel")
 
 # Mark all tests in this file as requiring camel
 pytestmark = [pytest.mark.interface, pytest.mark.camel]
+
+
+# =============================================================================
+# Basic Import and Creation Tests
+# =============================================================================
 
 
 def test_camel_adapter_import():
@@ -70,19 +79,12 @@ def test_camel_user_creation():
 def test_camel_adapter_gather_traces_basic():
     """Test that CamelAgentAdapter.gather_traces() returns expected base fields."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    # Create a mock agent with memory
-    mock_agent = Mock()
-    mock_agent.memory = None  # No memory configured
-
-    # Create adapter
+    mock_agent = create_mock_camel_agent()
     agent_adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
-    # Call gather_traces
     traces = agent_adapter.gather_traces()
 
-    # Verify base fields are present
     assert "type" in traces
     assert "gathered_at" in traces
     assert "name" in traces
@@ -95,25 +97,16 @@ def test_camel_adapter_gather_traces_basic():
 def test_camel_adapter_gather_traces_with_response():
     """Test that gather_traces captures response metadata when available."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    # Create a mock agent
-    mock_agent = Mock()
-    mock_agent.memory = None
-
-    # Create adapter
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     # Simulate a response being cached
-    mock_response = Mock()
-    mock_response.terminated = True
-    mock_response.info = {"key": "value"}
+    mock_response = MockCamelResponse(content="Response", terminated=True, info={"key": "value"})
     adapter._last_response = mock_response
 
-    # Call gather_traces
     traces = adapter.gather_traces()
 
-    # Verify response metadata is captured
     assert "last_response_terminated" in traces
     assert traces["last_response_terminated"] is True
     assert "last_response_info" in traces
@@ -122,22 +115,12 @@ def test_camel_adapter_gather_traces_with_response():
 def test_camel_adapter_gather_config_basic():
     """Test that CamelAgentAdapter.gather_config() returns expected fields."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    # Create a mock agent
-    mock_agent = Mock()
-    mock_agent.memory = None
-    mock_agent.system_message = None
-    mock_agent.model = None
-    mock_agent.tools = None
-
-    # Create adapter
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
-    # Call gather_config
     config = adapter.gather_config()
 
-    # Verify base fields
     assert "type" in config
     assert "gathered_at" in config
     assert "name" in config
@@ -150,26 +133,12 @@ def test_camel_adapter_gather_config_basic():
 def test_camel_adapter_gather_config_with_system_message():
     """Test that gather_config captures system message."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    # Create a mock agent with system message
-    mock_agent = Mock()
-    mock_agent.memory = None
-    mock_agent.model = None
-    mock_agent.tools = None
-
-    # Mock system message as object with content
-    mock_sys_msg = Mock()
-    mock_sys_msg.content = "You are a helpful assistant."
-    mock_agent.system_message = mock_sys_msg
-
-    # Create adapter
+    mock_agent = create_mock_camel_agent(system_message="You are a helpful assistant.")
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
-    # Call gather_config
     config = adapter.gather_config()
 
-    # Verify camel_config includes system message
     assert "camel_config" in config
     assert "system_message" in config["camel_config"]
     assert config["camel_config"]["system_message"] == "You are a helpful assistant."
@@ -178,7 +147,6 @@ def test_camel_adapter_gather_config_with_system_message():
 def test_camel_adapter_gather_config_with_tools():
     """Test that gather_config captures tool information."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
     # Create mock tools
     mock_tool1 = Mock()
@@ -189,20 +157,11 @@ def test_camel_adapter_gather_config_with_tools():
     mock_tool2.name = "calculator"
     mock_tool2.description = "Perform calculations"
 
-    # Create a mock agent with tools
-    mock_agent = Mock()
-    mock_agent.memory = None
-    mock_agent.system_message = None
-    mock_agent.model = None
-    mock_agent.tools = [mock_tool1, mock_tool2]
-
-    # Create adapter
+    mock_agent = create_mock_camel_agent(tools=[mock_tool1, mock_tool2])
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
-    # Call gather_config
     config = adapter.gather_config()
 
-    # Verify tools are captured
     assert "camel_config" in config
     assert "tools" in config["camel_config"]
     assert len(config["camel_config"]["tools"]) == 2
@@ -214,19 +173,12 @@ def test_camel_adapter_get_messages_empty():
     """Test that get_messages returns empty MessageHistory when no messages."""
     from maseval.interface.agents.camel import CamelAgentAdapter
     from maseval.core.history import MessageHistory
-    from unittest.mock import Mock
 
-    # Create a mock agent with no memory
-    mock_agent = Mock()
-    mock_agent.memory = None
-
-    # Create adapter
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
-    # Get messages
     messages = adapter.get_messages()
 
-    # Verify it's a MessageHistory (possibly empty)
     assert isinstance(messages, MessageHistory)
     assert len(messages) == 0
 
@@ -235,30 +187,18 @@ def test_camel_adapter_get_messages_with_memory():
     """Test that get_messages correctly converts memory messages."""
     from maseval.interface.agents.camel import CamelAgentAdapter
     from maseval.core.history import MessageHistory
-    from unittest.mock import Mock
 
-    # Create mock memory with messages
-    mock_memory = Mock()
-    mock_memory.get_context.return_value = (
-        [
-            {"role": "system", "content": "You are helpful."},
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"},
-        ],
-        50,  # token count
-    )
+    memory_messages = [
+        {"role": "system", "content": "You are helpful."},
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there!"},
+    ]
 
-    # Create a mock agent with memory
-    mock_agent = Mock()
-    mock_agent.memory = mock_memory
-
-    # Create adapter
+    mock_agent = create_mock_camel_agent(memory_messages=memory_messages)
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
-    # Get messages
     messages = adapter.get_messages()
 
-    # Verify messages are converted
     assert isinstance(messages, MessageHistory)
     assert len(messages) == 3
     assert messages[0]["role"] == "system"
@@ -272,11 +212,8 @@ def test_camel_adapter_get_messages_with_memory():
 def test_camel_adapter_logs_initially_empty():
     """Test that adapter logs are initially empty."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
-    mock_agent.memory = None
-
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     assert isinstance(adapter.logs, list)
@@ -311,56 +248,34 @@ def test_camel_user_get_tool():
 def test_camel_adapter_extract_final_answer():
     """Test that _extract_final_answer correctly extracts content from response."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
-    mock_agent.memory = None
-
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
-    # Create mock response with msgs
-    mock_msg = Mock()
-    mock_msg.content = "This is the answer"
-
-    mock_response = Mock()
-    mock_response.msgs = [mock_msg]
-
-    # Test extraction
+    mock_response = MockCamelResponse(content="This is the answer")
     answer = adapter._extract_final_answer(mock_response)
+
     assert answer == "This is the answer"
 
 
 def test_camel_adapter_extract_final_answer_from_msg():
     """Test extraction when response has msg instead of msgs."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
-    mock_agent.memory = None
-
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
-    # Create mock response with singular msg
-    mock_msg = Mock()
-    mock_msg.content = "Single message answer"
-
-    mock_response = Mock()
-    mock_response.msgs = []  # Empty msgs
-    mock_response.msg = mock_msg
-
-    # Test extraction
+    mock_response = MockCamelResponse(content="Single message answer", use_msg=True)
     answer = adapter._extract_final_answer(mock_response)
+
     assert answer == "Single message answer"
 
 
 def test_camel_adapter_convert_memory_messages_with_tool_calls():
     """Test that tool-related fields are preserved during conversion."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
-    mock_agent.memory = None
-
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     # Messages with tool calls
@@ -407,9 +322,8 @@ def test_camel_agent_user_creation():
     """Test CamelAgentUser creation with a mock agent."""
     from maseval.interface.agents.camel import CamelAgentUser
     from maseval.core.user import User
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
+    mock_agent = create_mock_camel_agent()
 
     user = CamelAgentUser(
         user_agent=mock_agent,
@@ -427,9 +341,8 @@ def test_camel_agent_user_creation():
 def test_camel_agent_user_get_initial_query():
     """Test CamelAgentUser.get_initial_query() returns the initial query."""
     from maseval.interface.agents.camel import CamelAgentUser
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
+    mock_agent = create_mock_camel_agent()
     user = CamelAgentUser(
         user_agent=mock_agent,
         initial_query="Test initial query",
@@ -441,9 +354,8 @@ def test_camel_agent_user_get_initial_query():
 def test_camel_agent_user_is_done():
     """Test CamelAgentUser.is_done() respects max_turns."""
     from maseval.interface.agents.camel import CamelAgentUser
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
+    mock_agent = create_mock_camel_agent()
     user = CamelAgentUser(
         user_agent=mock_agent,
         initial_query="Hello",
@@ -462,17 +374,8 @@ def test_camel_agent_user_is_done():
 def test_camel_agent_user_respond():
     """Test CamelAgentUser.respond() delegates to the CAMEL agent."""
     from maseval.interface.agents.camel import CamelAgentUser
-    from unittest.mock import Mock
 
-    # Create mock agent with response
-    mock_msg = Mock()
-    mock_msg.content = "Agent response"
-
-    mock_response = Mock()
-    mock_response.msgs = [mock_msg]
-
-    mock_agent = Mock()
-    mock_agent.step.return_value = mock_response
+    mock_agent = create_mock_camel_agent(responses=["Agent response"])
 
     user = CamelAgentUser(
         user_agent=mock_agent,
@@ -490,9 +393,8 @@ def test_camel_agent_user_respond():
 def test_camel_agent_user_respond_when_done():
     """Test CamelAgentUser.respond() returns empty string when done."""
     from maseval.interface.agents.camel import CamelAgentUser
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
+    mock_agent = create_mock_camel_agent()
     user = CamelAgentUser(
         user_agent=mock_agent,
         initial_query="Hello",
@@ -512,9 +414,8 @@ def test_camel_agent_user_get_tool():
     """Test CamelAgentUser.get_tool() returns a FunctionTool."""
     from maseval.interface.agents.camel import CamelAgentUser
     from camel.toolkits import FunctionTool
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
+    mock_agent = create_mock_camel_agent()
     user = CamelAgentUser(
         user_agent=mock_agent,
         initial_query="Hello",
@@ -528,9 +429,8 @@ def test_camel_agent_user_get_tool():
 def test_camel_agent_user_gather_traces():
     """Test CamelAgentUser.gather_traces() returns expected fields."""
     from maseval.interface.agents.camel import CamelAgentUser
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
+    mock_agent = create_mock_camel_agent()
     mock_agent.__class__.__name__ = "MockChatAgent"
 
     user = CamelAgentUser(
@@ -553,9 +453,8 @@ def test_camel_agent_user_gather_traces():
 def test_camel_agent_user_gather_config():
     """Test CamelAgentUser.gather_config() returns expected fields."""
     from maseval.interface.agents.camel import CamelAgentUser
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
+    mock_agent = create_mock_camel_agent()
     mock_agent.__class__.__name__ = "MockChatAgent"
 
     user = CamelAgentUser(
@@ -595,30 +494,16 @@ def test_execution_loop_in_all():
 def test_execution_loop_basic():
     """Test camel_role_playing_execution_loop with mock RolePlaying."""
     from maseval.interface.agents.camel import camel_role_playing_execution_loop
-    from unittest.mock import Mock
 
-    # Create mock responses
-    mock_msg = Mock()
-    mock_msg.content = "Final answer"
+    mock_assistant_response = MockCamelResponse(content="Final answer", terminated=True)
+    mock_user_response = MockCamelResponse(terminated=False)
 
-    mock_assistant_response = Mock()
-    mock_assistant_response.msgs = [mock_msg]
-    mock_assistant_response.terminated = True
-
-    mock_user_response = Mock()
-    mock_user_response.terminated = False
-
-    # Create mock RolePlaying
     mock_role_playing = Mock()
     mock_role_playing.step.return_value = (mock_assistant_response, mock_user_response)
 
-    # Create mock task
-    mock_task = Mock()
-
-    # Execute
     result = camel_role_playing_execution_loop(
         mock_role_playing,
-        mock_task,
+        Mock(),
         max_steps=5,
     )
 
@@ -629,27 +514,15 @@ def test_execution_loop_basic():
 def test_execution_loop_with_tracer():
     """Test camel_role_playing_execution_loop records steps in tracer."""
     from maseval.interface.agents.camel import camel_role_playing_execution_loop, CamelRolePlayingTracer
-    from unittest.mock import Mock
 
-    # Create mock responses
-    mock_msg = Mock()
-    mock_msg.content = "Answer"
+    mock_assistant_response = MockCamelResponse(content="Answer", terminated=True)
+    mock_user_response = MockCamelResponse(terminated=False)
 
-    mock_assistant_response = Mock()
-    mock_assistant_response.msgs = [mock_msg]
-    mock_assistant_response.terminated = True
-
-    mock_user_response = Mock()
-    mock_user_response.terminated = False
-
-    # Create mock RolePlaying
     mock_role_playing = Mock()
     mock_role_playing.step.return_value = (mock_assistant_response, mock_user_response)
 
-    # Create tracer
     tracer = CamelRolePlayingTracer(mock_role_playing, name="test_tracer")
 
-    # Execute with tracer
     camel_role_playing_execution_loop(
         mock_role_playing,
         Mock(),
@@ -657,7 +530,6 @@ def test_execution_loop_with_tracer():
         tracer=tracer,
     )
 
-    # Verify tracer recorded the step
     assert tracer._step_count == 1
     assert tracer._termination_reason == "assistant_terminated"
 
@@ -665,30 +537,19 @@ def test_execution_loop_with_tracer():
 def test_execution_loop_max_steps():
     """Test camel_role_playing_execution_loop respects max_steps."""
     from maseval.interface.agents.camel import camel_role_playing_execution_loop
-    from unittest.mock import Mock
 
-    # Create mock responses that never terminate
-    mock_msg = Mock()
-    mock_msg.content = "Non-terminal answer"
-
-    mock_assistant_response = Mock()
-    mock_assistant_response.msgs = [mock_msg]
-    mock_assistant_response.terminated = False
-
-    mock_user_response = Mock()
-    mock_user_response.terminated = False
+    mock_assistant_response = MockCamelResponse(content="Non-terminal answer", terminated=False)
+    mock_user_response = MockCamelResponse(terminated=False)
 
     mock_role_playing = Mock()
     mock_role_playing.step.return_value = (mock_assistant_response, mock_user_response)
 
-    # Execute with max_steps=3
     camel_role_playing_execution_loop(
         mock_role_playing,
         Mock(),
         max_steps=3,
     )
 
-    # Should have executed exactly 3 steps
     assert mock_role_playing.step.call_count == 3
 
 
@@ -727,27 +588,22 @@ def test_role_playing_tracer_creation():
 def test_role_playing_tracer_record_step():
     """Test CamelRolePlayingTracer.record_step() tracks progress."""
     from maseval.interface.agents.camel import CamelRolePlayingTracer
-    from unittest.mock import Mock
 
     mock_role_playing = Mock()
     tracer = CamelRolePlayingTracer(mock_role_playing)
 
     # Create mock responses
-    mock_assistant = Mock()
-    mock_assistant.terminated = False
+    mock_assistant = MockCamelResponse(terminated=False)
+    mock_user = MockCamelResponse(terminated=False)
 
-    mock_user = Mock()
-    mock_user.terminated = False
-
-    # Record a step
     tracer.record_step(mock_assistant, mock_user)
 
     assert tracer._step_count == 1
     assert tracer._termination_reason is None
 
     # Record another step with termination
-    mock_assistant.terminated = True
-    tracer.record_step(mock_assistant, mock_user)
+    mock_assistant_terminated = MockCamelResponse(terminated=True)
+    tracer.record_step(mock_assistant_terminated, mock_user)
 
     assert tracer._step_count == 2
     assert tracer._termination_reason == "assistant_terminated"
@@ -756,14 +612,11 @@ def test_role_playing_tracer_record_step():
 def test_role_playing_tracer_gather_traces():
     """Test CamelRolePlayingTracer.gather_traces() returns expected fields."""
     from maseval.interface.agents.camel import CamelRolePlayingTracer
-    from unittest.mock import Mock
 
     mock_role_playing = Mock()
     tracer = CamelRolePlayingTracer(mock_role_playing, name="test_tracer")
 
-    # Record some steps
-    mock_response = Mock()
-    mock_response.terminated = False
+    mock_response = MockCamelResponse(terminated=False)
     tracer.record_step(mock_response, mock_response)
     tracer.record_step(mock_response, mock_response)
 
@@ -909,19 +762,14 @@ def test_workforce_tracer_extract_completed_tasks():
 def test_camel_adapter_run_agent_error_handling():
     """Test CamelAgentAdapter._run_agent() error handling path."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
     import pytest
 
-    mock_agent = Mock()
-    mock_agent.memory = None
-    mock_agent.step.side_effect = RuntimeError("Agent execution failed")
-
+    mock_agent = create_mock_camel_agent(raise_on_step=RuntimeError("Agent execution failed"))
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     with pytest.raises(RuntimeError, match="Agent execution failed"):
         adapter.run("Test query")
 
-    # Verify error was logged
     assert len(adapter.logs) == 1
     assert adapter.logs[0]["status"] == "error"
     assert "Agent execution failed" in adapter.logs[0]["error"]
@@ -931,31 +779,25 @@ def test_camel_adapter_run_agent_error_handling():
 def test_camel_adapter_run_agent_with_token_usage():
     """Test CamelAgentAdapter._run_agent() captures token usage from response info."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    # Create mock response with token usage info
-    mock_msg = Mock()
-    mock_msg.content = "Test response"
-
-    mock_response = Mock()
-    mock_response.msgs = [mock_msg]
-    mock_response.terminated = False
-    mock_response.info = {
+    # Create mock agent with custom response handling for token usage
+    usage_info = {
         "usage": {
             "prompt_tokens": 10,
             "completion_tokens": 20,
             "total_tokens": 30,
         }
     }
+    mock_response = MockCamelResponse(content="Test response", terminated=False, info=usage_info)
 
+    # Create agent without side_effect, then set return_value directly
     mock_agent = Mock()
     mock_agent.memory = None
-    mock_agent.step.return_value = mock_response
+    mock_agent.step = Mock(return_value=mock_response)
 
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
     adapter.run("Test query")
 
-    # Verify token usage was logged
     assert len(adapter.logs) == 1
     assert adapter.logs[0]["input_tokens"] == 10
     assert adapter.logs[0]["output_tokens"] == 20
@@ -965,11 +807,8 @@ def test_camel_adapter_run_agent_with_token_usage():
 def test_camel_adapter_convert_base_message():
     """Test CamelAgentAdapter._convert_base_message() with BaseMessage objects."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
-    mock_agent.memory = None
-
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     # Test with role_type having value attribute
@@ -1005,11 +844,8 @@ def test_camel_adapter_convert_base_message():
 def test_camel_adapter_convert_memory_messages_with_base_message():
     """Test _convert_memory_messages handles BaseMessage objects."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
-    mock_agent.memory = None
-
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     # Create a BaseMessage-like object (not a dict)
@@ -1035,11 +871,8 @@ def test_camel_adapter_convert_memory_messages_with_base_message():
 def test_camel_adapter_gather_traces_with_non_serializable_info():
     """Test gather_traces handles non-serializable response info."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    mock_agent = Mock()
-    mock_agent.memory = None
-
+    mock_agent = create_mock_camel_agent()
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     # Create a response with non-serializable info
@@ -1053,7 +886,6 @@ def test_camel_adapter_gather_traces_with_non_serializable_info():
 
     traces = adapter.gather_traces()
 
-    # Should fall back to string representation
     assert "last_response_info" in traces
     assert "last_response_terminated" in traces
     assert traces["last_response_terminated"] is True
@@ -1062,17 +894,15 @@ def test_camel_adapter_gather_traces_with_non_serializable_info():
 def test_camel_adapter_get_messages_memory_access_failure():
     """Test get_messages handles memory access failure gracefully."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    mock_memory = Mock()
-    mock_memory.get_context.side_effect = Exception("Memory access failed")
+    mock_memory = MockCamelMemory()
+    mock_memory.get_context = Mock(side_effect=Exception("Memory access failed"))  # type: ignore[method-assign]
 
-    mock_agent = Mock()
+    mock_agent = create_mock_camel_agent()
     mock_agent.memory = mock_memory
 
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
-    # Should not raise, returns empty history
     messages = adapter.get_messages()
     assert len(messages) == 0
 
@@ -1080,18 +910,8 @@ def test_camel_adapter_get_messages_memory_access_failure():
 def test_camel_adapter_gather_config_with_model():
     """Test gather_config captures model information."""
     from maseval.interface.agents.camel import CamelAgentAdapter
-    from unittest.mock import Mock
 
-    mock_model = Mock()
-    mock_model.model_type = "gpt-4"
-    mock_model.__class__.__name__ = "OpenAIModel"
-
-    mock_agent = Mock()
-    mock_agent.memory = None
-    mock_agent.system_message = None
-    mock_agent.model = mock_model
-    mock_agent.tools = None
-
+    mock_agent = create_mock_camel_agent(model_type="gpt-4")
     adapter = CamelAgentAdapter(agent_instance=mock_agent, name="test_agent")
 
     config = adapter.gather_config()
@@ -1126,11 +946,9 @@ def test_camel_user_get_tool_invocation():
 def test_camel_agent_user_respond_error_handling():
     """Test CamelAgentUser.respond() error handling."""
     from maseval.interface.agents.camel import CamelAgentUser
-    from unittest.mock import Mock
     import pytest
 
-    mock_agent = Mock()
-    mock_agent.step.side_effect = RuntimeError("Agent failed")
+    mock_agent = create_mock_camel_agent(raise_on_step=RuntimeError("Agent failed"))
 
     user = CamelAgentUser(
         user_agent=mock_agent,
@@ -1141,7 +959,6 @@ def test_camel_agent_user_respond_error_handling():
     with pytest.raises(RuntimeError, match="Agent failed"):
         user.respond("Question?")
 
-    # Verify error was logged
     assert len(user.logs) == 1
     assert user.logs[0]["status"] == "error"
     assert "Agent failed" in user.logs[0]["error"]
@@ -1150,18 +967,12 @@ def test_camel_agent_user_respond_error_handling():
 def test_camel_agent_user_respond_with_msg_not_msgs():
     """Test CamelAgentUser.respond() handles response.msg (singular) attribute."""
     from maseval.interface.agents.camel import CamelAgentUser
-    from unittest.mock import Mock
 
-    # Response with msg instead of msgs
-    mock_msg = Mock()
-    mock_msg.content = "Response from msg"
+    mock_response = MockCamelResponse(content="Response from msg", use_msg=True)
 
-    mock_response = Mock()
-    mock_response.msgs = []  # Empty msgs
-    mock_response.msg = mock_msg  # But has singular msg
-
+    # Create agent without side_effect to allow direct return_value
     mock_agent = Mock()
-    mock_agent.step.return_value = mock_response
+    mock_agent.step = Mock(return_value=mock_response)
 
     user = CamelAgentUser(
         user_agent=mock_agent,
@@ -1176,7 +987,6 @@ def test_camel_agent_user_respond_with_msg_not_msgs():
 def test_camel_agent_user_respond_fallback_to_str():
     """Test CamelAgentUser.respond() falls back to str() for unknown response format."""
     from maseval.interface.agents.camel import CamelAgentUser
-    from unittest.mock import Mock
 
     # Response with neither msgs nor msg
     mock_response = Mock()
@@ -1184,8 +994,9 @@ def test_camel_agent_user_respond_fallback_to_str():
     mock_response.msg = None
     mock_response.__str__ = Mock(return_value="Fallback string response")
 
+    # Create agent without side_effect to allow direct return_value
     mock_agent = Mock()
-    mock_agent.step.return_value = mock_response
+    mock_agent.step = Mock(return_value=mock_response)
 
     user = CamelAgentUser(
         user_agent=mock_agent,
@@ -1200,19 +1011,9 @@ def test_camel_agent_user_respond_fallback_to_str():
 def test_execution_loop_with_msg_attribute():
     """Test camel_role_playing_execution_loop handles response.msg (singular)."""
     from maseval.interface.agents.camel import camel_role_playing_execution_loop
-    from unittest.mock import Mock
 
-    # Response with msg instead of msgs
-    mock_msg = Mock()
-    mock_msg.content = "Answer from msg"
-
-    mock_assistant_response = Mock()
-    mock_assistant_response.msgs = []  # Empty
-    mock_assistant_response.msg = mock_msg  # But has singular msg
-    mock_assistant_response.terminated = True
-
-    mock_user_response = Mock()
-    mock_user_response.terminated = False
+    mock_assistant_response = MockCamelResponse(content="Answer from msg", use_msg=True, terminated=True)
+    mock_user_response = MockCamelResponse(terminated=False)
 
     mock_role_playing = Mock()
     mock_role_playing.step.return_value = (mock_assistant_response, mock_user_response)
@@ -1229,44 +1030,34 @@ def test_execution_loop_with_msg_attribute():
 def test_execution_loop_calls_init_chat():
     """Test camel_role_playing_execution_loop calls init_chat if available."""
     from maseval.interface.agents.camel import camel_role_playing_execution_loop
-    from unittest.mock import Mock
 
-    mock_msg = Mock()
-    mock_msg.content = "Response"
-
-    mock_response = Mock()
-    mock_response.msgs = [mock_msg]
-    mock_response.terminated = True
+    mock_response = MockCamelResponse(content="Response", terminated=True)
 
     mock_role_playing = Mock()
     mock_role_playing.step.return_value = (mock_response, mock_response)
 
     camel_role_playing_execution_loop(mock_role_playing, Mock())
 
-    # Verify init_chat was called
     mock_role_playing.init_chat.assert_called_once()
 
 
 def test_role_playing_tracer_user_termination():
     """Test CamelRolePlayingTracer records user termination."""
     from maseval.interface.agents.camel import CamelRolePlayingTracer
-    from unittest.mock import Mock
 
     mock_role_playing = Mock()
     tracer = CamelRolePlayingTracer(mock_role_playing)
 
     # First step: neither terminates
-    mock_assistant = Mock()
-    mock_assistant.terminated = False
-    mock_user = Mock()
-    mock_user.terminated = False
+    mock_assistant = MockCamelResponse(terminated=False)
+    mock_user = MockCamelResponse(terminated=False)
     tracer.record_step(mock_assistant, mock_user)
 
     assert tracer._termination_reason is None
 
     # Second step: user terminates
-    mock_user.terminated = True
-    tracer.record_step(mock_assistant, mock_user)
+    mock_user_terminated = MockCamelResponse(terminated=True)
+    tracer.record_step(mock_assistant, mock_user_terminated)
 
     assert tracer._termination_reason == "user_terminated"
 

@@ -30,7 +30,7 @@ swap between agent frameworks.
 import pytest
 from typing import List, Optional
 from maseval.core.callback import AgentCallback
-from conftest import DummyAgent, DummyAgentAdapter, FakeSmolagentsModel
+from conftest import DummyAgent, DummyAgentAdapter, FakeSmolagentsModel, MockCamelAgent
 
 # Mark all tests as contract + interface (requires optional dependencies)
 pytestmark = [pytest.mark.contract, pytest.mark.interface]
@@ -176,60 +176,7 @@ def create_agent_for_framework(framework: str, mock_llm: MockLLM):
 
     elif framework == "camel":
         pytest.importorskip("camel")
-        # Create a mock CAMEL ChatAgent for contract testing
-        from unittest.mock import Mock
-
-        class MockCamelMemory:
-            """Mock memory that returns messages in CAMEL format."""
-
-            def __init__(self):
-                self._messages = []
-
-            def get_context(self):
-                return self._messages, len(self._messages) * 10
-
-            def add_message(self, msg):
-                self._messages.append(msg)
-
-        class MockCamelResponse:
-            """Mock ChatAgentResponse."""
-
-            def __init__(self, content: str):
-                self.msgs = [Mock(content=content)]
-                self.msg = Mock(content=content)
-                self.terminated = False
-                self.info = {}
-
-        class MockCamelAgent:
-            """Mock CAMEL ChatAgent for contract testing."""
-
-            def __init__(self, responses: List[str]):
-                self.responses = responses
-                self.call_count = 0
-                self.memory = MockCamelMemory()
-                self.system_message = None
-                self.model = None
-                self.tools = None
-
-            def step(self, user_msg):
-                """Process a message and return a response."""
-                # Record user message in memory
-                if hasattr(user_msg, "content"):
-                    content = user_msg.content
-                else:
-                    content = str(user_msg)
-
-                self.memory.add_message({"role": "user", "content": content})
-
-                # Get response
-                response_content = self.responses[self.call_count % len(self.responses)]
-                self.call_count += 1
-
-                # Record assistant message in memory
-                self.memory.add_message({"role": "assistant", "content": response_content})
-
-                return MockCamelResponse(response_content)
-
+        # Use shared MockCamelAgent from conftest
         return MockCamelAgent(mock_llm.responses)
 
     else:
