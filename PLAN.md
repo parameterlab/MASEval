@@ -146,75 +146,11 @@ Basic CAMEL-AI integration supporting the core `ChatAgent` class. Implementation
 
 ---
 
-## Phase 2: Multi-Agent Integration Options
+## Phase 2: Multi-Agent Support
 
-### Option A: Agent Extraction (Documentation Only)
+Phase 2 consists of incremental improvements that build on each other. Core library changes come first, followed by interface-specific implementations.
 
-**Approach**: Document how users can extract individual `ChatAgent` instances from RolePlaying/OWL/Workforce and wrap them with existing `CamelAgentAdapter`.
-
-**Pattern for RolePlaying/OWL**:
-```python
-from camel.societies import RolePlaying
-from maseval.interface.agents.camel import CamelAgentAdapter
-
-class MyBenchmark(Benchmark):
-    def setup_agents(self, agent_data, environment, task, user):
-        # Create RolePlaying
-        role_playing = RolePlaying(
-            assistant_role_name="Assistant",
-            user_role_name="User",
-            task_prompt=task.query,
-        )
-
-        # Extract and wrap the assistant agent
-        assistant_adapter = CamelAgentAdapter(
-            role_playing.assistant_agent,
-            name="camel_assistant"
-        )
-
-        return [assistant_adapter], {"assistant": assistant_adapter}
-```
-
-**Pattern for Workforce**:
-```python
-from camel.societies.workforce import Workforce
-from maseval.interface.agents.camel import CamelAgentAdapter
-
-class MyBenchmark(Benchmark):
-    def setup_agents(self, agent_data, environment, task, user):
-        # Create Workforce
-        workforce = Workforce(...)
-        self._workforce = workforce  # Store for run_agents
-
-        # Extract and wrap individual workers for tracing
-        worker_adapters = {}
-        for worker in workforce._children:
-            adapter = CamelAgentAdapter(worker.agent, name=worker.name)
-            worker_adapters[worker.name] = adapter
-
-        # Return empty agents_to_run (we'll run Workforce directly)
-        return [], worker_adapters
-
-    def run_agents(self, agents, task, environment, query):
-        # Run Workforce (handles internal orchestration)
-        result = self._workforce.process(query)
-        return result
-```
-
-**Pros**:
-- No new code needed in MASEval
-- Clean separation: MASEval evaluates, CAMEL orchestrates agent collaboration
-- Works for RolePlaying, OWL, and Workforce
-
-**Cons**:
-- Users must understand CAMEL internals
-- Workforce orchestration state (task decomposition, assignments) not automatically traced
-
-**Effort**: Low (documentation only)
-
----
-
-### Option B: BaseUser Abstraction
+### 2.1 BaseUser Abstraction (Core Library)
 
 **Motivation**: The current `maseval.User` forces LLM simulation via `UserLLMSimulator`. This is too restrictive for:
 - Using a smolagents agent as user
@@ -222,8 +158,6 @@ class MyBenchmark(Benchmark):
 - Connecting user to an MCP server
 - Scripted/deterministic users for testing
 - Human-in-the-loop scenarios
-
-**Approach**: Refactor `maseval.User` into an abstract `BaseUser` and concrete implementations.
 
 **Core changes** (in `maseval/core/user.py`):
 ```python
@@ -257,8 +191,30 @@ class SimulatedUser(BaseUser):
     # ... current implementation
 ```
 
-**Interface additions** (in `maseval/interface/agents/camel.py`):
+**Benefits**:
+- Follows MASEval's "Abstract Base Classes" principle
+- Enables any agent implementation as user (CAMEL, smolagents, LangGraph, MCP, etc.)
+- Library-wide improvement, not CAMEL-specific
+
+**Effort**: Medium (core refactor, but library is early-release)
+
+**Files to change**:
+- `maseval/core/user.py` - Split `User` → `BaseUser` + `SimulatedUser`
+- `maseval/core/__init__.py` - Export `BaseUser`, `SimulatedUser`
+- `maseval/core/benchmark.py` - Update type hints to use `BaseUser`
+- `tests/test_core/test_user.py` - Update tests for new structure
+
+---
+
+### 2.2 CAMEL Interface: CamelAgentUser
+
+**Depends on**: 2.1 (BaseUser abstraction)
+
+Once `BaseUser` exists, add CAMEL-specific implementation:
+
 ```python
+# In maseval/interface/agents/camel.py
+
 class CamelAgentUser(BaseUser):
     """User backed by a CAMEL ChatAgent."""
 
@@ -284,23 +240,129 @@ class CamelAgentUser(BaseUser):
         return FunctionTool(self.simulate_response)
 ```
 
-**Benefits**:
-- Follows MASEval's "Abstract Base Classes" principle
-- Enables any agent implementation as user (CAMEL, smolagents, LangGraph, MCP, etc.)
-- Library-wide improvement, not CAMEL-specific
-
-**Effort**: Medium (core refactor, but library is early-release)
+**Use case**: Using RolePlaying's `user_agent` as the user in MASEval's execution loop.
 
 ---
 
-### Option C: Custom execution_loop Override
+### 2.3 Documentation: Using Workforce/RolePlaying with MASEval
+
+**Location**: TBD (possibly `docs/interface/agents/camel.md` or a dedicated guide)
+
+Document how developers can use CAMEL's multi-agent orchestrators with MASEval by extracting individual agents for tracing.
+
+**Pattern for Workforce**:
+```python
+from camel.societies.workforce import Workforce
+from maseval.interface.agents.camel import CamelAgentAdapter
+
+class MyBenchmark(Benchmark):
+    def setup_agents(self, agent_data, environment, task, user):
+        # Create Workforce
+        workforce = Workforce(...)
+        self._workforce = workforce  # Store for run_agents
+
+        # Extract and wrap individual workers for tracing
+        worker_adapters = {}
+        for worker in workforce._children:
+            adapter = CamelAgentAdapter(worker.agent, name=worker.name)
+            worker_adapters[worker.name] = adapter
+
+        # Return empty agents_to_run (we'll run Workforce directly)
+        return [], worker_adapters
+
+    def run_agents(self, agents, task, environment, query):
+        # Run Workforce (handles internal orchestration)
+        result = self._workforce.process(query)
+        return result
+```
+
+**Pattern for RolePlaying**:
+```python
+from camel.societies import RolePlaying
+from maseval.interface.agents.camel import CamelAgentAdapter
+
+class MyBenchmark(Benchmark):
+    def setup_agents(self, agent_data, environment, task, user):
+        # Create RolePlaying
+        role_playing = RolePlaying(
+            assistant_role_name="Assistant",
+            user_role_name="User",
+            task_prompt=task.query,
+        )
+
+        # Extract and wrap the assistant agent
+        assistant_adapter = CamelAgentAdapter(
+            role_playing.assistant_agent,
+            name="camel_assistant"
+        )
+
+        return [assistant_adapter], {"assistant": assistant_adapter}
+```
+
+**Key points to document**:
+- MASEval evaluates, CAMEL orchestrates agent collaboration - they're complementary
+- Individual agent messages are traced via `CamelAgentAdapter`
+- Orchestration state (task decomposition, assignments) requires additional tracers (see 2.5)
+
+---
+
+### 2.4 CAMEL Interface: Prefixed Execution Loop
 
 **Context**: The `execution_loop` method is **designed to be overridden**. From the docstring:
 
 > *"Override this method in your benchmark subclass to implement custom interaction patterns (e.g., agent-initiated conversations, different termination conditions, or specialized query routing)."*
 
-**Approach**: Users can override `execution_loop` to use RolePlaying's `step()` semantics:
+Provide a reusable execution loop function for RolePlaying semantics:
 
+```python
+# In maseval/interface/agents/camel.py
+
+def camel_role_playing_execution_loop(
+    benchmark: Benchmark,
+    role_playing: RolePlaying,
+    agents: Sequence[AgentAdapter],
+    task: Task,
+    environment: Environment,
+    user: Optional[BaseUser],
+    max_steps: int = 10,
+) -> Any:
+    """Execution loop using CAMEL RolePlaying's step() semantics.
+
+    Use this in your benchmark's execution_loop override:
+
+        def execution_loop(self, agents, task, environment, user):
+            return camel_role_playing_execution_loop(
+                self, self._role_playing, agents, task, environment, user
+            )
+
+    Args:
+        benchmark: The benchmark instance (for max_invocations, callbacks, etc.)
+        role_playing: The CAMEL RolePlaying instance
+        agents: Agent adapters (for tracing, not execution)
+        task: Current task
+        environment: Current environment
+        user: Optional user (ignored - RolePlaying uses its own user_agent)
+        max_steps: Maximum RolePlaying steps
+
+    Returns:
+        Final answer from the assistant agent
+    """
+    role_playing.init_chat()
+
+    final_answer = None
+    for _ in range(max_steps):
+        assistant_response, user_response = role_playing.step()
+
+        if assistant_response.msgs:
+            final_answer = assistant_response.msgs[-1].content
+
+        if assistant_response.terminated or user_response.terminated:
+            break
+
+    return final_answer
+```
+
+**Usage**:
 ```python
 class CamelRolePlayingBenchmark(Benchmark):
     def setup_agents(self, agent_data, environment, task, user):
@@ -317,44 +379,23 @@ class CamelRolePlayingBenchmark(Benchmark):
         return [assistant], {"assistant": assistant, "user_agent": user_agent}
 
     def execution_loop(self, agents, task, environment, user):
-        """Use RolePlaying's step() instead of default agent-user loop."""
-        self._role_playing.init_chat()
-
-        final_answer = None
-        for _ in range(self.max_invocations):
-            assistant_response, user_response = self._role_playing.step()
-
-            if assistant_response.msgs:
-                final_answer = assistant_response.msgs[-1].content
-
-            if assistant_response.terminated or user_response.terminated:
-                break
-
-        return final_answer
+        return camel_role_playing_execution_loop(
+            self, self._role_playing, agents, task, environment, user
+        )
 ```
 
-**Use case**: When you want RolePlaying's exact interaction semantics (CAMEL's `user_agent` drives the conversation) rather than MASEval's `maseval.User`.
-
-**Pros**:
-- Uses existing extension point
-- Full control over interaction pattern
+**Benefits**:
+- Reusable - developers don't need to write the loop themselves
+- Consistent behavior across CAMEL-based benchmarks
 - Both agents traced via adapters
-
-**Cons**:
-- More code for users to write
-- Bypasses `maseval.User` entirely
-
-**Effort**: Low (documentation + example)
 
 ---
 
-### Option D: Trace Wrappers for Orchestration State
+### 2.5 CAMEL Interface: Orchestration Tracers
 
-**Motivation**: RolePlaying and Workforce maintain orchestration state that individual agent traces don't capture. Users may want to include this state in MASEval traces for debugging and analysis.
+**Motivation**: RolePlaying and Workforce maintain orchestration state that individual agent traces don't capture. Provide lightweight `TraceableMixin` wrappers for this state.
 
-**Approach**: Provide lightweight wrappers implementing `TraceableMixin` that users can register.
-
-**RolePlaying Tracer**:
+**RolePlayingTracer**:
 ```python
 class CamelRolePlayingTracer(TraceableMixin, ConfigurableMixin):
     """Collects orchestration traces from CAMEL RolePlaying."""
@@ -390,7 +431,7 @@ class CamelRolePlayingTracer(TraceableMixin, ConfigurableMixin):
         }
 ```
 
-**Workforce Tracer**:
+**WorkforceTracer**:
 ```python
 class CamelWorkforceTracer(TraceableMixin, ConfigurableMixin):
     """Collects orchestration traces from CAMEL Workforce."""
@@ -430,13 +471,17 @@ class CamelWorkforceTracer(TraceableMixin, ConfigurableMixin):
 class MyBenchmark(Benchmark):
     def setup_agents(self, agent_data, environment, task, user):
         workforce = Workforce(...)
+        self._workforce = workforce
 
         # Create tracer and register it
         workforce_tracer = CamelWorkforceTracer(workforce)
-        self.register(workforce_tracer)  # Traces go to "other" category
+        self.register(workforce_tracer)  # Traces included in gather_traces()
 
-        # Wrap individual workers
-        worker_adapters = {...}
+        # Wrap individual workers for message tracing
+        worker_adapters = {}
+        for worker in workforce._children:
+            adapter = CamelAgentAdapter(worker.agent, name=worker.name)
+            worker_adapters[worker.name] = adapter
 
         return [], worker_adapters
 ```
@@ -445,75 +490,69 @@ class MyBenchmark(Benchmark):
 - Individual agents: Full message history via `CamelAgentAdapter`
 - Orchestration: Task decomposition, assignments, lifecycle via tracer
 
-**Pros**:
-- Uses existing `TraceableMixin` / `register()` pattern
-- Clear separation: agents vs orchestration traces
-- Optional - users only add if they need orchestration visibility
-
-**Cons**:
-- Users must manually call `record_step()` for RolePlaying
-- Workforce internal state accessed via private attributes (may break)
-
-**Effort**: Medium
+**Note**: Workforce tracer accesses private attributes (`_children`, `_assignees`, etc.) which may change with CAMEL updates. Document this caveat.
 
 ---
 
 ## Integration Summary
 
-| CAMEL Component | Recommended Integration | New Code Needed |
-|-----------------|------------------------|-----------------|
-| **ChatAgent** | `CamelAgentAdapter` | Done |
-| **RolePlaying** | Option A (extract agents) + Option C (custom loop) or Option D (tracer) | Documentation + optional tracer |
-| **OWL** | Same as RolePlaying | Same as RolePlaying |
-| **Workforce** | Option A (extract workers) + Option D (tracer) | Documentation + optional tracer |
-| **Society** | Extract agents | Documentation only |
-| **Memory** | Already traced via `get_context()` | None |
+| CAMEL Component | Integration Approach | Phase |
+|-----------------|---------------------|-------|
+| **ChatAgent** | `CamelAgentAdapter` | 1 (Done) |
+| **RolePlaying** | Extract agents + `camel_role_playing_execution_loop` + optional tracer | 2.3, 2.4, 2.5 |
+| **OWL** | Same as RolePlaying | 2.3, 2.4, 2.5 |
+| **Workforce** | Extract workers + optional tracer | 2.3, 2.5 |
+| **user_agent (from RolePlaying)** | `CamelAgentUser` | 2.1, 2.2 |
+| **Memory** | Already traced via `get_context()` | 1 (Done) |
 
 ---
 
 ## Recommendations
 
-### Phase 2a: Documentation + Tracers (Recommended Next Step)
+### Implementation Order
 
-1. **Document extraction patterns** (Option A):
-   - How to use RolePlaying with MASEval
-   - How to use Workforce with MASEval
-   - How to override `execution_loop` for custom interaction (Option C)
+1. **Phase 2.1: BaseUser Abstraction** (Core)
+   - Library-wide improvement, benefits all frameworks
+   - Unblocks flexible user implementations
 
-2. **Implement optional tracers** (Option D):
-   - `CamelRolePlayingTracer` - lightweight, captures step count and termination
-   - `CamelWorkforceTracer` - captures task decomposition, assignments, lifecycle
+2. **Phase 2.2: CamelAgentUser** (Interface)
+   - Depends on 2.1
+   - Enables RolePlaying's user_agent in MASEval
 
-### Phase 2b: BaseUser Abstraction (Future)
+3. **Phase 2.3: Documentation**
+   - Can be done in parallel with 2.1/2.2
+   - Document Workforce/RolePlaying usage patterns
 
-If there's demand for flexible user implementations:
+4. **Phase 2.4: camel_role_playing_execution_loop** (Interface)
+   - Reusable execution loop for RolePlaying
+   - Can be done after 2.3
 
-1. **Core refactor**: Split `User` → `BaseUser` + `SimulatedUser`
-2. **Interface additions**: `CamelAgentUser`, potentially `SmolAgentUser`, `MCPUser`, etc.
-
-This is a library-wide improvement that benefits all frameworks, not just CAMEL.
+5. **Phase 2.5: Orchestration Tracers** (Interface)
+   - Optional add-on for debugging/analysis
+   - Can be done independently
 
 ### Decision Framework
 
-| If you need... | Recommended approach |
-|----------------|---------------------|
+| If you need... | Use |
+|----------------|-----|
 | Evaluate CAMEL ChatAgents | `CamelAgentAdapter` (Phase 1) |
-| Use RolePlaying with MASEval's user simulation | Extract `assistant_agent`, wrap with adapter |
-| Use RolePlaying's `user_agent` | Override `execution_loop` (Option C) or wait for BaseUser (Option B) |
-| Use Workforce with MASEval | Extract workers, optionally add `CamelWorkforceTracer` |
-| Trace Workforce task decomposition | `CamelWorkforceTracer` (Option D) |
+| Use Workforce with MASEval | Extract workers, optionally add `CamelWorkforceTracer` (2.3, 2.5) |
+| Use RolePlaying with MASEval's User | Extract `assistant_agent` only (2.3) |
+| Use RolePlaying's `user_agent` | `CamelAgentUser` after BaseUser refactor (2.1, 2.2) |
+| Use RolePlaying's exact interaction semantics | `camel_role_playing_execution_loop` (2.4) |
+| Trace orchestration state | `CamelRolePlayingTracer` / `CamelWorkforceTracer` (2.5) |
 
 ---
 
 ## Open Questions
 
-1. **Tracer implementation location**: Should tracers go in `maseval/interface/agents/camel.py` or a separate `maseval/interface/tracers/` directory?
+1. **Documentation location**: Should Workforce/RolePlaying usage patterns go in `docs/interface/agents/camel.md` or a dedicated guide (e.g., `docs/guides/camel-multi-agent.md`)?
 
 2. **Workforce private attributes**: The tracer accesses `_children`, `_assignees`, `_task_dependencies`, etc. Should we document this as "may break with CAMEL updates" or request stable APIs from CAMEL-AI?
 
-3. **BaseUser timing**: Should BaseUser be done as part of CAMEL integration, or as a separate MASEval improvement?
+3. **Trace category**: Should orchestration traces go to a dedicated category (e.g., `orchestration`) or use the existing `other` category in `collect_all_traces()`?
 
-4. **Trace category**: Should orchestration traces go to a dedicated category (e.g., `orchestration`) or use the existing `other` category in `collect_all_traces()`?
+4. **BaseUser naming**: Keep `User` as alias for `SimulatedUser` for backwards compatibility, or clean break?
 
 ---
 
@@ -571,12 +610,9 @@ The contract tests (`tests/test_contract/test_agent_adapter_contract.py`) valida
        return CamelAgentAdapter(agent, "test_agent", callbacks=callbacks)
    ```
 
-### Potential: Phase 2a (Tracers)
-- `maseval/interface/agents/camel.py` - Add `CamelRolePlayingTracer`, `CamelWorkforceTracer`
-- `docs/interface/agents/camel.md` - Add extraction patterns and tracer usage
-- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add tracer tests
+---
 
-### Potential: Phase 2b (BaseUser)
+### Phase 2.1: BaseUser Abstraction (Core)
 
 **Core changes:**
 - `maseval/core/user.py` - Split `User` → `BaseUser` + `SimulatedUser`
@@ -584,8 +620,35 @@ The contract tests (`tests/test_contract/test_agent_adapter_contract.py`) valida
 - `maseval/core/benchmark.py` - Update type hints to use `BaseUser`
 - `tests/test_core/test_user.py` - Update tests for new structure
 
-**Interface additions:**
+**Interface updates** (existing users extend `SimulatedUser`):
+- `maseval/interface/agents/smolagents.py` - Update `SmolAgentUser`
+- `maseval/interface/agents/langgraph.py` - Update `LangGraphUser`
+- `maseval/interface/agents/llamaindex.py` - Update `LlamaIndexUser`
+
+---
+
+### Phase 2.2: CamelAgentUser (Interface)
+
 - `maseval/interface/agents/camel.py` - Add `CamelAgentUser(BaseUser)`
-- `maseval/interface/agents/smolagents.py` - Update `SmolAgentUser` to extend `SimulatedUser`
-- `maseval/interface/agents/langgraph.py` - Update `LangGraphUser` to extend `SimulatedUser`
-- `maseval/interface/agents/llamaindex.py` - Update `LlamaIndexUser` to extend `SimulatedUser`
+- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add CamelAgentUser tests
+
+---
+
+### Phase 2.3: Documentation
+
+- `docs/interface/agents/camel.md` - Add Workforce/RolePlaying usage patterns
+- Or: `docs/guides/camel-multi-agent.md` - Dedicated guide
+
+---
+
+### Phase 2.4: Prefixed Execution Loop (Interface)
+
+- `maseval/interface/agents/camel.py` - Add `camel_role_playing_execution_loop()`
+- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add execution loop tests
+
+---
+
+### Phase 2.5: Orchestration Tracers (Interface)
+
+- `maseval/interface/agents/camel.py` - Add `CamelRolePlayingTracer`, `CamelWorkforceTracer`
+- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add tracer tests
