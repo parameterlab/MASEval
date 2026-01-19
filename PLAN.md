@@ -159,15 +159,49 @@ Phase 2 consists of incremental improvements that build on each other. Core libr
 - Scripted/deterministic users for testing
 - Human-in-the-loop scenarios
 
+**Design Decisions**:
+
+1. **Method naming: `respond()` instead of `simulate_response()`**
+
+   The current `simulate_response()` name implies the response is being "simulated", which is only accurate for LLM-based users. Other user types don't "simulate":
+   - A human-in-the-loop actually responds
+   - A CAMEL agent acting as user processes and responds
+   - A scripted test user returns pre-defined values
+
+   Using `respond(message: str) -> str` is generic and accurate for all implementations.
+
+2. **`get_tool()` is optional, not abstract**
+
+   Some frameworks (smolagents, CAMEL) use a tool-based pattern where agents invoke an `AskUser` tool to interact with the user. Other frameworks handle user interaction through message passing, callbacks, or other mechanisms.
+
+   Making `get_tool()` optional with a default returning `None` allows:
+   - Framework-specific subclasses to override and provide tools
+   - Frameworks that don't need tools to ignore it
+   - The core `respond()` method remains the universal interface
+
+3. **Class naming: `LLMUser` instead of `SimulatedUser`**
+
+   `LLMUser` is clearer - it explicitly states the user is backed by a language model. "Simulated" is vague and could be confused with other simulation types.
+
+4. **`AgenticUser` → `AgenticLLMUser`**
+
+   The current `AgenticUser` (user with tool access) should be renamed to `AgenticLLMUser` to match the new naming convention.
+
+5. **Clean break, no backwards compatibility aliases**
+
+   Per AGENTS.md: *"This project is early-release. Clean, maintainable code is the priority - not backwards compatibility."*
+
+   No `User` alias for `LLMUser`. The rename is straightforward and search-replace handles migration.
+
 **Core changes** (in `maseval/core/user.py`):
 ```python
 class BaseUser(ABC, TraceableMixin, ConfigurableMixin):
-    """Abstract base class defining the user interface."""
+    """Abstract interface for user interaction during evaluation.
 
-    @abstractmethod
-    def simulate_response(self, question: str) -> str:
-        """Generate a response to the agent's question."""
-        ...
+    A user represents the entity that interacts with agents. This could be
+    an LLM simulating a human, a scripted response sequence, a real human,
+    or another agent system.
+    """
 
     @abstractmethod
     def get_initial_query(self) -> str:
@@ -175,34 +209,89 @@ class BaseUser(ABC, TraceableMixin, ConfigurableMixin):
         ...
 
     @abstractmethod
+    def respond(self, message: str) -> str:
+        """Respond to a message from the agent.
+
+        Args:
+            message: The agent's message or question.
+
+        Returns:
+            The user's response.
+        """
+        ...
+
+    @abstractmethod
     def is_done(self) -> bool:
         """Check if the user interaction should terminate."""
         ...
 
-    @abstractmethod
     def get_tool(self):
-        """Return a framework-compatible tool for agent interaction."""
-        ...
+        """Return a framework-compatible tool for agent interaction.
 
-class SimulatedUser(BaseUser):
-    """LLM-simulated user (current User implementation)."""
-    def __init__(self, model: ModelAdapter, ...):
-        self._llm_simulator = UserLLMSimulator(model, ...)
-    # ... current implementation
+        Some frameworks (smolagents, CAMEL) use a tool-based pattern where
+        agents invoke an AskUser tool. Override this in subclasses for
+        frameworks that need it. Returns None by default.
+
+        Returns:
+            Framework-specific tool, or None if not applicable.
+        """
+        return None
+
+
+class LLMUser(BaseUser):
+    """User simulated by a language model.
+
+    Uses an LLM to generate realistic user responses based on a
+    user profile and scenario description.
+    """
+    def __init__(
+        self,
+        model: ModelAdapter,
+        user_profile: Dict[str, Any],
+        scenario: str,
+        name: str = "user",
+        initial_query: Optional[str] = None,
+        template: Optional[str] = None,
+        max_try: int = 3,
+        max_turns: int = 1,
+        stop_tokens: Optional[List[str]] = None,
+        early_stopping_condition: Optional[str] = None,
+    ):
+        ...
+    # Current User implementation body (without abstract get_tool)
+
+
+class AgenticLLMUser(LLMUser):
+    """LLM-simulated user with access to tools.
+
+    Extends LLMUser with the ability to use tools (e.g., check order status,
+    lookup information) during the conversation.
+    """
+    # Current AgenticUser implementation, renamed
 ```
 
 **Benefits**:
 - Follows MASEval's "Abstract Base Classes" principle
 - Enables any agent implementation as user (CAMEL, smolagents, LangGraph, MCP, etc.)
 - Library-wide improvement, not CAMEL-specific
+- Cleaner separation: core interface vs. framework-specific tool integration
+- Generic method names work for all user types
 
 **Effort**: Medium (core refactor, but library is early-release)
 
 **Files to change**:
-- `maseval/core/user.py` - Split `User` → `BaseUser` + `SimulatedUser`
-- `maseval/core/__init__.py` - Export `BaseUser`, `SimulatedUser`
+
+*Core:*
+- `maseval/core/user.py` - Refactor `User` → `BaseUser` + `LLMUser`, rename `AgenticUser` → `AgenticLLMUser`, rename `simulate_response` → `respond`
+- `maseval/core/__init__.py` - Export `BaseUser`, `LLMUser`, `AgenticLLMUser`
 - `maseval/core/benchmark.py` - Update type hints to use `BaseUser`
 - `tests/test_core/test_user.py` - Update tests for new structure
+
+*Interface (framework-specific users now extend `LLMUser` and override `get_tool()`):*
+- `maseval/interface/agents/smolagents.py` - `SmolAgentUser(LLMUser)` overrides `get_tool()`
+- `maseval/interface/agents/langgraph.py` - `LangGraphUser(LLMUser)` overrides `get_tool()`
+- `maseval/interface/agents/llamaindex.py` - `LlamaIndexUser(LLMUser)` overrides `get_tool()`
+- `maseval/interface/agents/camel.py` - `CamelUser(LLMUser)` overrides `get_tool()`
 
 ---
 
@@ -210,13 +299,17 @@ class SimulatedUser(BaseUser):
 
 **Depends on**: 2.1 (BaseUser abstraction)
 
-Once `BaseUser` exists, add CAMEL-specific implementation:
+Once `BaseUser` exists, add CAMEL-specific implementation for using a CAMEL ChatAgent as the user:
 
 ```python
 # In maseval/interface/agents/camel.py
 
 class CamelAgentUser(BaseUser):
-    """User backed by a CAMEL ChatAgent."""
+    """User backed by a CAMEL ChatAgent.
+
+    Wraps a CAMEL ChatAgent to act as the user in MASEval's evaluation loop.
+    Useful for using RolePlaying's `user_agent` with MASEval.
+    """
 
     def __init__(self, user_agent: ChatAgent, initial_query: str, max_turns: int = 10):
         self.user_agent = user_agent
@@ -224,23 +317,25 @@ class CamelAgentUser(BaseUser):
         self._turn_count = 0
         self._max_turns = max_turns
 
-    def simulate_response(self, question: str) -> str:
-        self._turn_count += 1
-        response = self.user_agent.step(question)
-        return response.msgs[0].content
-
     def get_initial_query(self) -> str:
         return self._initial_query
+
+    def respond(self, message: str) -> str:
+        """Forward the message to the CAMEL agent and return its response."""
+        self._turn_count += 1
+        response = self.user_agent.step(message)
+        return response.msgs[0].content
 
     def is_done(self) -> bool:
         return self._turn_count >= self._max_turns
 
     def get_tool(self):
+        """Return a CAMEL FunctionTool for agent-to-user interaction."""
         from camel.toolkits import FunctionTool
-        return FunctionTool(self.simulate_response)
+        return FunctionTool(self.respond)
 ```
 
-**Use case**: Using RolePlaying's `user_agent` as the user in MASEval's execution loop.
+**Use case**: Using RolePlaying's `user_agent` as the user in MASEval's execution loop, enabling agent-to-agent evaluation where one CAMEL agent acts as the user.
 
 ---
 
@@ -552,8 +647,6 @@ class MyBenchmark(Benchmark):
 
 3. **Trace category**: Should orchestration traces go to a dedicated category (e.g., `orchestration`) or use the existing `other` category in `collect_all_traces()`?
 
-4. **BaseUser naming**: Keep `User` as alias for `SimulatedUser` for backwards compatibility, or clean break?
-
 ---
 
 ## Files Reference
@@ -615,15 +708,16 @@ The contract tests (`tests/test_contract/test_agent_adapter_contract.py`) valida
 ### Phase 2.1: BaseUser Abstraction (Core)
 
 **Core changes:**
-- `maseval/core/user.py` - Split `User` → `BaseUser` + `SimulatedUser`
-- `maseval/core/__init__.py` - Export `BaseUser`, `SimulatedUser`
+- `maseval/core/user.py` - Refactor `User` → `BaseUser` + `LLMUser`, rename `AgenticUser` → `AgenticLLMUser`, rename `simulate_response()` → `respond()`
+- `maseval/core/__init__.py` - Export `BaseUser`, `LLMUser`, `AgenticLLMUser`
 - `maseval/core/benchmark.py` - Update type hints to use `BaseUser`
-- `tests/test_core/test_user.py` - Update tests for new structure
+- `tests/test_core/test_user.py` - Update tests for new structure and method names
 
-**Interface updates** (existing users extend `SimulatedUser`):
-- `maseval/interface/agents/smolagents.py` - Update `SmolAgentUser`
-- `maseval/interface/agents/langgraph.py` - Update `LangGraphUser`
-- `maseval/interface/agents/llamaindex.py` - Update `LlamaIndexUser`
+**Interface updates** (existing users extend `LLMUser` and override `get_tool()`):
+- `maseval/interface/agents/smolagents.py` - `SmolAgentUser(LLMUser)` overrides `get_tool()`
+- `maseval/interface/agents/langgraph.py` - `LangGraphUser(LLMUser)` overrides `get_tool()`
+- `maseval/interface/agents/llamaindex.py` - `LlamaIndexUser(LLMUser)` overrides `get_tool()`
+- `maseval/interface/agents/camel.py` - `CamelUser(LLMUser)` overrides `get_tool()`
 
 ---
 
