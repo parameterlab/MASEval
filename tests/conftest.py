@@ -6,6 +6,7 @@ from maseval import (
     Benchmark,
     AgentAdapter,
     Environment,
+    LLMUser,
     User,
     Task,
     TaskQueue,
@@ -197,15 +198,15 @@ class DummyEnvironment(Environment):
         return {}
 
 
-class DummyUser(User):
+class DummyUser(LLMUser):
     """Minimal user simulator for testing.
 
-    Properly inherits from User base class, allowing tests to verify base class
+    Properly inherits from LLMUser base class, allowing tests to verify base class
     behavior. The simulator is replaced with a mock to avoid LLM calls.
 
     Supports all base class features:
     - max_turns / stop_token for multi-turn interaction
-    - is_done() / simulate_response() / get_initial_query()
+    - is_done() / respond() / get_initial_query()
     - messages (MessageHistory) for conversation tracking
     """
 
@@ -215,7 +216,7 @@ class DummyUser(User):
         Args:
             name: User name
             model: ModelAdapter instance
-            **kwargs: Forwarded to User base class:
+            **kwargs: Forwarded to LLMUser base class:
                 - user_profile: Dict of user attributes
                 - scenario: Scenario description
                 - initial_query: Optional initial message
@@ -353,7 +354,7 @@ def dummy_user(dummy_model):
         user_profile={"role": "tester"},
         scenario="test scenario",
         initial_query="Hello",
-        max_turns=2,  # Allow at least one simulate_response after initial query
+        max_turns=2,  # Allow at least one respond() call after initial query
     )
 
 

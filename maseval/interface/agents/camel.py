@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from maseval import AgentAdapter, MessageHistory, User
+from maseval import AgentAdapter, MessageHistory, LLMUser
 
 __all__ = ["CamelAgentAdapter", "CamelUser"]
 
@@ -442,12 +442,12 @@ class CamelAgentAdapter(AgentAdapter):
         return str(response)
 
 
-class CamelUser(User):
-    """A CAMEL-specific user that provides a tool for user interaction.
+class CamelUser(LLMUser):
+    """A CAMEL-specific LLM user that provides a tool for user interaction.
 
-    This class extends the base User class to provide a CAMEL-compatible
-    FunctionTool that wraps the simulate_response method, allowing CAMEL
-    agents to interact with simulated users during benchmarking.
+    Extends LLMUser to provide a CAMEL-compatible FunctionTool that wraps
+    the respond method, allowing CAMEL agents to interact with users
+    during benchmarking.
 
     Requires camel-ai to be installed.
 
@@ -483,7 +483,7 @@ class CamelUser(User):
     def get_tool(self):
         """Get a CAMEL-compatible tool for user interaction.
 
-        Returns a CAMEL FunctionTool that wraps the simulate_response method,
+        Returns a CAMEL FunctionTool that wraps the respond method,
         allowing agents to ask the user questions during execution.
 
         Returns:
@@ -506,6 +506,6 @@ class CamelUser(User):
             Returns:
                 The user's response to the question
             """
-            return user_instance.simulate_response(question)
+            return user_instance.respond(question)
 
         return FunctionTool(func=ask_user)

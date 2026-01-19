@@ -6,7 +6,7 @@ This module requires smolagents to be installed:
 
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from maseval import AgentAdapter, MessageHistory, User
+from maseval import AgentAdapter, MessageHistory, LLMUser
 
 __all__ = ["SmolAgentAdapter", "SmolAgentUser"]
 
@@ -473,9 +473,10 @@ class SmolAgentAdapter(AgentAdapter):
         return MessageHistory(converted_messages)
 
 
-class SmolAgentUser(User):
-    """A smol-agent specific user that provides a tool for user interaction.
+class SmolAgentUser(LLMUser):
+    """A smolagents-specific LLM user that provides a tool for user interaction.
 
+    Extends LLMUser to provide a smolagents-compatible tool via get_tool().
     Requires smolagents to be installed.
 
     Example:

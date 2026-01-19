@@ -50,15 +50,15 @@ class SmolAgentUserSimulationInputTool(UserInputTool):
         self._user = user
 
     def forward(self, question: str) -> str:
-        """Simulate asking the user a question and getting a response.
+        """Ask the user a question and get a response.
 
         This method is called by smolagents when the agent needs user input.
-        It delegates to the wrapped SmolAgentUser's simulate_response method.
+        It delegates to the wrapped SmolAgentUser's respond method.
 
         Args:
-            question: The question to ask the simulated user.
+            question: The question to ask the user.
 
         Returns:
-            The simulated user's response based on their persona and scenario.
+            The user's response.
         """
-        return self._user.simulate_response(question)
+        return self._user.respond(question)

@@ -59,7 +59,7 @@ MASEval already supports agent-to-agent evaluation in multiple ways:
 
 2. **LLM-simulated user**: The `maseval.User` with `UserLLMSimulator` IS an LLM-based agent simulating user behavior.
 
-3. **Potential: Framework-specific agent as user**: With a `BaseUser` abstraction, any agent implementation could serve as the "user" side (see Option B).
+3. **Potential: Framework-specific agent as user**: With a `User` abstraction, any agent implementation could serve as the "user" side (see Option B).
 
 ### Component Deep Dive
 
@@ -150,7 +150,7 @@ Basic CAMEL-AI integration supporting the core `ChatAgent` class. Implementation
 
 Phase 2 consists of incremental improvements that build on each other. Core library changes come first, followed by interface-specific implementations.
 
-### 2.1 BaseUser Abstraction (Core Library)
+### 2.1 User Abstraction (Core Library)
 
 **Motivation**: The current `maseval.User` forces LLM simulation via `UserLLMSimulator`. This is too restrictive for:
 - Using a smolagents agent as user
@@ -195,7 +195,7 @@ Phase 2 consists of incremental improvements that build on each other. Core libr
 
 **Core changes** (in `maseval/core/user.py`):
 ```python
-class BaseUser(ABC, TraceableMixin, ConfigurableMixin):
+class User(ABC, TraceableMixin, ConfigurableMixin):
     """Abstract interface for user interaction during evaluation.
 
     A user represents the entity that interacts with agents. This could be
@@ -238,7 +238,7 @@ class BaseUser(ABC, TraceableMixin, ConfigurableMixin):
         return None
 
 
-class LLMUser(BaseUser):
+class LLMUser(User):
     """User simulated by a language model.
 
     Uses an LLM to generate realistic user responses based on a
@@ -282,9 +282,9 @@ class AgenticLLMUser(LLMUser):
 **Files to change**:
 
 *Core:*
-- `maseval/core/user.py` - Refactor `User` → `BaseUser` + `LLMUser`, rename `AgenticUser` → `AgenticLLMUser`, rename `simulate_response` → `respond`
-- `maseval/core/__init__.py` - Export `BaseUser`, `LLMUser`, `AgenticLLMUser`
-- `maseval/core/benchmark.py` - Update type hints to use `BaseUser`
+- `maseval/core/user.py` - Refactor `User` → `User` + `LLMUser`, rename `AgenticUser` → `AgenticLLMUser`, rename `simulate_response` → `respond`
+- `maseval/core/__init__.py` - Export `User`, `LLMUser`, `AgenticLLMUser`
+- `maseval/core/benchmark.py` - Update type hints to use `User`
 - `tests/test_core/test_user.py` - Update tests for new structure
 
 *Interface (framework-specific users now extend `LLMUser` and override `get_tool()`):*
@@ -297,14 +297,14 @@ class AgenticLLMUser(LLMUser):
 
 ### 2.2 CAMEL Interface: CamelAgentUser
 
-**Depends on**: 2.1 (BaseUser abstraction)
+**Depends on**: 2.1 (User abstraction)
 
-Once `BaseUser` exists, add CAMEL-specific implementation for using a CAMEL ChatAgent as the user:
+Once `User` exists, add CAMEL-specific implementation for using a CAMEL ChatAgent as the user:
 
 ```python
 # In maseval/interface/agents/camel.py
 
-class CamelAgentUser(BaseUser):
+class CamelAgentUser(User):
     """User backed by a CAMEL ChatAgent.
 
     Wraps a CAMEL ChatAgent to act as the user in MASEval's evaluation loop.
@@ -418,7 +418,7 @@ def camel_role_playing_execution_loop(
     agents: Sequence[AgentAdapter],
     task: Task,
     environment: Environment,
-    user: Optional[BaseUser],
+    user: Optional[User],
     max_steps: int = 10,
 ) -> Any:
     """Execution loop using CAMEL RolePlaying's step() semantics.
@@ -606,7 +606,7 @@ class MyBenchmark(Benchmark):
 
 ### Implementation Order
 
-1. **Phase 2.1: BaseUser Abstraction** (Core)
+1. **Phase 2.1: User Abstraction** (Core)
    - Library-wide improvement, benefits all frameworks
    - Unblocks flexible user implementations
 
@@ -633,7 +633,7 @@ class MyBenchmark(Benchmark):
 | Evaluate CAMEL ChatAgents | `CamelAgentAdapter` (Phase 1) |
 | Use Workforce with MASEval | Extract workers, optionally add `CamelWorkforceTracer` (2.3, 2.5) |
 | Use RolePlaying with MASEval's User | Extract `assistant_agent` only (2.3) |
-| Use RolePlaying's `user_agent` | `CamelAgentUser` after BaseUser refactor (2.1, 2.2) |
+| Use RolePlaying's `user_agent` | `CamelAgentUser` after User refactor (2.1, 2.2) |
 | Use RolePlaying's exact interaction semantics | `camel_role_playing_execution_loop` (2.4) |
 | Trace orchestration state | `CamelRolePlayingTracer` / `CamelWorkforceTracer` (2.5) |
 
@@ -705,12 +705,12 @@ The contract tests (`tests/test_contract/test_agent_adapter_contract.py`) valida
 
 ---
 
-### Phase 2.1: BaseUser Abstraction (Core)
+### Phase 2.1: User Abstraction (Core)
 
 **Core changes:**
-- `maseval/core/user.py` - Refactor `User` → `BaseUser` + `LLMUser`, rename `AgenticUser` → `AgenticLLMUser`, rename `simulate_response()` → `respond()`
-- `maseval/core/__init__.py` - Export `BaseUser`, `LLMUser`, `AgenticLLMUser`
-- `maseval/core/benchmark.py` - Update type hints to use `BaseUser`
+- `maseval/core/user.py` - Refactor `User` → `User` + `LLMUser`, rename `AgenticUser` → `AgenticLLMUser`, rename `simulate_response()` → `respond()`
+- `maseval/core/__init__.py` - Export `User`, `LLMUser`, `AgenticLLMUser`
+- `maseval/core/benchmark.py` - Update type hints to use `User`
 - `tests/test_core/test_user.py` - Update tests for new structure and method names
 
 **Interface updates** (existing users extend `LLMUser` and override `get_tool()`):
@@ -723,7 +723,7 @@ The contract tests (`tests/test_contract/test_agent_adapter_contract.py`) valida
 
 ### Phase 2.2: CamelAgentUser (Interface)
 
-- `maseval/interface/agents/camel.py` - Add `CamelAgentUser(BaseUser)`
+- `maseval/interface/agents/camel.py` - Add `CamelAgentUser(User)`
 - `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add CamelAgentUser tests
 
 ---
