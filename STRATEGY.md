@@ -10,7 +10,7 @@ This document proposes the integration architecture for bringing MARBLE (Multi-A
 
 This enables critical research questions: **"Which multi-agent framework performs best on the same tasks?"**
 
-**Key Finding**: The tau2/macs patterns transfer smoothly with one architectural difference: MARBLE's multi-agent engine must be wrapped as a single `AgentAdapter` rather than setting up individual agents.
+**Key Finding**: Individual MARBLE agents CAN be extracted and wrapped in separate AgentAdapters, providing per-agent trace visibility while preserving MARBLE's coordination logic.
 
 **License**: ✅ MARBLE's MIT license explicitly permits vendoring/usage with attribution.
 
@@ -22,15 +22,15 @@ This enables critical research questions: **"Which multi-agent framework perform
 
 MARBLE is a multi-agent coordination framework that:
 - Orchestrates multiple LLM-based agents using an **Engine** + **AgentGraph** architecture
-- Supports various coordination modes (chain, hierarchical, graph-based)
-- Provides **SharedMemory** for inter-agent communication
-- Includes domain-specific environments (Coding, Database, Minecraft, Research, Bargaining)
+- Supports various coordination modes (star, chain, tree, graph)
+- Provides **inter-agent communication** via direct message passing (stored in `agent.msg_box`)
+- Includes domain-specific environments (Coding, Database, Minecraft, Research, Bargaining, Web, WorldSimulation)
 - Uses configuration for agent relationships and task specifications
 
 ### What is MultiAgentBench?
 
 MultiAgentBench is MARBLE's benchmark suite featuring:
-- **5 domains**: Coding, Database, Minecraft, Research, Bargaining
+- **7 domains**: Coding, Database, Minecraft, Research, Bargaining, Web, WorldSimulation
 - **JSONL task format** with rich metadata (agent relationships, coordination modes, evaluation metrics)
 - **500+ tasks** testing collaboration and competition scenarios
 - Original paper: "MultiAgentBench: Evaluating the Collaboration and Competition of LLM agents" (arXiv:2503.01935)
@@ -41,6 +41,7 @@ MultiAgentBench is MARBLE's benchmark suite featuring:
 2. **Enable multi-agent framework comparison** - Abstract base allows users to implement with any framework
 3. **Maintain MASEval's framework-agnostic design** - No hard dependencies on agent frameworks
 4. **Reuse MASEval infrastructure** - Callbacks, tracing, parallelization, error handling
+5. **Per-agent trace visibility** - Wrap individual agents, not just the engine
 
 ---
 
@@ -51,7 +52,8 @@ MultiAgentBench is MARBLE's benchmark suite featuring:
 ```
 maseval/benchmark/multiagentbench/
 ├── __init__.py
-├── README.md                              # Setup: clone MARBLE to marble/
+├── README.md                              # Setup instructions
+├── PROVENANCE.md                          # Track upstream version, license
 ├── .gitignore                             # Ignore marble/ directory
 │
 ├── multiagentbench.py                     # Core classes:
@@ -62,27 +64,18 @@ maseval/benchmark/multiagentbench/
 ├── environment.py                         # MultiAgentBenchEnvironment
 ├── data_loader.py                         # load_tasks(), configure_model_ids()
 ├── adapters/
-│   └── marble_adapter.py                  # MarbleAgentAdapter
+│   └── marble_adapter.py                  # MarbleAgentAdapter (per-agent)
 │
-├── marble/                                # ← Vendored MARBLE (gitignored)
-│   ├── LICENSE                            #   MIT license preserved
-│   ├── agent/
-│   ├── engine/
-│   ├── environments/
-│   ├── evaluator/
-│   └── ...                                #   Full MARBLE source
-│
-└── data/                                  # Symlink to marble/multiagentbench/
-    ├── coding/
-    ├── database/
-    ├── minecraft/
-    ├── research/
-    └── bargaining/
+└── marble/                                # ← Vendored MARBLE (gitignored)
+    ├── LICENSE                            #   MIT license preserved
+    ├── agent/
+    ├── engine/
+    ├── environments/
+    ├── evaluator/
+    └── ...                                #   Full MARBLE source
 ```
 
 ### Class Hierarchy
-
-**In `maseval/benchmark/multiagentbench/`:**
 
 ```python
 # Abstract base - provides task/eval infrastructure for ANY framework
@@ -95,525 +88,609 @@ class MultiAgentBenchBenchmark(Benchmark):
     def setup_evaluators(...)   → MultiAgentBenchEvaluator    # Shared
     def setup_agents(...)       → ABSTRACT                    # User implements
 
-# MARBLE reproduction - the only concrete implementation in main library
+# MARBLE reproduction - wraps individual agents for trace visibility
 class MarbleMultiAgentBenchBenchmark(MultiAgentBenchBenchmark):
     """Exact MARBLE reproduction for scientific validation."""
     def setup_agents(...):
-        # Convert Task → MARBLE Config
-        # Create MARBLE Engine (contains multiple agents internally)
-        # Wrap as single MarbleAgentAdapter
-        # Return to MASEval
-```
-
-**User implementations (examples/ directory only):**
-
-```python
-# Example: LangGraph implementation (in examples/, NOT in main library)
-class LangGraphMultiAgentBench(MultiAgentBenchBenchmark):
-    def setup_agents(...):
-        # Build LangGraph from task.environment_data["relationships"]
-        # User's custom implementation
-
-# Example: Smolagents implementation (in examples/, NOT in main library)
-class SmolagentsMultiAgentBench(MultiAgentBenchBenchmark):
-    def setup_agents(...):
-        # User's custom implementation
+        # Create MARBLE agents from task config
+        # Wrap EACH agent in MarbleAgentAdapter
+        # Return list of adapters to MASEval
 ```
 
 ---
 
-## How The Integration Works
+## Agent Wrapping Strategy
 
-### Execution Flow
+### Per-Agent Adapters (Preferred Pattern)
 
-Let me trace a complete execution from user code to MARBLE coordination:
+MARBLE agents CAN be extracted and wrapped individually. This provides:
+- Per-agent trace visibility (matches tau2/macs pattern)
+- Better error attribution
+- Callback hooks fire per-agent
+- Cleaner debugging
 
-#### 1. User Loads Tasks
+**Requirements for independent agent execution:**
+1. Each agent needs an `AgentGraph` reference (even if minimal)
+2. Communicating agents must share the same `AgentGraph`
+3. Each agent needs an environment reference
+4. Call `agent.act(task)` directly
 
-```python
-from maseval.benchmark.multiagentbench import load_tasks, configure_model_ids
-
-# Load tasks from JSONL
-tasks = load_tasks("coding", limit=5)
-# Reads marble/multiagentbench/coding/coding_main.jsonl
-# Each JSONL line → MASEval Task object
-
-# Configure model for all agents
-configure_model_ids(tasks, agent_model_id="gpt-4")
-```
-
-**Task structure after loading:**
-```python
-Task(
-    id="coding_1",
-    query="Software Development Task: Please write a system called...",
-    environment_data={
-        "scenario": "coding",
-        "coordinate_mode": "chain",  # or "hierarchical", "graph"
-        "relationships": [
-            ["agent1", "agent2", "reports_to"],
-            ["agent2", "agent3", "collaborates_with"],
-        ],
-        "agents": [
-            {"agent_id": "agent1", "profile": "Senior Developer...", "type": "CodingAgent"},
-            {"agent_id": "agent2", "profile": "Code Reviewer...", "type": "CodingAgent"},
-            {"agent_id": "agent3", "profile": "QA Engineer...", "type": "CodingAgent"},
-        ],
-        "environment": {"type": "Coding", "workspace_dir": "workspace", "max_iterations": 10},
-        "llm": "gpt-4",
-    },
-    evaluation_data={
-        "metrics": {"code_quality": true, "test_coverage": true, "collaboration_effectiveness": true}
-    },
-)
-```
-
-#### 2. User Chooses Implementation
-
-**Option A: MARBLE Reproduction (built-in)**
-```python
-from maseval.benchmark.multiagentbench import MarbleMultiAgentBenchBenchmark
-
-benchmark = MarbleMultiAgentBenchBenchmark()
-results = benchmark.run(tasks)  # Exact MARBLE behavior
-```
-
-**Option B: Custom Framework Implementation (user-provided)**
-```python
-# User implements their own benchmark (e.g., in examples/ or custom code)
-# Example shown in examples/multiagentbench_langgraph.py
-
-from examples.multiagentbench_langgraph import LangGraphMultiAgentBench
-
-benchmark = LangGraphMultiAgentBench()
-results = benchmark.run(tasks)  # Same tasks, user's framework
-```
-
-#### 3. MASEval Orchestration Loop
-
-For each task, `benchmark.run()` calls:
-
-```python
-# Phase 1: Setup components
-environment = benchmark.setup_environment(agent_data={}, task=task)
-# → MultiAgentBenchEnvironment (wraps MARBLE CodingEnvironment)
-
-user = benchmark.setup_user(agent_data={}, environment, task)
-# → None (MultiAgentBench doesn't use external user simulation)
-
-agents, agents_dict = benchmark.setup_agents(agent_data={}, environment, task, user)
-# → This is where MARBLE vs LangGraph differ!
-
-evaluators = benchmark.setup_evaluators(environment, task, agents, user)
-# → MultiAgentBenchEvaluator (wraps MARBLE's Evaluator)
-
-# Phase 2: Execute agents
-final_answer = benchmark.run_agents(agents, task, environment, query=task.query)
-# → Calls agent.run(query) - delegates to MARBLE or LangGraph
-
-# Phase 3: Evaluate
-traces = benchmark.collect_all_traces()
-# → Gathers agent messages, tool calls, memory state
-
-eval_results = benchmark.evaluate(evaluators, agents_dict, final_answer, traces)
-# → Computes code_quality, test_coverage, collaboration metrics
-
-# Store result
-report = {
-    "task_id": task.id,
-    "final_answer": final_answer,
-    "eval": eval_results,
-    "traces": traces,
-    "status": "success"
-}
-```
-
-#### 4. Inside `MarbleMultiAgentBenchBenchmark.setup_agents()`
-
-This is where MARBLE integration happens:
-
-```python
-def setup_agents(
-    self,
-    agent_data: Dict[str, Any],
-    environment: MultiAgentBenchEnvironment,
-    task: Task,
-    user: Optional[User],
-) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
-    """Create MARBLE Engine and wrap as single AgentAdapter."""
-
-    from .marble.configs.config import Config
-    from .marble.engine.engine import Engine
-
-    # Step 1: Convert MASEval Task → MARBLE Config
-    marble_config = Config.from_dict({
-        "coordinate_mode": task.environment_data["coordinate_mode"],
-        "relationships": task.environment_data["relationships"],
-        "agents": task.environment_data["agents"],
-        "environment": task.environment_data["environment"],
-        "task": {"content": task.query},
-        "llm": task.environment_data["llm"],
-        "memory": {"type": "SharedMemory"},
-        "metrics": task.evaluation_data["metrics"],
-        "engine_planner": {"initial_progress": "Starting task"},
-    })
-
-    # Step 2: Create MARBLE Engine
-    # This internally creates:
-    # - 3 BaseAgent instances (agent1, agent2, agent3)
-    # - AgentGraph managing relationships
-    # - SharedMemory for inter-agent communication
-    # - EnginePlanner for coordination strategy
-    # - Domain environment (CodingEnvironment)
-    engine = Engine(marble_config)
-
-    # Step 3: Wrap entire engine as single AgentAdapter
-    # MASEval sees one "agent" but it contains 3+ agents internally
-    engine_adapter = MarbleAgentAdapter(
-        engine=engine,
-        name="marble_engine",
-    )
-
-    # Step 4: Return to MASEval
-    # agents_to_run: [engine_adapter] - MASEval will call .run() on this
-    # agents_dict: {"marble_engine": engine_adapter} - for tracing
-    return [engine_adapter], {"marble_engine": engine_adapter}
-```
-
-**Key Insight**: MASEval never sees MARBLE's internal agents (agent1, agent2, agent3). It only sees the wrapper. This preserves MARBLE's coordination logic while integrating cleanly.
-
-#### 5. Inside `MarbleAgentAdapter._run_agent()`
-
-When MASEval calls `agent.run(query)`:
+### How It Works
 
 ```python
 class MarbleAgentAdapter(AgentAdapter):
-    """Wraps MARBLE's multi-agent Engine as a single agent."""
+    """Wraps a single MARBLE BaseAgent."""
 
-    def __init__(self, engine: "Engine", name: str = "marble_engine", callbacks=None):
-        self.engine = engine  # Contains multiple agents + coordination
-        super().__init__(engine, name, callbacks)
+    def __init__(
+        self,
+        agent: "BaseAgent",
+        name: str,
+        callbacks: Optional[List[Any]] = None,
+    ):
+        super().__init__(agent, name, callbacks)
+        self._agent = agent
 
-    def _run_agent(self, query: str) -> Any:
-        """Execute MARBLE's multi-agent coordination."""
+    def _run_agent(self, query: str) -> str:
+        """Execute MARBLE agent's act() method."""
+        result, communication = self._agent.act(query)
+        return result
 
-        # Delegate to MARBLE Engine
-        self.engine.start()
+    def get_messages(self) -> MessageHistory:
+        """Extract messages from agent's msg_box."""
+        return self._extract_message_history()
 
-        # Engine internally does:
-        # 1. EnginePlanner decides execution order based on coordinate_mode
-        # 2. agent1.run() → writes to SharedMemory
-        # 3. agent2.run() → reads SharedMemory, writes response
-        # 4. agent3.run() → reads SharedMemory, final output
-        # 5. Agents use AgentGraph to check who they can communicate with
-        # 6. Runs until task complete or max_iterations reached
+    def _extract_message_history(self) -> MessageHistory:
+        """Extract messages from MARBLE's msg_box structure.
 
-        # Extract final answer from SharedMemory or designated output
-        final_answer = self.engine.memory.get("final_answer")
-        if not final_answer:
-            # Fallback: get from last agent's output
-            final_answer = self.engine.agents[-1].last_output
-
-        # Convert MARBLE's execution traces → MASEval MessageHistory
-        self.messages = self._convert_to_message_history(self.engine)
-
-        return final_answer
-
-    def _convert_to_message_history(self, engine) -> MessageHistory:
-        """Extract messages from all MARBLE agents."""
+        MARBLE stores messages in agent.msg_box:
+            msg_box[session_id][other_agent_id] = List[(direction, message)]
+            direction: 0 = FORWARD_TO (sent), 1 = RECV_FROM (received)
+        """
         messages = []
-
-        # Gather from each internal agent
-        for agent in engine.agents:
-            agent_msgs = getattr(agent, "messages", [])
-            for msg in agent_msgs:
-                messages.append({
-                    "role": f"agent_{agent.agent_id}",
-                    "content": str(msg),
-                    "agent_id": agent.agent_id,
-                    "timestamp": getattr(msg, "timestamp", None),
-                })
-
-        # Include SharedMemory state
-        messages.append({
-            "role": "system",
-            "content": f"SharedMemory: {engine.memory.to_dict()}",
-        })
-
+        for session_id, conversations in self._agent.msg_box.items():
+            for other_agent_id, msg_list in conversations.items():
+                for direction, content in msg_list:
+                    messages.append({
+                        "role": "agent" if direction == 0 else "other",
+                        "content": str(content),
+                        "agent_id": self._agent.agent_id,
+                        "other_agent_id": other_agent_id,
+                        "direction": "sent" if direction == 0 else "received",
+                        "session_id": session_id,
+                    })
         return MessageHistory(messages)
 
     def gather_traces(self) -> Dict[str, Any]:
         """Gather MARBLE-specific execution data."""
         return {
             **super().gather_traces(),
-            "coordination_mode": self.engine.coordinate_mode,
-            "agent_graph": self.engine.graph.to_dict(),
-            "shared_memory": self.engine.memory.to_dict(),
-            "iterations": self.engine.current_iteration,
-            "max_iterations": self.engine.max_iterations,
-            "internal_agents": [
-                {"agent_id": a.agent_id, "type": a.agent_type}
-                for a in self.engine.agents
-            ],
+            "agent_id": self._agent.agent_id,
+            "agent_type": getattr(self._agent, "agent_type", "BaseAgent"),
+            "profile": getattr(self._agent, "profile", ""),
+            "task_history": getattr(self._agent, "task_history", []),
+            "relationships": self._extract_relationships(),
         }
+
+    def _extract_relationships(self) -> List[Dict[str, str]]:
+        """Extract this agent's relationships from the graph."""
+        relationships = []
+        if self._agent.agent_graph:
+            for src, dst, rel_type in self._agent.agent_graph.relationships:
+                if src == self._agent.agent_id or dst == self._agent.agent_id:
+                    relationships.append({
+                        "source": src,
+                        "target": dst,
+                        "type": rel_type,
+                    })
+        return relationships
 ```
 
-#### 6. Alternative: User Framework Implementation Example
+### Coordination Without Engine.start()
 
-**Note**: This is a USER implementation (in examples/), NOT part of main library.
-
-For comparison with a different framework, users implement their own benchmark:
+Instead of calling `engine.start()`, we implement coordination in MASEval's `run_agents()`:
 
 ```python
-# In examples/multiagentbench_langgraph.py (NOT in maseval/benchmark/)
+def run_agents(
+    self,
+    agents: Sequence[AgentAdapter],
+    task: Task,
+    environment: MultiAgentBenchEnvironment,
+    query: str = "",
+) -> Any:
+    """Execute agents according to coordination mode."""
+    coordinate_mode = task.environment_data.get("coordinate_mode", "star")
 
-class LangGraphMultiAgentBench(MultiAgentBenchBenchmark):
-    """Example user implementation using LangGraph."""
+    if coordinate_mode == "star":
+        return self._star_coordinate(agents, task, query)
+    elif coordinate_mode == "chain":
+        return self._chain_coordinate(agents, task, query)
+    elif coordinate_mode == "tree":
+        return self._tree_coordinate(agents, task, query)
+    elif coordinate_mode == "graph":
+        return self._graph_coordinate(agents, task, query)
+    else:
+        raise ValueError(f"Unknown coordination mode: {coordinate_mode}")
 
-    def setup_agents(
-        self,
-        agent_data: Dict[str, Any],
-        environment: MultiAgentBenchEnvironment,
-        task: Task,
-        user: Optional[User],
-    ) -> Tuple[Sequence[AgentAdapter], Dict[str, AgentAdapter]]:
-        """Create LangGraph-based multi-agent system."""
+def _star_coordinate(
+    self,
+    agents: Sequence[AgentAdapter],
+    task: Task,
+    query: str,
+) -> Any:
+    """Star coordination: central planner assigns tasks to agents."""
+    max_iterations = task.environment_data.get("max_iterations", 10)
+    results = {}
 
-        from langgraph.graph import StateGraph
+    for iteration in range(max_iterations):
+        # Assign tasks (simplified - full impl uses EnginePlanner)
+        task_assignments = self._assign_tasks(agents, task, results)
 
-        # Same task data, different implementation
-        graph = StateGraph(AgentState)
+        if not task_assignments:
+            break
 
-        # Create agents from same specs
-        for agent_spec in task.environment_data["agents"]:
-            agent = self._create_langgraph_agent(
-                agent_id=agent_spec["agent_id"],
-                profile=agent_spec["profile"],
-                tools=environment.tools,  # Same environment!
-                model=task.environment_data["llm"],  # Same model!
-            )
-            graph.add_node(agent_spec["agent_id"], agent)
+        # Execute each agent with its assigned task
+        for agent, agent_task in task_assignments.items():
+            result = agent.run(agent_task)
+            results[agent.name] = result
 
-        # Interpret relationships as edges
-        for src, dst, rel_type in task.environment_data["relationships"]:
-            if rel_type in ["reports_to", "collaborates_with"]:
-                graph.add_edge(src, dst)
+        # Check termination
+        if self._should_terminate(results, task):
+            break
 
-        # Compile and wrap
-        compiled = graph.compile()
-        adapter = LangGraphAdapter(compiled, "langgraph_system")
-
-        return [adapter], {"langgraph_system": adapter}
+    return self._aggregate_results(results)
 ```
-
-**Result**: Both MARBLE and user frameworks run on:
-- ✅ Same tasks (coding task #1)
-- ✅ Same agent specs (agent1, agent2, agent3)
-- ✅ Same environment (CodingEnvironment)
-- ✅ Same evaluation (code_quality, collaboration)
-- ❌ **Different coordination strategy** - this is what enables comparison!
 
 ---
 
-## Pattern Transfer Analysis: Do tau2/macs Patterns Apply?
+## Critical MARBLE API Details
 
-### Summary: YES, with one architectural adaptation
+### Message History Storage
 
-The tau2/macs integration patterns transfer smoothly to MultiAgentBench.
+**MARBLE stores messages in `agent.msg_box`, NOT SharedMemory:**
 
-### Pattern Comparison
-
-| Component | MACS/Tau2 Pattern | MultiAgentBench Pattern | Transfer |
-|-----------|-------------------|-------------------------|----------|
-| **Environment** | Wraps domain-specific environment (tools, database) | Wraps MARBLE domain environment (Coding, DB, Minecraft) | ✅ Direct |
-| **Evaluator** | filter_traces() + LLM or deterministic eval | MARBLE evaluator metrics (code quality, collaboration) | ✅ Direct |
-| **Data Loading** | load_tasks() from JSON/JSONL | load_tasks() from JSONL | ✅ Direct |
-| **Model Config** | configure_model_ids() sets LLM per component | configure_model_ids() sets LLM for all MARBLE agents | ✅ Direct |
-| **Benchmark Base** | Abstract base, user implements setup_agents() | Abstract base, user implements setup_agents() | ✅ Direct |
-| **Agent Setup** | Create individual AgentAdapters | **DIFFERENT**: Wrap entire MARBLE Engine as single adapter | ⚠️ Adapted |
-
-### Key Architectural Difference
-
-**MACS/Tau2 Pattern:**
 ```python
-def setup_agents(self, agent_data, environment, task, user):
-    # Create individual agent adapters
-    supervisor = MyAgent("supervisor", tools=environment.tools)
-    worker = MyAgent("worker", tools=environment.tools)
+# BaseAgent structure (base_agent.py)
+self.msg_box: DefaultDict[str, DefaultDict[str, List[Tuple[int, str]]]]
+# Structure: msg_box[session_id][other_agent_id] = [(direction, message), ...]
+# Direction: 0 = FORWARD_TO (sent), 1 = RECV_FROM (received)
 
-    adapter1 = AgentAdapter(supervisor, "supervisor")
-    adapter2 = AgentAdapter(worker, "worker")
-
-    return [adapter1], {"supervisor": adapter1, "worker": adapter2}
+# Serialize via (note: typo in MARBLE)
+serialized = agent.seralize_message(session_id="")
 ```
 
-**MultiAgentBench Pattern:**
+### SharedMemory is NOT Shared
+
+Despite the name, each MARBLE agent creates its own `SharedMemory` instance:
+
 ```python
-def setup_agents(self, agent_data, environment, task, user):
-    # MARBLE Engine contains multiple agents internally
-    from .marble.engine.engine import Engine
-
-    config = self._build_marble_config(task)
-    engine = Engine(config)  # Creates agent1, agent2, agent3 internally
-
-    # Wrap entire engine as single adapter
-    engine_adapter = MarbleAgentAdapter(engine, "marble_engine")
-
-    return [engine_adapter], {"marble_engine": engine_adapter}
+# In BaseAgent.__init__() (base_agent.py:72-73)
+self.memory = BaseMemory()        # Per-agent memory
+self.shared_memory = SharedMemory()  # Also per-agent, NOT shared!
 ```
 
-**Why this works:**
-- MASEval's `run_agents()` calls `agent.run(query)` on returned agents
-- `MarbleAgentAdapter._run_agent()` delegates to `engine.start()`
-- MARBLE handles all internal coordination (agent-to-agent communication)
-- Individual agent messages are aggregated in `gather_traces()`
+**Do NOT rely on SharedMemory for inter-agent state.** Use `msg_box` or environment state instead.
 
-**Benefits:**
-1. Preserves MARBLE's coordination logic (no reimplementation)
-2. Clean separation: MASEval orchestrates outer loop, MARBLE handles inner coordination
-3. Scientific fidelity: Using MARBLE exactly as designed
-4. Extensible: Users can implement custom frameworks by subclassing `MultiAgentBenchBenchmark`
+### AgentGraph is Required
 
-### Verdict: Strong Pattern Transfer
+`agent.act()` requires an AgentGraph reference:
 
-✅ **5/6 components** transfer directly
-⚠️ **1/6 components** (agent setup) requires clean, well-motivated adaptation
+```python
+# In BaseAgent.act() (base_agent.py:145-147)
+assert self.agent_graph is not None, \
+    "Agent graph is not set. Please set the agent graph using set_agent_graph method first."
+```
+
+**Solution:** Create AgentGraph during setup and set it on all agents:
+
+```python
+def setup_agents(self, agent_data, environment, task, user):
+    # Create agents
+    agents = self._create_agents(task)
+
+    # Create and configure AgentGraph
+    from .marble.graph.agent_graph import AgentGraph
+    graph = AgentGraph(agents, self._build_graph_config(task))
+
+    # Set graph reference on each agent (REQUIRED)
+    for agent in agents:
+        agent.set_agent_graph(graph)
+
+    # Wrap in adapters
+    adapters = [MarbleAgentAdapter(agent, agent.agent_id) for agent in agents]
+    agents_dict = {a.name: a for a in adapters}
+
+    return adapters, agents_dict
+```
+
+### Known MARBLE Bug: chain_coordinate()
+
+**Bug:** `engine.py:702` calls `self.graph.get_agent_profiles_linked()` which does not exist in AgentGraph.
+
+**Impact:** Chain coordination mode will crash.
+
+**Workaround:** Either:
+1. Avoid chain mode tasks initially
+2. Patch MARBLE locally (add the missing method)
+3. Implement chain coordination in MASEval's `run_agents()`
 
 ---
 
-## Critical Implementation Details
+## Environment Integration
 
-### 1. Environment Integration
+### Domain-Specific Requirements
 
-**Challenge**: MARBLE environments manage tools internally; MASEval expects `Environment.create_tools()`.
+| Domain | External Dependencies | Initial Support |
+|--------|----------------------|-----------------|
+| Research | None | ✅ Yes |
+| Bargaining | None | ✅ Yes |
+| Coding | Filesystem access | ✅ Yes |
+| Web | Network access | ✅ Yes |
+| WorldSimulation | None | ✅ Yes |
+| Database | Docker + PostgreSQL | ⚠️ Optional |
+| Minecraft | External game server | ❌ Deferred |
 
-**Solution**:
+**Strategy:** Start with domains that don't require external services. Add infrastructure-heavy domains as optional extras with clear skip logic.
+
+### MultiAgentBenchEnvironment
+
 ```python
 class MultiAgentBenchEnvironment(Environment):
     """Wraps MARBLE environment instances."""
 
-    def __init__(self, task_data: Dict[str, Any], callbacks=None):
-        self.domain = task_data["scenario"]
-        self.marble_env_config = task_data["environment"]
+    # Domains that require external infrastructure
+    INFRASTRUCTURE_DOMAINS = {"database", "minecraft"}
+
+    def __init__(
+        self,
+        task_data: Dict[str, Any],
+        callbacks: Optional[List[Any]] = None,
+    ):
+        self.domain = task_data.get("scenario", "")
+        self._marble_env: Optional["BaseEnvironment"] = None
         super().__init__(task_data, callbacks)
 
-    def setup_state(self, task_data: Dict[str, Any]) -> Any:
+    def setup_state(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Initialize state and create MARBLE environment."""
+        domain = task_data.get("scenario", "")
+        env_config = task_data.get("environment", {})
+
+        # Check infrastructure requirements
+        if domain in self.INFRASTRUCTURE_DOMAINS:
+            if not self._check_infrastructure(domain):
+                raise EnvironmentError(
+                    f"Domain '{domain}' requires external infrastructure. "
+                    f"See README.md for setup instructions.",
+                    component="MultiAgentBenchEnvironment",
+                )
+
+        # Create MARBLE environment
+        self._marble_env = self._create_marble_environment(domain, env_config)
+
         return {
-            "domain": task_data["scenario"],
-            "marble_config": task_data["environment"],
+            "domain": domain,
+            "env_config": env_config,
+            "marble_env_type": type(self._marble_env).__name__,
         }
+
+    def _check_infrastructure(self, domain: str) -> bool:
+        """Check if required infrastructure is available."""
+        if domain == "database":
+            # Check Docker availability
+            import shutil
+            return shutil.which("docker") is not None
+        elif domain == "minecraft":
+            # Minecraft requires external server - always fail for now
+            return False
+        return True
+
+    def _create_marble_environment(
+        self,
+        domain: str,
+        env_config: Dict[str, Any],
+    ) -> "BaseEnvironment":
+        """Create the appropriate MARBLE environment."""
+        from .marble.environments.base_env import BaseEnvironment
+
+        # Import domain-specific environments
+        env_classes = {
+            "coding": "marble.environments.coding_env.CodingEnvironment",
+            "database": "marble.environments.db_env.DBEnvironment",
+            "research": "marble.environments.research_env.ResearchEnvironment",
+            "bargaining": "marble.environments.bargaining_env.BargainingEnvironment",
+            "web": "marble.environments.web_env.WebEnvironment",
+            "worldsimulation": "marble.environments.world_env.WorldSimulationEnvironment",
+        }
+
+        env_class_path = env_classes.get(domain.lower())
+        if not env_class_path:
+            # Fallback to base environment
+            return BaseEnvironment(env_config)
+
+        # Dynamic import
+        module_path, class_name = env_class_path.rsplit(".", 1)
+        module = __import__(module_path, fromlist=[class_name])
+        env_class = getattr(module, class_name)
+        return env_class(env_config)
 
     def create_tools(self) -> Dict[str, Any]:
-        # MARBLE environments manage tools internally
-        # Tools are accessed through MARBLE agents, not directly
-        # Return empty dict to satisfy MASEval interface
-        return {}
+        """Extract tools from MARBLE environment for tracing.
+
+        MARBLE environments expose tools via action_handler_descriptions.
+        We wrap these for MASEval tracing.
+        """
+        if not self._marble_env:
+            return {}
+
+        tools = {}
+        for action_name in self._marble_env._action_handlers:
+            handler = self._marble_env._action_handlers[action_name]
+            # Wrap handler for tracing
+            tools[action_name] = self._wrap_tool_for_tracing(action_name, handler)
+        return tools
+
+    def _wrap_tool_for_tracing(
+        self,
+        name: str,
+        handler: Callable,
+    ) -> Callable:
+        """Wrap a MARBLE action handler for MASEval tracing."""
+        tool_history = ToolInvocationHistory()
+
+        def traced_handler(**kwargs) -> Any:
+            try:
+                result = handler(**kwargs)
+                tool_history.add_invocation(
+                    inputs=kwargs,
+                    outputs=result,
+                    status="success",
+                )
+                return result
+            except Exception as e:
+                tool_history.add_invocation(
+                    inputs=kwargs,
+                    outputs=str(e),
+                    status="error",
+                )
+                raise
+
+        # Attach history for trace collection
+        traced_handler._history = tool_history
+        traced_handler._original_name = name
+        return traced_handler
 
     def get_tool(self, name: str) -> Optional[Any]:
-        # R3: Fail loudly if someone tries to access tools directly
-        raise NotImplementedError(
-            "MultiAgentBenchEnvironment tools are managed by MARBLE Engine. "
-            "Access tools through MARBLE agents, not directly from environment."
-        )
+        """Get a specific tool by name."""
+        return self.tools.get(name)
 
     def gather_traces(self) -> Dict[str, Any]:
-        """Extract traces from MARBLE environment if available."""
-        return {
-            **super().gather_traces(),
-            "domain": self.domain,
-            "marble_env_type": self.marble_env_config.get("type"),
-        }
+        """Gather traces including tool invocations."""
+        traces = super().gather_traces()
+        traces["domain"] = self.domain
+
+        # Collect tool invocation histories
+        tool_traces = {}
+        for name, tool in self.tools.items():
+            if hasattr(tool, "_history"):
+                tool_traces[name] = {
+                    "invocations": tool._history.to_list(),
+                }
+        traces["tool_invocations"] = tool_traces
+
+        return traces
 ```
 
-### 2. Evaluator Design
+---
 
-**Challenge**: MARBLE uses domain-specific metrics (code_quality, collaboration_effectiveness).
+## Evaluator Design
 
-**Solution**:
+### Metrics Mapping
+
+MARBLE Evaluator produces metrics that must be mapped to MASEval format:
+
+| MARBLE Metric | Type | MASEval Mapping |
+|---------------|------|-----------------|
+| `task_completion` | List[0/1] | `passed` (last value) |
+| `token_consumption` | List[int] | `total_tokens` (sum) |
+| `planning_score` | List[1-5] | `planning_score` (mean) |
+| `communication_score` | List[1-5] | `communication_score` (mean) |
+| `code_quality` | Dict | `code_quality` (pass-through) |
+| `agent_kpis` | Dict[agent_id, int] | `agent_kpis` (pass-through) |
+
+### MultiAgentBenchEvaluator
+
 ```python
 class MultiAgentBenchEvaluator(Evaluator):
     """Wraps MARBLE's Evaluator for MASEval integration."""
 
-    def __init__(self, task: Task, environment: MultiAgentBenchEnvironment):
+    def __init__(
+        self,
+        task: Task,
+        environment: MultiAgentBenchEnvironment,
+        agents: Sequence[AgentAdapter],
+    ):
         self.task = task
         self.environment = environment
+        self.agents = agents
         self.metrics_config = task.evaluation_data.get("metrics", {})
 
         # Create MARBLE evaluator
         from .marble.evaluator.evaluator import Evaluator as MarbleEvaluator
-        self.marble_evaluator = MarbleEvaluator(metrics_config=self.metrics_config)
+        self._marble_evaluator = MarbleEvaluator(metrics_config=self.metrics_config)
 
     def filter_traces(self, traces: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract MARBLE-specific execution data."""
+        """Extract data needed for MARBLE evaluation."""
+        # Get agent traces
+        agent_traces = traces.get("agents", {})
 
-        # For coding: extract generated code
-        # For DB: extract query sequences
-        # For collaboration: extract agent interactions
+        # Get environment state
+        env_traces = traces.get("environment", {})
 
-        marble_engine = traces.get("agents", {}).get("marble_engine", {})
+        # Get tool invocations
+        tool_traces = env_traces.get("tool_invocations", {})
 
         return {
-            "engine_traces": marble_engine,
-            "shared_memory": marble_engine.get("shared_memory", {}),
-            "agent_graph": marble_engine.get("agent_graph", {}),
-            "iterations": marble_engine.get("iterations", 0),
+            "agent_traces": agent_traces,
+            "environment": env_traces,
+            "tool_invocations": tool_traces,
+            "task_id": self.task.id,
         }
 
     def __call__(
         self,
         traces: Dict[str, Any],
-        final_answer: Optional[str] = None
+        final_answer: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Run MARBLE evaluation metrics."""
+        """Run MARBLE evaluation and convert to MASEval format."""
+        # Extract MARBLE agents from adapters
+        marble_agents = [
+            adapter._agent for adapter in self.agents
+            if hasattr(adapter, "_agent")
+        ]
 
-        # Extract relevant data
-        engine_traces = traces["engine_traces"]
+        # Call MARBLE evaluator update (REQUIRED - not automatic)
+        if self.environment._marble_env:
+            self._marble_evaluator.update(
+                environment=self.environment._marble_env,
+                agents=marble_agents,
+            )
 
-        # Call MARBLE evaluator
-        results = self.marble_evaluator.evaluate(
-            output=final_answer,
-            task_spec=self.task.evaluation_data,
-            traces=engine_traces,
-        )
+        # Finalize metrics
+        self._marble_evaluator.finalize()
 
-        # Results should include:
-        # - code_quality: float (for coding tasks)
-        # - test_coverage: float (for coding tasks)
-        # - collaboration_effectiveness: float (for all tasks)
-        # - task_completion: bool
+        # Get raw metrics
+        raw_metrics = self._marble_evaluator.get_metrics()
 
-        return results
+        # Convert to MASEval format
+        return self._convert_metrics(raw_metrics, final_answer)
+
+    def _convert_metrics(
+        self,
+        raw_metrics: Dict[str, Any],
+        final_answer: Optional[str],
+    ) -> Dict[str, Any]:
+        """Convert MARBLE metrics to MASEval format."""
+        task_completion = raw_metrics.get("task_completion", [])
+        planning_scores = raw_metrics.get("planning_score", [])
+        comm_scores = raw_metrics.get("communication_score", [])
+        token_counts = raw_metrics.get("token_consumption", [])
+
+        # Compute aggregates
+        passed = task_completion[-1] == 1 if task_completion else False
+        planning_score = sum(planning_scores) / len(planning_scores) if planning_scores else 0.0
+        communication_score = sum(comm_scores) / len(comm_scores) if comm_scores else 0.0
+        total_tokens = sum(token_counts)
+
+        return {
+            "passed": passed,
+            "task_completion": task_completion[-1] if task_completion else 0,
+            "planning_score": planning_score,
+            "communication_score": communication_score,
+            "total_tokens": total_tokens,
+            "code_quality": raw_metrics.get("code_quality", {}),
+            "agent_kpis": raw_metrics.get("agent_kpis", {}),
+            "total_milestones": raw_metrics.get("total_milestones", 0),
+            "raw_metrics": raw_metrics,  # Include raw for debugging
+        }
 ```
 
-### 3. Data Loading
+---
 
-**Task format validation (R3: Fail loudly)**:
+## Error Classification
+
+Map MARBLE errors to MASEval's `TaskExecutionStatus`:
 
 ```python
+from maseval import TaskExecutionStatus, AgentError, EnvironmentError
+
+def classify_marble_error(error: Exception) -> TaskExecutionStatus:
+    """Classify MARBLE errors into MASEval status codes."""
+    error_str = str(error).lower()
+
+    # Infrastructure failures (not agent's fault)
+    if any(x in error_str for x in ["docker", "connection", "timeout", "rate limit"]):
+        return TaskExecutionStatus.ENVIRONMENT_ERROR
+
+    # MARBLE internal bugs (not agent's fault)
+    if "marble" in error_str or "agentgraph" in error_str:
+        return TaskExecutionStatus.ENVIRONMENT_ERROR
+
+    # Missing dependencies
+    if "import" in error_str or "module" in error_str:
+        return TaskExecutionStatus.SETUP_FAILED
+
+    # LLM/API failures
+    if any(x in error_str for x in ["api", "openai", "anthropic", "quota"]):
+        return TaskExecutionStatus.ENVIRONMENT_ERROR
+
+    # Agent assertion failures, invalid actions
+    if any(x in error_str for x in ["assert", "invalid", "not found"]):
+        return TaskExecutionStatus.AGENT_ERROR
+
+    # Default to agent error (conservative - holds agent accountable)
+    return TaskExecutionStatus.AGENT_ERROR
+
+
+def wrap_marble_error(error: Exception) -> Exception:
+    """Wrap MARBLE exceptions in MASEval exception types."""
+    status = classify_marble_error(error)
+
+    if status == TaskExecutionStatus.ENVIRONMENT_ERROR:
+        return EnvironmentError(
+            str(error),
+            component="MARBLE",
+        )
+    elif status == TaskExecutionStatus.AGENT_ERROR:
+        return AgentError(
+            str(error),
+            component="MarbleAgent",
+        )
+    else:
+        return error
+```
+
+---
+
+## Data Loading
+
+### Task Loading with Validation
+
+```python
+from pathlib import Path
+from typing import List, Optional, Union
+import json
+
+VALID_DOMAINS = frozenset({
+    "coding", "database", "minecraft", "research",
+    "bargaining", "web", "worldsimulation",
+})
+
 def load_tasks(
     domain: str,
     data_dir: Optional[Path] = None,
     limit: Optional[int] = None,
-) -> TaskQueue:
+) -> List[Task]:
     """Load MultiAgentBench tasks from JSONL.
 
     Args:
-        domain: One of "coding", "database", "minecraft", "research", "bargaining"
-        data_dir: Base data directory (default: marble/multiagentbench/)
+        domain: One of the valid domains (see VALID_DOMAINS)
+        data_dir: Base data directory (default: auto-detect)
         limit: Maximum number of tasks
 
     Returns:
-        TaskQueue containing Task objects
+        List of Task objects
 
     Raises:
-        ValueError: If domain invalid or required fields missing
+        ValueError: If domain is invalid or required fields missing
+        FileNotFoundError: If data files not found
     """
-    VALID_DOMAINS = ("coding", "database", "minecraft", "research", "bargaining")
-    if domain not in VALID_DOMAINS:
-        raise ValueError(f"Invalid domain '{domain}'. Must be one of {VALID_DOMAINS}")
+    # Validate domain
+    if domain.lower() not in VALID_DOMAINS:
+        raise ValueError(
+            f"Invalid domain '{domain}'. Must be one of: {sorted(VALID_DOMAINS)}"
+        )
 
-    # Default to vendored MARBLE data
-    data_dir = Path(data_dir) if data_dir else Path(__file__).parent / "marble" / "multiagentbench"
+    # Find data directory
+    data_dir = _resolve_data_dir(data_dir)
     jsonl_path = data_dir / domain / f"{domain}_main.jsonl"
 
     if not jsonl_path.exists():
@@ -630,180 +707,129 @@ def load_tasks(
                 break
 
             entry = json.loads(line)
-
-            # R3: Validate required fields
-            REQUIRED_FIELDS = ["scenario", "task_id", "task", "agents", "environment", "relationships"]
-            missing = [f for f in REQUIRED_FIELDS if f not in entry]
-            if missing:
-                raise ValueError(
-                    f"Task {entry.get('task_id', idx)} missing required fields: {missing}\n"
-                    f"Ensure JSONL format matches MultiAgentBench specification."
-                )
-
-            # Validate agent specifications
-            for agent_spec in entry["agents"]:
-                if "agent_id" not in agent_spec:
-                    raise ValueError(
-                        f"Agent in task {entry['task_id']} missing 'agent_id'\n"
-                        f"Agent spec: {agent_spec}"
-                    )
-
-            # Convert to MASEval Task
-            task = Task(
-                id=f"{domain}_{entry['task_id']}",
-                query=entry["task"]["content"],
-                environment_data={
-                    "scenario": entry["scenario"],
-                    "coordinate_mode": entry.get("coordinate_mode", "chain"),
-                    "relationships": entry["relationships"],
-                    "environment": entry["environment"],
-                    "task": entry["task"],
-                    "agents": entry["agents"],
-                    "memory": entry.get("memory", {"type": "SharedMemory"}),
-                    "engine_planner": entry.get("engine_planner", {}),
-                },
-                evaluation_data={
-                    "metrics": entry.get("metrics", {}),
-                },
-                metadata={
-                    "domain": domain,
-                    "task_id": entry["task_id"],
-                    "llm": entry.get("llm", ""),
-                },
-            )
+            task = _parse_task_entry(entry, domain, idx)
             tasks.append(task)
 
-    return TaskQueue(tasks)
+    return tasks
+
+
+def _resolve_data_dir(data_dir: Optional[Path]) -> Path:
+    """Resolve the MARBLE data directory."""
+    if data_dir:
+        return Path(data_dir)
+
+    # Check standard locations
+    candidates = [
+        Path(__file__).parent / "marble" / "multiagentbench",
+        Path.cwd() / "marble" / "multiagentbench",
+    ]
+
+    # Check environment variable
+    import os
+    env_dir = os.environ.get("MARBLE_DATA_DIR")
+    if env_dir:
+        candidates.insert(0, Path(env_dir))
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    raise FileNotFoundError(
+        "MARBLE data directory not found. Either:\n"
+        "1. Clone MARBLE to maseval/benchmark/multiagentbench/marble/\n"
+        "2. Set MARBLE_DATA_DIR environment variable\n"
+        "See README.md for setup instructions."
+    )
+
+
+def _parse_task_entry(
+    entry: Dict[str, Any],
+    domain: str,
+    idx: int,
+) -> Task:
+    """Parse a JSONL entry into a MASEval Task.
+
+    Raises:
+        ValueError: If required fields are missing (fail loudly, no defaults)
+    """
+    # Required fields - fail if missing
+    REQUIRED_FIELDS = ["scenario", "task_id", "task", "agents", "environment", "relationships"]
+    missing = [f for f in REQUIRED_FIELDS if f not in entry]
+    if missing:
+        raise ValueError(
+            f"Task entry {idx} missing required fields: {missing}\n"
+            f"Entry keys: {list(entry.keys())}"
+        )
+
+    # Validate agent specifications
+    for i, agent_spec in enumerate(entry["agents"]):
+        if "agent_id" not in agent_spec:
+            raise ValueError(
+                f"Agent {i} in task {entry['task_id']} missing 'agent_id'\n"
+                f"Agent spec: {agent_spec}"
+            )
+
+    # Extract task content
+    task_content = entry["task"]
+    if isinstance(task_content, dict):
+        query = task_content.get("content", "")
+    else:
+        query = str(task_content)
+
+    if not query:
+        raise ValueError(
+            f"Task {entry['task_id']} has empty query/content"
+        )
+
+    return Task(
+        id=f"{domain}_{entry['task_id']}",
+        query=query,
+        environment_data={
+            "scenario": entry["scenario"],
+            "coordinate_mode": entry.get("coordinate_mode", "star"),
+            "relationships": entry["relationships"],
+            "environment": entry["environment"],
+            "task": entry["task"],
+            "agents": entry["agents"],
+            "max_iterations": entry.get("max_iterations", 10),
+            # Store raw entry for MARBLE compatibility
+            "raw_marble_config": entry,
+        },
+        evaluation_data={
+            "metrics": entry.get("metrics", {}),
+        },
+        metadata={
+            "domain": domain,
+            "task_id": entry["task_id"],
+        },
+    )
 
 
 def configure_model_ids(
-    tasks: Union[TaskQueue, List[Task]],
+    tasks: List[Task],
     *,
     agent_model_id: str,
     evaluator_model_id: Optional[str] = None,
-) -> Union[TaskQueue, List[Task]]:
+) -> List[Task]:
     """Configure model IDs for MARBLE agents and evaluator.
 
     Args:
-        tasks: TaskQueue or list of Tasks
-        agent_model_id: Model for all MARBLE agents (e.g., "gpt-4", "claude-sonnet-4.5")
-        evaluator_model_id: Optional model for LLM-based evaluation metrics
+        tasks: List of Tasks
+        agent_model_id: Model for all MARBLE agents
+        evaluator_model_id: Optional model for LLM-based evaluation
 
     Returns:
         Tasks with model IDs configured (mutated in place)
     """
     for task in tasks:
-        # Set global LLM for all MARBLE agents
+        # Set agent model
         task.environment_data["llm"] = agent_model_id
 
-        # Individual agents can override via agent_config["llm"]
-        # This is preserved in task.environment_data["agents"]
-
-        # Set evaluator model if LLM-based metrics enabled
-        if evaluator_model_id and task.evaluation_data.get("metrics", {}).get("use_llm_eval"):
-            task.evaluation_data["evaluate_llm"] = evaluator_model_id
+        # Set evaluator model
+        if evaluator_model_id:
+            task.evaluation_data["model_id"] = evaluator_model_id
 
     return tasks
-```
-
-### 4. Message History Extraction
-
-**Challenge**: MARBLE agents may not expose message history directly.
-
-**Fallback strategies**:
-```python
-def _convert_to_message_history(self, engine) -> MessageHistory:
-    """Extract messages from MARBLE agents with fallbacks."""
-    messages = []
-
-    # Strategy 1: Direct message access
-    for agent in engine.agents:
-        if hasattr(agent, "messages"):
-            for msg in agent.messages:
-                messages.append({
-                    "role": f"agent_{agent.agent_id}",
-                    "content": str(msg),
-                    "agent_id": agent.agent_id,
-                })
-
-    # Strategy 2: Fallback to SharedMemory
-    if not messages:
-        memory_state = engine.memory.to_dict()
-        for key, value in memory_state.items():
-            messages.append({
-                "role": "system",
-                "content": f"{key}: {value}",
-            })
-
-    # Strategy 3: Fallback to agent outputs
-    if not messages:
-        for agent in engine.agents:
-            if hasattr(agent, "last_output"):
-                messages.append({
-                    "role": f"agent_{agent.agent_id}",
-                    "content": str(agent.last_output),
-                    "agent_id": agent.agent_id,
-                })
-
-    return MessageHistory(messages)
-```
-
----
-
-## Setup Instructions
-
-### Getting MARBLE Source
-
-Since MARBLE's pip installation has bugs, clone the source directly:
-
-```bash
-cd maseval/benchmark/multiagentbench
-git clone https://github.com/ulab-uiuc/MARBLE.git marble
-cd marble
-git checkout <commit-hash>  # Pin to tested version
-```
-
-**Recommended commit**: `<commit-hash>` (tested with MASEval integration)
-
-**Document in `README.md`**:
-```markdown
-# MultiAgentBench Integration Setup
-
-1. Clone MARBLE source:
-   ```bash
-   cd maseval/benchmark/multiagentbench
-   git clone https://github.com/ulab-uiuc/MARBLE.git marble
-   cd marble
-   git checkout abc123def  # Pinned version
-   ```
-
-2. Install MARBLE dependencies:
-   ```bash
-   # From maseval root
-   uv pip install -e ./maseval/benchmark/multiagentbench/marble
-   ```
-
-3. Run example:
-   ```bash
-   python examples/multiagentbench_marble.py
-   ```
-```
-
-**Document in `PROVENANCE.md`**:
-```markdown
-# MARBLE Integration Provenance
-
-- **Source**: https://github.com/ulab-uiuc/MARBLE
-- **Version**: Commit `abc123def` (2025-01-19)
-- **License**: MIT (Copyright 2024 Haofei Yu)
-- **Vendoring**: Permitted by MIT license with attribution
-- **Paper**: arXiv:2503.01935
-- **Last Updated**: 2025-01-19
-- **Integration**: Wrapped via MarbleAgentAdapter
-
-## Changes from Upstream
-- None (vanilla MARBLE source)
-- If patches needed, document here
 ```
 
 ---
@@ -812,367 +838,195 @@ git checkout <commit-hash>  # Pin to tested version
 
 ### R1: Reuse MASEval ✅
 
-**Fully compliant.** The integration:
 - Uses `Benchmark`, `Environment`, `Evaluator`, `AgentAdapter` base classes
 - Leverages callback system for tracing
-- Uses `TaskQueue` and `Task` data structures
+- Uses `Task` data structures
 - Benefits from parallel execution, progress bars, error handling
-- No reimplementation of MASEval features
 
 ### R2: Scientific Fidelity ✅
 
-**Compliant with validation.**
-
-**Preserved**:
-- Uses MARBLE's Engine, AgentGraph, SharedMemory exactly as designed
 - Version pinning via commit hash
 - Task data preserved from original JSONL format
-- Same coordination strategies (chain, hierarchical, graph)
-
-**Validation Strategy**:
-1. Run subset of tasks with both standalone MARBLE and MASEval integration
-2. Compare final outputs, metrics, agent behaviors
-3. Document any discrepancies
-4. Adjust adapter if differences are material
-
-**Expected**: Minor differences in execution traces (formatted differently) but identical final outputs and metrics.
+- Same coordination strategies available
+- MARBLE's agent logic preserved in adapters
 
 ### R3: Fail Loudly ✅
 
-**Fully compliant.** The integration includes:
-
-**Validation at boundaries**:
-```python
-# Missing MARBLE source
-if not Path("marble").exists():
-    raise FileNotFoundError("MARBLE not found. See README.md for setup.")
-
-# Invalid domain
-if domain not in VALID_DOMAINS:
-    raise ValueError(f"Invalid domain '{domain}'")
-
-# Missing required fields
-if "agent_id" not in agent_spec:
-    raise ValueError(f"Agent missing 'agent_id': {agent_spec}")
-
-# Incorrect tool access
-def get_tool(self, name):
-    raise NotImplementedError("Tools managed by MARBLE Engine")
-```
-
-**No defensive defaults**:
-- Missing JSONL fields → crash with error message
-- Invalid relationships → propagate MARBLE error
-- Missing config → fail at Engine initialization
+- No silent fallbacks that change benchmark results
+- Explicit validation with clear error messages
+- Infrastructure requirements checked upfront
+- Missing fields cause immediate failure
 
 ### R4: Maintainability ✅
 
-**Compliant.** The integration:
-
-**Clear module boundaries**:
-- `data_loader.py`: JSONL → Task conversion (zero MARBLE dependencies)
-- `environment.py`: Thin wrapper, delegates to MARBLE
-- `multiagentbench.py`: Benchmark + Evaluator, documented adapter pattern
-- `adapters/marble_adapter.py`: Single-purpose adapter
-- `marble/`: Vendored source, not modified
-
-**Documentation**:
-- `README.md`: Setup instructions, version pinning
-- `PROVENANCE.md`: Track upstream, document changes
-- Docstrings: Explain rationale, MARBLE delegation
-- Code comments: Clarify adapter pattern decisions
-
-**Update Process**:
-```bash
-# Update vendored MARBLE
-cd maseval/benchmark/multiagentbench/marble
-git pull origin main
-git checkout <new-commit>
-
-# Test integration
-cd ../../../..
-pytest tests/test_benchmarks/test_multiagentbench/ -v
-
-# Document update
-# Update PROVENANCE.md with new commit hash and date
-```
-
-**Long-term**:
-- Low coupling: Adapter isolates MASEval from MARBLE internals
-- Testable: Can mock MARBLE Engine for unit tests
-- Extensible: Users can add custom framework implementations via examples/
+- Clear module boundaries
+- Per-agent adapters match tau2/macs pattern
+- Documentation of MARBLE quirks
+- Update process documented
 
 ---
 
 ## Implementation Checklist
 
 ### Phase 1: Core Infrastructure
-- [ ] Create `maseval/benchmark/multiagentbench/` directory
+- [ ] Create `maseval/benchmark/multiagentbench/` directory structure
 - [ ] Add `.gitignore` excluding `marble/`
 - [ ] Write `README.md` with MARBLE setup instructions
 - [ ] Write `PROVENANCE.md` documenting MARBLE version and license
-- [ ] Clone MARBLE to `marble/` directory (manual step for users)
-- [ ] Create symlink: `data/` → `marble/multiagentbench/`
+- [ ] Implement `_resolve_data_dir()` for flexible data location
 
-### Phase 2: Core Classes
-- [ ] Implement `MultiAgentBenchEnvironment(Environment)`
-  - [ ] `setup_state()`: Store domain and config
-  - [ ] `create_tools()`: Return empty dict (tools managed by MARBLE)
-  - [ ] `get_tool()`: Raise NotImplementedError with clear message (R3)
-  - [ ] `gather_traces()`: Extract domain info
-- [ ] Implement `MarbleAgentAdapter(AgentAdapter)`
-  - [ ] `__init__()`: Store MARBLE Engine
-  - [ ] `_run_agent()`: Delegate to `engine.start()`
-  - [ ] `_convert_to_message_history()`: Extract from agents + SharedMemory
-  - [ ] `gather_traces()`: Include AgentGraph, SharedMemory, iterations
-- [ ] Implement `MultiAgentBenchEvaluator(Evaluator)`
-  - [ ] Wrap MARBLE's Evaluator
-  - [ ] `filter_traces()`: Extract engine traces
-  - [ ] `__call__()`: Compute metrics (code_quality, collaboration, etc.)
-
-### Phase 3: Benchmark Classes
-- [ ] Implement `MultiAgentBenchBenchmark(Benchmark)` (abstract base)
-  - [ ] `setup_environment()`: Create MultiAgentBenchEnvironment
-  - [ ] `setup_user()`: Return None
-  - [ ] `setup_agents()`: ABSTRACT
-  - [ ] `setup_evaluators()`: Create MultiAgentBenchEvaluator
-  - [ ] `run_agents()`: Call agent.run(query)
-- [ ] Implement `MarbleMultiAgentBenchBenchmark(MultiAgentBenchBenchmark)`
-  - [ ] `setup_agents()`: Create MARBLE Engine, wrap in adapter
-  - [ ] `_build_marble_config()`: Convert Task → MARBLE Config
-  - [ ] `get_model_adapter()`: Create/register model adapters
-
-### Phase 4: Data Loading
-- [ ] Implement `load_tasks()` in `data_loader.py`
-  - [ ] Validate domain (R3)
-  - [ ] Validate JSONL fields (R3)
-  - [ ] Convert to Task objects
-  - [ ] Clear error messages for missing data
+### Phase 2: Data Loading
+- [ ] Implement `load_tasks()` with strict validation
+- [ ] Implement `_parse_task_entry()` with required field checks
 - [ ] Implement `configure_model_ids()`
-  - [ ] Set agent model in environment_data
-  - [ ] Set evaluator model in evaluation_data
-- [ ] Add unit tests for data loading
+- [ ] Unit tests for data loading (valid/invalid inputs)
 
-### Phase 5: Testing & Validation
+### Phase 3: Environment
+- [ ] Implement `MultiAgentBenchEnvironment`
+- [ ] Implement `_create_marble_environment()` for each supported domain
+- [ ] Implement `_check_infrastructure()` for Docker-dependent domains
+- [ ] Implement `create_tools()` with tracing wrappers
+- [ ] Implement `gather_traces()` with tool invocation histories
+- [ ] Unit tests for environment setup
+
+### Phase 4: Agent Adapter
+- [ ] Implement `MarbleAgentAdapter`
+- [ ] Implement `_extract_message_history()` using `msg_box`
+- [ ] Implement `gather_traces()` with relationships
+- [ ] Implement `_extract_relationships()` from AgentGraph
+- [ ] Unit tests for adapter
+
+### Phase 5: Benchmark Class
+- [ ] Implement `MultiAgentBenchBenchmark` (abstract base)
+  - [ ] `setup_environment()` - create MultiAgentBenchEnvironment
+  - [ ] `setup_user()` - return None (no user simulation)
+  - [ ] `setup_agents()` - ABSTRACT
+  - [ ] `setup_evaluators()` - create MultiAgentBenchEvaluator
+- [ ] Implement `MarbleMultiAgentBenchBenchmark`
+  - [ ] `setup_agents()` - create agents, AgentGraph, wrap in adapters
+  - [ ] `_create_agents()` - instantiate MARBLE BaseAgent instances
+  - [ ] `_build_graph_config()` - create AgentGraph config from task
+  - [ ] `run_agents()` - implement coordination modes
+- [ ] Implement coordination methods:
+  - [ ] `_star_coordinate()`
+  - [ ] `_graph_coordinate()`
+  - [ ] `_tree_coordinate()` (optional - defer if complex)
+  - [ ] `_chain_coordinate()` (document MARBLE bug, implement workaround)
+
+### Phase 6: Evaluator
+- [ ] Implement `MultiAgentBenchEvaluator`
+- [ ] Implement `filter_traces()` - extract agent/env/tool data
+- [ ] Implement `__call__()` with explicit `evaluator.update()` call
+- [ ] Implement `_convert_metrics()` - MARBLE → MASEval format
+- [ ] Unit tests for evaluator
+
+### Phase 7: Error Handling
+- [ ] Implement `classify_marble_error()`
+- [ ] Implement `wrap_marble_error()`
+- [ ] Add try/except wrappers in adapter and benchmark
+- [ ] Test error classification
+
+### Phase 8: Integration Testing
 - [ ] Create `tests/test_benchmarks/test_multiagentbench/`
-- [ ] Unit tests:
-  - [ ] `test_load_tasks()`: Validates JSONL parsing
-  - [ ] `test_configure_model_ids()`: Validates model config
-  - [ ] `test_marble_config_conversion()`: Task → Config
-  - [ ] `test_environment()`: MultiAgentBenchEnvironment
-  - [ ] `test_evaluator()`: MultiAgentBenchEvaluator
-- [ ] Integration tests:
-  - [ ] Run 1 coding task with MARBLE
-  - [ ] Run 1 database task with MARBLE
-  - [ ] Verify metrics computed
-  - [ ] Verify traces collected
-- [ ] Validation test:
-  - [ ] Run same task standalone vs MASEval
-  - [ ] Compare outputs and metrics
-  - [ ] Document any discrepancies
+- [ ] Integration test: Run 1 Research task
+- [ ] Integration test: Run 1 Bargaining task
+- [ ] Integration test: Run 1 Coding task
+- [ ] Verify traces collected correctly
+- [ ] Verify metrics computed correctly
+- [ ] Verify error handling works
 
-### Phase 6: Documentation & Examples
-- [ ] Example: `examples/multiagentbench_marble.py`
-  - [ ] Load coding tasks
-  - [ ] Run with MarbleMultiAgentBenchBenchmark
-  - [ ] Print results and metrics
-- [ ] Update main MASEval README
-  - [ ] Document MultiAgentBench integration
-  - [ ] Setup instructions for MARBLE
-- [ ] Add to documentation site (if exists)
+### Phase 9: Example & Documentation
+- [ ] Create `examples/multiagentbench_marble.py`
+- [ ] Update main MASEval README with MultiAgentBench section
+- [ ] Document known limitations (chain mode bug, Minecraft not supported)
 
-### Phase 7: Optional User Framework Examples (in examples/ only)
-- [ ] Example: `examples/multiagentbench_langgraph.py`
-  - [ ] Implement `LangGraphMultiAgentBench(MultiAgentBenchBenchmark)`
-  - [ ] Parse relationships → LangGraph structure
-  - [ ] Demonstrate how users can implement custom frameworks
-  - [ ] Document in example README
-- [ ] Example: `examples/multiagentbench_smolagents.py`
-  - [ ] Implement `SmolagentsMultiAgentBench(MultiAgentBenchBenchmark)`
-  - [ ] Show second framework example
-  - [ ] Demonstrate comparison methodology
-- [ ] Document in examples README:
-  - [ ] How to implement custom multi-agent framework
-  - [ ] How to compare metrics across frameworks
-  - [ ] What differences are expected vs problematic
-  - [ ] **Important**: These are EXAMPLES, not part of main library
+---
+
+## Setup Instructions
+
+### Getting MARBLE Source
+
+```bash
+cd maseval/benchmark/multiagentbench
+git clone https://github.com/ulab-uiuc/MARBLE.git marble
+cd marble
+git checkout <pinned-commit-hash>  # Pin to tested version
+```
+
+**Recommended:** Pin to a specific commit after testing.
+
+### PROVENANCE.md Template
+
+```markdown
+# MARBLE Integration Provenance
+
+- **Source**: https://github.com/ulab-uiuc/MARBLE
+- **Version**: Commit `<commit-hash>` (YYYY-MM-DD)
+- **License**: MIT (Copyright 2024 Haofei Yu)
+- **Vendoring**: Permitted by MIT license with attribution
+- **Paper**: arXiv:2503.01935
+- **Last Updated**: YYYY-MM-DD
+
+## Known Issues in MARBLE
+
+1. `AgentGraph.get_agent_profiles_linked()` does not exist - breaks chain coordination
+2. SharedMemory is per-agent, not actually shared
+
+## Local Patches Applied
+
+- None (document any patches here)
+```
+
+---
+
+## Example Usage
+
+```python
+from maseval.benchmark.multiagentbench import (
+    load_tasks,
+    configure_model_ids,
+    MarbleMultiAgentBenchBenchmark,
+)
+
+# Load tasks from a simple domain (no Docker required)
+tasks = load_tasks("research", limit=5)
+configure_model_ids(tasks, agent_model_id="gpt-4o")
+
+# Create benchmark
+class MyMarbleBenchmark(MarbleMultiAgentBenchBenchmark):
+    def get_model_adapter(self, model_id, **kwargs):
+        from maseval.interface.openai import OpenAIModelAdapter
+        adapter = OpenAIModelAdapter(model_id)
+        if "register_name" in kwargs:
+            self.register("models", kwargs["register_name"], adapter)
+        return adapter
+
+# Run
+benchmark = MyMarbleBenchmark()
+results = benchmark.run(tasks)
+
+# Print results
+for result in results:
+    print(f"Task: {result['task_id']}")
+    print(f"Status: {result['status']}")
+    if result['eval']:
+        print(f"Passed: {result['eval'][0]['passed']}")
+        print(f"Planning Score: {result['eval'][0]['planning_score']:.2f}")
+```
 
 ---
 
 ## Risks and Mitigations
 
-### Risk 1: MARBLE API Changes
-**Probability**: High (early-stage project)
-**Impact**: High (breaks integration)
-**Mitigation**:
-- Pin exact commit hash in README and PROVENANCE.md
-- Vendored source allows local patches if needed
-- Automated tests detect breakage quickly
-- Document MARBLE version compatibility matrix
-
-### Risk 2: Message History Extraction
-**Probability**: Medium (depends on MARBLE internals)
-**Impact**: Medium (affects tracing quality)
-**Mitigation**:
-- Implement fallback strategies (SharedMemory, agent outputs)
-- Test extraction thoroughly
-- If MARBLE doesn't expose messages, contribute PR upstream
-- Document limitations in traces
-
-### Risk 3: License Compatibility
-**Probability**: None (VERIFIED ✅)
-**Impact**: N/A
-**Verification**:
-- ✅ MARBLE uses MIT License (Copyright 2024 Haofei Yu)
-- ✅ MIT explicitly allows: "use, copy, modify, merge, publish, distribute" without restriction
-- ✅ Only requirement: Include copyright notice and LICENSE file
-**Implementation**:
-- Keep `LICENSE` file in vendored `marble/` directory
-- Document in `PROVENANCE.md`: "MARBLE is MIT licensed, vendoring permitted with attribution"
-
-### Risk 4: User Setup Friction
-**Probability**: High (manual MARBLE clone)
-**Impact**: Low (one-time setup, well-documented)
-**Mitigation**:
-- Clear README with step-by-step instructions
-- Provide setup script: `bash setup_multiagentbench.sh`
-- Fail fast with helpful error if MARBLE missing
-- Consider setup script that automates cloning
-
-### Risk 5: Evaluation Discrepancies
-**Probability**: Medium (different execution context)
-**Impact**: High (invalidates scientific fidelity)
-**Mitigation**:
-- Run validation study: MASEval vs standalone MARBLE
-- Compare outputs, metrics, agent behaviors on subset of tasks
-- Document any differences in PROVENANCE.md
-- If material differences exist, adjust adapter
-- Acceptable: Different trace formatting, same final results
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| MARBLE API changes | High | High | Pin commit hash, vendored source allows local patches |
+| Chain coordination bug | Confirmed | Medium | Document, implement MASEval workaround |
+| Docker-dependent domains | Medium | Low | Clear error messages, skip logic, optional support |
+| Evaluation discrepancies | Medium | High | Validation study comparing standalone vs MASEval |
 
 ---
 
-## Conclusion
-
-The integration architecture provides:
-
-✅ **Exact MARBLE reproduction** via `MarbleMultiAgentBenchBenchmark`
-✅ **Fair framework comparison** via abstract `MultiAgentBenchBenchmark` base
-✅ **Reuse of MASEval infrastructure** (callbacks, tracing, parallelization)
-✅ **Clean architectural boundaries** (adapter pattern)
-✅ **Scientific fidelity** (version pinning, validation)
-✅ **Maintainability** (clear modules, documented patterns)
-
-**Key Architectural Insights**:
-
-1. **MARBLE's multi-agent Engine wraps as single AgentAdapter** - Preserves coordination logic while integrating with MASEval orchestration
-
-2. **Dual-purpose design enables comparative research** - Abstract base allows users to implement any framework, enabling "which framework is better?" questions
-
-3. **tau2/macs patterns transfer with one adaptation** - Demonstrates MASEval's flexibility for diverse benchmarking paradigms
-
-4. **License verified** - MIT permits vendoring with attribution
-
-**Next Steps**: Begin implementation with Phase 1 (infrastructure setup).
-
----
-
-## Appendices
-
-### Appendix A: Complete File Structure
-
-```
-maseval/benchmark/multiagentbench/
-├── __init__.py
-├── README.md
-├── PROVENANCE.md
-├── .gitignore
-├── multiagentbench.py
-├── environment.py
-├── data_loader.py
-├── adapters/
-│   ├── __init__.py
-│   └── marble_adapter.py
-├── marble/                    # Gitignored, user clones
-│   ├── LICENSE
-│   ├── multiagentbench/
-│   │   ├── coding/
-│   │   ├── database/
-│   │   ├── minecraft/
-│   │   ├── research/
-│   │   └── bargaining/
-│   └── ...
-└── data/                      # Symlink to marble/multiagentbench/
-```
-
-### Appendix B: MARBLE Architecture Summary
-
-- **Engine**: Main orchestrator, coordinates agents and environment
-- **BaseAgent**: Individual agent with LLM, tools, profile
-- **AgentGraph**: Manages agent relationships and communication rules
-- **SharedMemory**: Inter-agent communication and state sharing
-- **EnginePlanner**: Plans agent execution order based on coordination mode
-- **Environments**: Domain-specific (Coding, DB, Minecraft, Research, Bargaining, Web, WorldSimulation)
-- **Evaluator**: Computes domain-specific metrics (code_quality, collaboration_effectiveness)
-
-### Appendix C: Example Usage
-
-**Basic usage with MARBLE reproduction:**
-
-```python
-from maseval.benchmark.multiagentbench import (
-    load_tasks,
-    configure_model_ids,
-    MarbleMultiAgentBenchBenchmark,
-)
-
-# Load tasks
-tasks = load_tasks("coding", limit=10)
-configure_model_ids(tasks, agent_model_id="gpt-4")
-
-# Run with MARBLE (exact reproduction)
-marble_bench = MarbleMultiAgentBenchBenchmark()
-marble_results = marble_bench.run(tasks)
-
-# Print results
-for result in marble_results:
-    print(f"Task: {result['task_id']}")
-    print(f"Code quality: {result['eval']['code_quality']}")
-    print(f"Collaboration: {result['eval']['collaboration_effectiveness']}")
-```
-
-**Advanced: Framework comparison (user implementation):**
-
-```python
-from maseval.benchmark.multiagentbench import (
-    load_tasks,
-    configure_model_ids,
-    MarbleMultiAgentBenchBenchmark,
-)
-
-# User's custom implementation (from examples/ directory)
-from examples.multiagentbench_langgraph import LangGraphMultiAgentBench
-
-tasks = load_tasks("coding", limit=10)
-configure_model_ids(tasks, agent_model_id="gpt-4")
-
-# Run with MARBLE
-marble_bench = MarbleMultiAgentBenchBenchmark()
-marble_results = marble_bench.run(tasks)
-
-# Run with user's LangGraph implementation
-langgraph_bench = LangGraphMultiAgentBench()
-langgraph_results = langgraph_bench.run(tasks)
-
-# Compare results
-for marble_res, lg_res in zip(marble_results, langgraph_results):
-    print(f"Task: {marble_res['task_id']}")
-    print(f"  MARBLE code_quality: {marble_res['eval']['code_quality']}")
-    print(f"  LangGraph code_quality: {lg_res['eval']['code_quality']}")
-```
-
----
-
-**Document Version**: 2.0
+**Document Version**: 3.0
 **Date**: 2026-01-19
-**Author**: Claude (Sonnet 4.5)
-**Status**: Final Recommendation
+**Status**: Ready for Implementation
