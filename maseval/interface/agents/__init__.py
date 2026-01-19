@@ -31,8 +31,22 @@ except ImportError:
 
 # Conditionally import camel
 try:
-    from .camel import CamelAgentAdapter, CamelUser  # noqa: F401
+    from .camel import (  # noqa: F401
+        CamelAgentAdapter,
+        CamelUser,
+        CamelAgentUser,
+        camel_role_playing_execution_loop,
+        CamelRolePlayingTracer,
+        CamelWorkforceTracer,
+    )
 
-    __all__.extend(["CamelAgentAdapter", "CamelUser"])
+    __all__.extend([
+        "CamelAgentAdapter",
+        "CamelUser",
+        "CamelAgentUser",
+        "camel_role_playing_execution_loop",
+        "CamelRolePlayingTracer",
+        "CamelWorkforceTracer",
+    ])
 except ImportError:
     pass

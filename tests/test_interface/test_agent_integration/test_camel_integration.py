@@ -382,3 +382,520 @@ def test_camel_adapter_convert_memory_messages_with_tool_calls():
     assert converted[1]["role"] == "tool"
     assert converted[1]["tool_call_id"] == "call_1"
     assert converted[1]["name"] == "search"
+
+
+# =============================================================================
+# Phase 2 Tests: CamelAgentUser, Execution Loop, Tracers
+# =============================================================================
+
+
+def test_camel_agent_user_import():
+    """Test that CamelAgentUser can be imported."""
+    from maseval.interface.agents.camel import CamelAgentUser
+
+    assert CamelAgentUser is not None
+
+
+def test_camel_agent_user_in_all():
+    """Test that CamelAgentUser is in __all__."""
+    import maseval.interface.agents
+
+    assert "CamelAgentUser" in maseval.interface.agents.__all__
+
+
+def test_camel_agent_user_creation():
+    """Test CamelAgentUser creation with a mock agent."""
+    from maseval.interface.agents.camel import CamelAgentUser
+    from maseval.core.user import User
+    from unittest.mock import Mock
+
+    mock_agent = Mock()
+
+    user = CamelAgentUser(
+        user_agent=mock_agent,
+        initial_query="Hello, I need help",
+        name="test_user",
+        max_turns=5,
+    )
+
+    assert user.name == "test_user"
+    assert user._max_turns == 5
+    assert user._turn_count == 0
+    assert isinstance(user, User)
+
+
+def test_camel_agent_user_get_initial_query():
+    """Test CamelAgentUser.get_initial_query() returns the initial query."""
+    from maseval.interface.agents.camel import CamelAgentUser
+    from unittest.mock import Mock
+
+    mock_agent = Mock()
+    user = CamelAgentUser(
+        user_agent=mock_agent,
+        initial_query="Test initial query",
+    )
+
+    assert user.get_initial_query() == "Test initial query"
+
+
+def test_camel_agent_user_is_done():
+    """Test CamelAgentUser.is_done() respects max_turns."""
+    from maseval.interface.agents.camel import CamelAgentUser
+    from unittest.mock import Mock
+
+    mock_agent = Mock()
+    user = CamelAgentUser(
+        user_agent=mock_agent,
+        initial_query="Hello",
+        max_turns=2,
+    )
+
+    assert user.is_done() is False
+
+    user._turn_count = 1
+    assert user.is_done() is False
+
+    user._turn_count = 2
+    assert user.is_done() is True
+
+
+def test_camel_agent_user_respond():
+    """Test CamelAgentUser.respond() delegates to the CAMEL agent."""
+    from maseval.interface.agents.camel import CamelAgentUser
+    from unittest.mock import Mock
+
+    # Create mock agent with response
+    mock_msg = Mock()
+    mock_msg.content = "Agent response"
+
+    mock_response = Mock()
+    mock_response.msgs = [mock_msg]
+
+    mock_agent = Mock()
+    mock_agent.step.return_value = mock_response
+
+    user = CamelAgentUser(
+        user_agent=mock_agent,
+        initial_query="Hello",
+        max_turns=5,
+    )
+
+    response = user.respond("What is your question?")
+
+    assert response == "Agent response"
+    assert user._turn_count == 1
+    assert mock_agent.step.called
+
+
+def test_camel_agent_user_respond_when_done():
+    """Test CamelAgentUser.respond() returns empty string when done."""
+    from maseval.interface.agents.camel import CamelAgentUser
+    from unittest.mock import Mock
+
+    mock_agent = Mock()
+    user = CamelAgentUser(
+        user_agent=mock_agent,
+        initial_query="Hello",
+        max_turns=1,
+    )
+
+    # Set as done
+    user._turn_count = 1
+
+    response = user.respond("Question?")
+
+    assert response == ""
+    assert not mock_agent.step.called
+
+
+def test_camel_agent_user_get_tool():
+    """Test CamelAgentUser.get_tool() returns a FunctionTool."""
+    from maseval.interface.agents.camel import CamelAgentUser
+    from camel.toolkits import FunctionTool
+    from unittest.mock import Mock
+
+    mock_agent = Mock()
+    user = CamelAgentUser(
+        user_agent=mock_agent,
+        initial_query="Hello",
+    )
+
+    tool = user.get_tool()
+
+    assert isinstance(tool, FunctionTool)
+
+
+def test_camel_agent_user_gather_traces():
+    """Test CamelAgentUser.gather_traces() returns expected fields."""
+    from maseval.interface.agents.camel import CamelAgentUser
+    from unittest.mock import Mock
+
+    mock_agent = Mock()
+    mock_agent.__class__.__name__ = "MockChatAgent"
+
+    user = CamelAgentUser(
+        user_agent=mock_agent,
+        initial_query="Hello",
+        name="test_user",
+        max_turns=5,
+    )
+
+    traces = user.gather_traces()
+
+    assert traces["type"] == "CamelAgentUser"
+    assert traces["name"] == "test_user"
+    assert traces["max_turns"] == 5
+    assert traces["turns_used"] == 0
+    assert "gathered_at" in traces
+    assert "logs" in traces
+
+
+def test_camel_agent_user_gather_config():
+    """Test CamelAgentUser.gather_config() returns expected fields."""
+    from maseval.interface.agents.camel import CamelAgentUser
+    from unittest.mock import Mock
+
+    mock_agent = Mock()
+    mock_agent.__class__.__name__ = "MockChatAgent"
+
+    user = CamelAgentUser(
+        user_agent=mock_agent,
+        initial_query="Test query",
+        name="test_user",
+        max_turns=10,
+    )
+
+    config = user.gather_config()
+
+    assert config["type"] == "CamelAgentUser"
+    assert config["name"] == "test_user"
+    assert config["max_turns"] == 10
+    assert "initial_query" in config
+
+
+# =============================================================================
+# Execution Loop Tests
+# =============================================================================
+
+
+def test_execution_loop_import():
+    """Test that camel_role_playing_execution_loop can be imported."""
+    from maseval.interface.agents.camel import camel_role_playing_execution_loop
+
+    assert camel_role_playing_execution_loop is not None
+
+
+def test_execution_loop_in_all():
+    """Test that camel_role_playing_execution_loop is in __all__."""
+    import maseval.interface.agents
+
+    assert "camel_role_playing_execution_loop" in maseval.interface.agents.__all__
+
+
+def test_execution_loop_basic():
+    """Test camel_role_playing_execution_loop with mock RolePlaying."""
+    from maseval.interface.agents.camel import camel_role_playing_execution_loop
+    from unittest.mock import Mock
+
+    # Create mock responses
+    mock_msg = Mock()
+    mock_msg.content = "Final answer"
+
+    mock_assistant_response = Mock()
+    mock_assistant_response.msgs = [mock_msg]
+    mock_assistant_response.terminated = True
+
+    mock_user_response = Mock()
+    mock_user_response.terminated = False
+
+    # Create mock RolePlaying
+    mock_role_playing = Mock()
+    mock_role_playing.step.return_value = (mock_assistant_response, mock_user_response)
+
+    # Create mock task
+    mock_task = Mock()
+
+    # Execute
+    result = camel_role_playing_execution_loop(
+        mock_role_playing,
+        mock_task,
+        max_steps=5,
+    )
+
+    assert result == "Final answer"
+    assert mock_role_playing.step.call_count == 1  # Should stop after first step (terminated)
+
+
+def test_execution_loop_with_tracer():
+    """Test camel_role_playing_execution_loop records steps in tracer."""
+    from maseval.interface.agents.camel import camel_role_playing_execution_loop, CamelRolePlayingTracer
+    from unittest.mock import Mock
+
+    # Create mock responses
+    mock_msg = Mock()
+    mock_msg.content = "Answer"
+
+    mock_assistant_response = Mock()
+    mock_assistant_response.msgs = [mock_msg]
+    mock_assistant_response.terminated = True
+
+    mock_user_response = Mock()
+    mock_user_response.terminated = False
+
+    # Create mock RolePlaying
+    mock_role_playing = Mock()
+    mock_role_playing.step.return_value = (mock_assistant_response, mock_user_response)
+
+    # Create tracer
+    tracer = CamelRolePlayingTracer(mock_role_playing, name="test_tracer")
+
+    # Execute with tracer
+    camel_role_playing_execution_loop(
+        mock_role_playing,
+        Mock(),
+        max_steps=5,
+        tracer=tracer,
+    )
+
+    # Verify tracer recorded the step
+    assert tracer._step_count == 1
+    assert tracer._termination_reason == "assistant_terminated"
+
+
+def test_execution_loop_max_steps():
+    """Test camel_role_playing_execution_loop respects max_steps."""
+    from maseval.interface.agents.camel import camel_role_playing_execution_loop
+    from unittest.mock import Mock
+
+    # Create mock responses that never terminate
+    mock_msg = Mock()
+    mock_msg.content = "Non-terminal answer"
+
+    mock_assistant_response = Mock()
+    mock_assistant_response.msgs = [mock_msg]
+    mock_assistant_response.terminated = False
+
+    mock_user_response = Mock()
+    mock_user_response.terminated = False
+
+    mock_role_playing = Mock()
+    mock_role_playing.step.return_value = (mock_assistant_response, mock_user_response)
+
+    # Execute with max_steps=3
+    camel_role_playing_execution_loop(
+        mock_role_playing,
+        Mock(),
+        max_steps=3,
+    )
+
+    # Should have executed exactly 3 steps
+    assert mock_role_playing.step.call_count == 3
+
+
+# =============================================================================
+# RolePlaying Tracer Tests
+# =============================================================================
+
+
+def test_role_playing_tracer_import():
+    """Test that CamelRolePlayingTracer can be imported."""
+    from maseval.interface.agents.camel import CamelRolePlayingTracer
+
+    assert CamelRolePlayingTracer is not None
+
+
+def test_role_playing_tracer_in_all():
+    """Test that CamelRolePlayingTracer is in __all__."""
+    import maseval.interface.agents
+
+    assert "CamelRolePlayingTracer" in maseval.interface.agents.__all__
+
+
+def test_role_playing_tracer_creation():
+    """Test CamelRolePlayingTracer creation."""
+    from maseval.interface.agents.camel import CamelRolePlayingTracer
+    from unittest.mock import Mock
+
+    mock_role_playing = Mock()
+    tracer = CamelRolePlayingTracer(mock_role_playing, name="test_tracer")
+
+    assert tracer.name == "test_tracer"
+    assert tracer._step_count == 0
+    assert tracer._termination_reason is None
+
+
+def test_role_playing_tracer_record_step():
+    """Test CamelRolePlayingTracer.record_step() tracks progress."""
+    from maseval.interface.agents.camel import CamelRolePlayingTracer
+    from unittest.mock import Mock
+
+    mock_role_playing = Mock()
+    tracer = CamelRolePlayingTracer(mock_role_playing)
+
+    # Create mock responses
+    mock_assistant = Mock()
+    mock_assistant.terminated = False
+
+    mock_user = Mock()
+    mock_user.terminated = False
+
+    # Record a step
+    tracer.record_step(mock_assistant, mock_user)
+
+    assert tracer._step_count == 1
+    assert tracer._termination_reason is None
+
+    # Record another step with termination
+    mock_assistant.terminated = True
+    tracer.record_step(mock_assistant, mock_user)
+
+    assert tracer._step_count == 2
+    assert tracer._termination_reason == "assistant_terminated"
+
+
+def test_role_playing_tracer_gather_traces():
+    """Test CamelRolePlayingTracer.gather_traces() returns expected fields."""
+    from maseval.interface.agents.camel import CamelRolePlayingTracer
+    from unittest.mock import Mock
+
+    mock_role_playing = Mock()
+    tracer = CamelRolePlayingTracer(mock_role_playing, name="test_tracer")
+
+    # Record some steps
+    mock_response = Mock()
+    mock_response.terminated = False
+    tracer.record_step(mock_response, mock_response)
+    tracer.record_step(mock_response, mock_response)
+
+    traces = tracer.gather_traces()
+
+    assert traces["name"] == "test_tracer"
+    assert traces["trace_type"] == "role_playing_orchestration"
+    assert traces["step_count"] == 2
+    assert "step_logs" in traces
+    assert len(traces["step_logs"]) == 2
+
+
+def test_role_playing_tracer_gather_config():
+    """Test CamelRolePlayingTracer.gather_config() returns expected fields."""
+    from maseval.interface.agents.camel import CamelRolePlayingTracer
+    from unittest.mock import Mock
+
+    mock_role_playing = Mock()
+    mock_role_playing.task_prompt = "Test task prompt"
+    mock_role_playing.assistant_role_name = "Assistant"
+    mock_role_playing.user_role_name = "User"
+
+    tracer = CamelRolePlayingTracer(mock_role_playing, name="test_tracer")
+
+    config = tracer.gather_config()
+
+    assert config["name"] == "test_tracer"
+    assert config["task_prompt"] == "Test task prompt"
+    assert config["assistant_role"] == "Assistant"
+    assert config["user_role"] == "User"
+
+
+# =============================================================================
+# Workforce Tracer Tests
+# =============================================================================
+
+
+def test_workforce_tracer_import():
+    """Test that CamelWorkforceTracer can be imported."""
+    from maseval.interface.agents.camel import CamelWorkforceTracer
+
+    assert CamelWorkforceTracer is not None
+
+
+def test_workforce_tracer_in_all():
+    """Test that CamelWorkforceTracer is in __all__."""
+    import maseval.interface.agents
+
+    assert "CamelWorkforceTracer" in maseval.interface.agents.__all__
+
+
+def test_workforce_tracer_creation():
+    """Test CamelWorkforceTracer creation."""
+    from maseval.interface.agents.camel import CamelWorkforceTracer
+    from unittest.mock import Mock
+
+    mock_workforce = Mock()
+    tracer = CamelWorkforceTracer(mock_workforce, name="test_workforce")
+
+    assert tracer.name == "test_workforce"
+
+
+def test_workforce_tracer_gather_traces():
+    """Test CamelWorkforceTracer.gather_traces() returns expected fields."""
+    from maseval.interface.agents.camel import CamelWorkforceTracer
+    from unittest.mock import Mock
+
+    # Create mock workforce with internal state
+    mock_workforce = Mock()
+    mock_workforce._assignees = {"task_1": "worker_a", "task_2": "worker_b"}
+    mock_workforce._pending_tasks = []
+    mock_workforce._completed_tasks = []
+    mock_workforce._task_dependencies = {"task_1": [], "task_2": ["task_1"]}
+
+    tracer = CamelWorkforceTracer(mock_workforce, name="test_workforce")
+
+    traces = tracer.gather_traces()
+
+    assert traces["name"] == "test_workforce"
+    assert traces["trace_type"] == "workforce_orchestration"
+    assert "task_decomposition" in traces
+    assert "worker_assignments" in traces
+    assert "completed_tasks" in traces
+    assert traces["pending_tasks_count"] == 0
+
+
+def test_workforce_tracer_gather_config():
+    """Test CamelWorkforceTracer.gather_config() returns expected fields."""
+    from maseval.interface.agents.camel import CamelWorkforceTracer
+    from unittest.mock import Mock
+
+    # Create mock workforce
+    mock_worker1 = Mock()
+    mock_worker1.name = "worker_a"
+    mock_worker2 = Mock()
+    mock_worker2.name = "worker_b"
+
+    mock_workforce = Mock()
+    mock_workforce.mode = "collaborative"
+    mock_workforce._children = [mock_worker1, mock_worker2]
+
+    tracer = CamelWorkforceTracer(mock_workforce, name="test_workforce")
+
+    config = tracer.gather_config()
+
+    assert config["name"] == "test_workforce"
+    assert config["mode"] == "collaborative"
+    assert config["workers"] == ["worker_a", "worker_b"]
+
+
+def test_workforce_tracer_extract_completed_tasks():
+    """Test CamelWorkforceTracer extracts completed task info."""
+    from maseval.interface.agents.camel import CamelWorkforceTracer
+    from unittest.mock import Mock
+
+    # Create mock tasks
+    mock_task = Mock()
+    mock_task.id = "task_123"
+    mock_task.content = "Do something"
+    mock_task.result = "Done"
+
+    mock_workforce = Mock()
+    mock_workforce._completed_tasks = [mock_task]
+    mock_workforce._pending_tasks = []
+    mock_workforce._assignees = {}
+    mock_workforce._task_dependencies = {}
+
+    tracer = CamelWorkforceTracer(mock_workforce)
+
+    traces = tracer.gather_traces()
+
+    assert len(traces["completed_tasks"]) == 1
+    assert traces["completed_tasks"][0]["id"] == "task_123"
+    assert traces["completed_tasks"][0]["content"] == "Do something"
+    assert traces["completed_tasks"][0]["result"] == "Done"

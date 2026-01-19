@@ -301,6 +301,8 @@ class AgenticLLMUser(LLMUser):
 
 ### 2.2 CAMEL Interface: CamelAgentUser
 
+**Status: IMPLEMENTED**
+
 **Depends on**: 2.1 (User abstraction)
 
 Once `User` exists, add CAMEL-specific implementation for using a CAMEL ChatAgent as the user:
@@ -407,6 +409,8 @@ class MyBenchmark(Benchmark):
 
 ### 2.4 CAMEL Interface: Prefixed Execution Loop
 
+**Status: IMPLEMENTED**
+
 **Context**: The `execution_loop` method is **designed to be overridden**. From the docstring:
 
 > *"Override this method in your benchmark subclass to implement custom interaction patterns (e.g., agent-initiated conversations, different termination conditions, or specialized query routing)."*
@@ -491,6 +495,8 @@ class CamelRolePlayingBenchmark(Benchmark):
 ---
 
 ### 2.5 CAMEL Interface: Orchestration Tracers
+
+**Status: IMPLEMENTED**
 
 **Motivation**: RolePlaying and Workforce maintain orchestration state that individual agent traces don't capture. Provide lightweight `TraceableMixin` wrappers for this state.
 
@@ -655,11 +661,17 @@ class MyBenchmark(Benchmark):
 
 ## Files Reference
 
-### Completed (Phase 1)
-- `maseval/interface/agents/camel.py` - Main adapter (`CamelAgentAdapter`, `CamelUser`)
-- `maseval/interface/agents/__init__.py` - Conditional import
+### Completed (Phase 1 + Phase 2)
+- `maseval/interface/agents/camel.py` - All CAMEL components:
+  - `CamelAgentAdapter` - Wraps CAMEL ChatAgent
+  - `CamelUser` - LLM-simulated user with CAMEL tool
+  - `CamelAgentUser` - User backed by CAMEL ChatAgent (Phase 2.2)
+  - `camel_role_playing_execution_loop` - Execution loop for RolePlaying (Phase 2.4)
+  - `CamelRolePlayingTracer` - RolePlaying orchestration tracer (Phase 2.5)
+  - `CamelWorkforceTracer` - Workforce orchestration tracer (Phase 2.5)
+- `maseval/interface/agents/__init__.py` - Conditional import (all 6 exports)
 - `pyproject.toml` - Dependency and marker
-- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Integration tests (17 tests)
+- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Integration tests (44 tests)
 - `docs/interface/agents/camel.md` - Documentation
 - `mkdocs.yml` - Navigation
 - `CHANGELOG.md` - Entry
@@ -725,10 +737,10 @@ The contract tests (`tests/test_contract/test_agent_adapter_contract.py`) valida
 
 ---
 
-### Phase 2.2: CamelAgentUser (Interface)
+### Phase 2.2: CamelAgentUser (Interface) ✅ IMPLEMENTED
 
 - `maseval/interface/agents/camel.py` - Add `CamelAgentUser(User)`
-- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add CamelAgentUser tests
+- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add CamelAgentUser tests (12 tests)
 
 ---
 
@@ -739,14 +751,14 @@ The contract tests (`tests/test_contract/test_agent_adapter_contract.py`) valida
 
 ---
 
-### Phase 2.4: Prefixed Execution Loop (Interface)
+### Phase 2.4: Prefixed Execution Loop (Interface) ✅ IMPLEMENTED
 
 - `maseval/interface/agents/camel.py` - Add `camel_role_playing_execution_loop()`
-- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add execution loop tests
+- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add execution loop tests (4 tests)
 
 ---
 
-### Phase 2.5: Orchestration Tracers (Interface)
+### Phase 2.5: Orchestration Tracers (Interface) ✅ IMPLEMENTED
 
 - `maseval/interface/agents/camel.py` - Add `CamelRolePlayingTracer`, `CamelWorkforceTracer`
-- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add tracer tests
+- `tests/test_interface/test_agent_integration/test_camel_integration.py` - Add tracer tests (11 tests)

@@ -2,15 +2,32 @@
 
 This module requires camel-ai to be installed:
     pip install maseval[camel]
+
+Components:
+    CamelAgentAdapter: Wraps CAMEL ChatAgent for MASEval evaluation
+    CamelUser: LLM-simulated user with CAMEL-compatible tool
+    CamelAgentUser: User backed by a CAMEL ChatAgent (for agent-to-agent evaluation)
+    camel_role_playing_execution_loop: Execution loop using CAMEL RolePlaying semantics
+    CamelRolePlayingTracer: Collects orchestration traces from RolePlaying
+    CamelWorkforceTracer: Collects orchestration traces from Workforce
 """
 
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from maseval import AgentAdapter, MessageHistory, LLMUser
+from maseval import AgentAdapter, MessageHistory, LLMUser, User
+from maseval.core.tracing import TraceableMixin
+from maseval.core.config import ConfigurableMixin
 
-__all__ = ["CamelAgentAdapter", "CamelUser"]
+__all__ = [
+    "CamelAgentAdapter",
+    "CamelUser",
+    "CamelAgentUser",
+    "camel_role_playing_execution_loop",
+    "CamelRolePlayingTracer",
+    "CamelWorkforceTracer",
+]
 
 # Only import camel types for type checking, not at runtime
 if TYPE_CHECKING:
@@ -509,3 +526,576 @@ class CamelUser(LLMUser):
             return user_instance.respond(question)
 
         return FunctionTool(func=ask_user)
+
+
+class CamelAgentUser(User):
+    """User backed by a CAMEL ChatAgent.
+
+    Wraps a CAMEL ChatAgent to act as the user in MASEval's evaluation loop.
+    Useful for using RolePlaying's `user_agent` with MASEval, enabling
+    agent-to-agent evaluation where one CAMEL agent acts as the user.
+
+    Unlike LLMUser which uses an LLM simulator, this class delegates
+    directly to a CAMEL ChatAgent for generating responses.
+
+    Example:
+        ```python
+        from camel.societies import RolePlaying
+        from maseval.interface.agents.camel import CamelAgentAdapter, CamelAgentUser
+
+        # Create RolePlaying
+        role_playing = RolePlaying(
+            assistant_role_name="Assistant",
+            user_role_name="Customer",
+            task_prompt="Help the customer with their order",
+        )
+
+        # Use the user_agent as the MASEval user
+        user = CamelAgentUser(
+            user_agent=role_playing.user_agent,
+            initial_query="I need help with my order",
+            max_turns=5,
+        )
+
+        # Wrap assistant for evaluation
+        assistant = CamelAgentAdapter(role_playing.assistant_agent, "assistant")
+
+        # Now use with benchmark
+        benchmark.run(tasks, agent=assistant, user=user)
+        ```
+    """
+
+    def __init__(
+        self,
+        user_agent,
+        initial_query: str,
+        name: str = "camel_agent_user",
+        max_turns: int = 10,
+    ):
+        """Initialize CamelAgentUser.
+
+        Args:
+            user_agent: CAMEL ChatAgent instance to use as the user.
+            initial_query: The opening message to start the conversation.
+            name: Name for this user (used in traces). Defaults to "camel_agent_user".
+            max_turns: Maximum number of response turns. Defaults to 10.
+        """
+        _check_camel_installed()
+        self.user_agent = user_agent
+        self._initial_query = initial_query
+        self.name = name
+        self._turn_count = 0
+        self._max_turns = max_turns
+        self.logs: List[Dict[str, Any]] = []
+
+    def get_initial_query(self) -> str:
+        """Return the initial query to start the conversation.
+
+        Returns:
+            The initial query provided at construction.
+        """
+        return self._initial_query
+
+    def respond(self, message: str) -> str:
+        """Forward the message to the CAMEL agent and return its response.
+
+        Args:
+            message: The agent's message to respond to.
+
+        Returns:
+            The CAMEL agent's response, or empty string if done.
+        """
+        if self.is_done():
+            return ""
+
+        _check_camel_installed()
+        from camel.messages import BaseMessage
+
+        self._turn_count += 1
+        start_time = time.time()
+        timestamp = datetime.now().isoformat()
+
+        log_entry: Dict[str, Any] = {
+            "timestamp": timestamp,
+            "turn": self._turn_count,
+            "message": message[:500],  # Truncate for logging
+            "status": "success",
+        }
+
+        try:
+            # Create message for CAMEL agent
+            user_msg = BaseMessage.make_user_message(
+                role_name="User",
+                content=message,
+            )
+
+            # Get response from CAMEL agent
+            response = self.user_agent.step(user_msg)
+
+            # Extract content from response
+            if hasattr(response, "msgs") and response.msgs:
+                content = response.msgs[0].content if hasattr(response.msgs[0], "content") else str(response.msgs[0])
+            elif hasattr(response, "msg") and response.msg:
+                content = response.msg.content if hasattr(response.msg, "content") else str(response.msg)
+            else:
+                content = str(response)
+
+            log_entry["duration_seconds"] = time.time() - start_time
+            log_entry["response_preview"] = content[:200]
+            self.logs.append(log_entry)
+
+            return str(content)
+
+        except Exception as e:
+            log_entry["duration_seconds"] = time.time() - start_time
+            log_entry["status"] = "error"
+            log_entry["error"] = str(e)
+            log_entry["error_type"] = type(e).__name__
+            self.logs.append(log_entry)
+            raise
+
+    def is_done(self) -> bool:
+        """Check if the user interaction should terminate.
+
+        Returns:
+            True if max_turns has been reached.
+        """
+        return self._turn_count >= self._max_turns
+
+    def get_tool(self):
+        """Return a CAMEL FunctionTool for agent-to-user interaction.
+
+        Returns:
+            CAMEL FunctionTool wrapping the respond method.
+        """
+        _check_camel_installed()
+        from camel.toolkits import FunctionTool
+
+        user_instance = self
+
+        def ask_user(question: str) -> str:
+            """Ask the user a question and get their response.
+
+            Use this tool when you need to ask the user for clarification,
+            additional information, or to confirm something.
+
+            Args:
+                question: The question to ask the user
+
+            Returns:
+                The user's response to the question
+            """
+            return user_instance.respond(question)
+
+        return FunctionTool(func=ask_user)
+
+    def gather_traces(self) -> Dict[str, Any]:
+        """Gather execution traces from this user.
+
+        Returns:
+            Dictionary containing trace information.
+        """
+        return {
+            "type": self.__class__.__name__,
+            "gathered_at": datetime.now().isoformat(),
+            "name": self.name,
+            "turns_used": self._turn_count,
+            "max_turns": self._max_turns,
+            "logs": self.logs,
+            "agent_type": type(self.user_agent).__name__,
+        }
+
+    def gather_config(self) -> Dict[str, Any]:
+        """Gather configuration from this user.
+
+        Returns:
+            Dictionary containing configuration information.
+        """
+        return {
+            "type": self.__class__.__name__,
+            "gathered_at": datetime.now().isoformat(),
+            "name": self.name,
+            "max_turns": self._max_turns,
+            "initial_query": self._initial_query[:200],  # Truncate for config
+            "agent_type": type(self.user_agent).__name__,
+        }
+
+
+def camel_role_playing_execution_loop(
+    role_playing,
+    task,
+    max_steps: int = 10,
+    tracer: Optional["CamelRolePlayingTracer"] = None,
+) -> Any:
+    """Execution loop using CAMEL RolePlaying's step() semantics.
+
+    This function provides a reusable execution loop for benchmarks that use
+    CAMEL's RolePlaying. It handles the step-by-step interaction between
+    the assistant and user agents, returning the final answer.
+
+    Use this in your benchmark's execution_loop override:
+
+        def execution_loop(self, agents, task, environment, user):
+            return camel_role_playing_execution_loop(
+                self._role_playing, task, max_steps=10, tracer=self._tracer
+            )
+
+    Args:
+        role_playing: The CAMEL RolePlaying instance.
+        task: Current MASEval task (used for context, not directly accessed).
+        max_steps: Maximum number of RolePlaying steps. Defaults to 10.
+        tracer: Optional CamelRolePlayingTracer to record step data.
+
+    Returns:
+        Final answer from the assistant agent, or None if no response.
+
+    Example:
+        ```python
+        class CamelRolePlayingBenchmark(Benchmark):
+            def setup_agents(self, agent_data, environment, task, user):
+                self._role_playing = RolePlaying(
+                    assistant_role_name="Assistant",
+                    user_role_name="User",
+                    task_prompt=task.query,
+                )
+
+                # Wrap both agents for tracing
+                assistant = CamelAgentAdapter(
+                    self._role_playing.assistant_agent, "assistant"
+                )
+                user_agent = CamelAgentAdapter(
+                    self._role_playing.user_agent, "user_agent"
+                )
+
+                # Optional: create tracer
+                self._tracer = CamelRolePlayingTracer(self._role_playing)
+                self.register(self._tracer)
+
+                return [assistant], {"assistant": assistant, "user_agent": user_agent}
+
+            def execution_loop(self, agents, task, environment, user):
+                return camel_role_playing_execution_loop(
+                    self._role_playing, task, tracer=self._tracer
+                )
+        ```
+    """
+    _check_camel_installed()
+
+    # Initialize chat if RolePlaying supports it
+    if hasattr(role_playing, "init_chat"):
+        role_playing.init_chat()
+
+    final_answer = None
+    for step in range(max_steps):
+        # Execute one step of RolePlaying
+        assistant_response, user_response = role_playing.step()
+
+        # Record step in tracer if provided
+        if tracer is not None:
+            tracer.record_step(assistant_response, user_response)
+
+        # Extract final answer from assistant response
+        if hasattr(assistant_response, "msgs") and assistant_response.msgs:
+            msg = assistant_response.msgs[0]
+            final_answer = msg.content if hasattr(msg, "content") else str(msg)
+        elif hasattr(assistant_response, "msg") and assistant_response.msg:
+            msg = assistant_response.msg
+            final_answer = msg.content if hasattr(msg, "content") else str(msg)
+
+        # Check for termination
+        assistant_terminated = getattr(assistant_response, "terminated", False)
+        user_terminated = getattr(user_response, "terminated", False)
+
+        if assistant_terminated or user_terminated:
+            break
+
+    return final_answer
+
+
+class CamelRolePlayingTracer(TraceableMixin, ConfigurableMixin):
+    """Collects orchestration traces from CAMEL RolePlaying.
+
+    RolePlaying orchestrates the interaction between two ChatAgents.
+    This tracer captures the orchestration-level state that individual
+    agent traces don't include, such as step count and termination reason.
+
+    Register with benchmark to include in trace collection:
+
+        tracer = CamelRolePlayingTracer(role_playing)
+        self.register(tracer)
+
+    Then call record_step() after each RolePlaying.step():
+
+        assistant_response, user_response = role_playing.step()
+        tracer.record_step(assistant_response, user_response)
+
+    Example:
+        ```python
+        class MyBenchmark(Benchmark):
+            def setup_agents(self, agent_data, environment, task, user):
+                self._role_playing = RolePlaying(...)
+                self._tracer = CamelRolePlayingTracer(self._role_playing)
+                self.register(self._tracer)
+                return [...]
+
+            def execution_loop(self, agents, task, environment, user):
+                for _ in range(10):
+                    assistant_response, user_response = self._role_playing.step()
+                    self._tracer.record_step(assistant_response, user_response)
+                    if assistant_response.terminated:
+                        break
+                return final_answer
+        ```
+    """
+
+    def __init__(self, role_playing, name: str = "role_playing"):
+        """Initialize the RolePlaying tracer.
+
+        Args:
+            role_playing: CAMEL RolePlaying instance to trace.
+            name: Name for this tracer in traces. Defaults to "role_playing".
+        """
+        _check_camel_installed()
+        self.role_playing = role_playing
+        self.name = name
+        self._step_count = 0
+        self._termination_reason: Optional[str] = None
+        self._step_logs: List[Dict[str, Any]] = []
+
+    def record_step(self, assistant_response, user_response) -> None:
+        """Record data from a RolePlaying step.
+
+        Call this after each role_playing.step() to track progress.
+
+        Args:
+            assistant_response: ChatAgentResponse from the assistant.
+            user_response: ChatAgentResponse from the user agent.
+        """
+        self._step_count += 1
+
+        # Record step details
+        step_log: Dict[str, Any] = {
+            "step": self._step_count,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        # Check termination
+        assistant_terminated = getattr(assistant_response, "terminated", False)
+        user_terminated = getattr(user_response, "terminated", False)
+
+        step_log["assistant_terminated"] = assistant_terminated
+        step_log["user_terminated"] = user_terminated
+
+        if assistant_terminated and self._termination_reason is None:
+            self._termination_reason = "assistant_terminated"
+        elif user_terminated and self._termination_reason is None:
+            self._termination_reason = "user_terminated"
+
+        self._step_logs.append(step_log)
+
+    def gather_traces(self) -> Dict[str, Any]:
+        """Gather orchestration traces from RolePlaying.
+
+        Returns:
+            Dictionary containing:
+            - name: Tracer name
+            - type: "role_playing_orchestration"
+            - step_count: Number of steps executed
+            - termination_reason: Why the interaction ended
+            - step_logs: Per-step termination data
+        """
+        return {
+            **super().gather_traces(),
+            "name": self.name,
+            "trace_type": "role_playing_orchestration",
+            "step_count": self._step_count,
+            "termination_reason": self._termination_reason,
+            "step_logs": self._step_logs,
+        }
+
+    def gather_config(self) -> Dict[str, Any]:
+        """Gather configuration from RolePlaying.
+
+        Returns:
+            Dictionary containing RolePlaying configuration.
+        """
+        config: Dict[str, Any] = {
+            **super().gather_config(),
+            "name": self.name,
+        }
+
+        # Extract task prompt if available
+        if hasattr(self.role_playing, "task_prompt"):
+            task_prompt = self.role_playing.task_prompt
+            config["task_prompt"] = str(task_prompt)[:500] if task_prompt else None
+
+        # Extract role names if available
+        if hasattr(self.role_playing, "assistant_role_name"):
+            config["assistant_role"] = self.role_playing.assistant_role_name
+        if hasattr(self.role_playing, "user_role_name"):
+            config["user_role"] = self.role_playing.user_role_name
+
+        return config
+
+
+class CamelWorkforceTracer(TraceableMixin, ConfigurableMixin):
+    """Collects orchestration traces from CAMEL Workforce.
+
+    Workforce is a complex task orchestrator that manages task decomposition,
+    worker assignment, and retry strategies. This tracer captures the
+    orchestration-level state that individual worker traces don't include.
+
+    Note: This tracer accesses Workforce internal attributes (_children,
+    _assignees, _pending_tasks, etc.) which may change with CAMEL updates.
+
+    Register with benchmark to include in trace collection:
+
+        tracer = CamelWorkforceTracer(workforce)
+        self.register(tracer)
+
+    Example:
+        ```python
+        class MyBenchmark(Benchmark):
+            def setup_agents(self, agent_data, environment, task, user):
+                workforce = Workforce(...)
+                self._workforce = workforce
+
+                # Create tracer and register it
+                tracer = CamelWorkforceTracer(workforce)
+                self.register(tracer)
+
+                # Wrap individual workers for message tracing
+                worker_adapters = {}
+                for worker in workforce._children:
+                    adapter = CamelAgentAdapter(worker.agent, name=worker.name)
+                    worker_adapters[worker.name] = adapter
+
+                return [], worker_adapters
+        ```
+    """
+
+    def __init__(self, workforce, name: str = "workforce"):
+        """Initialize the Workforce tracer.
+
+        Args:
+            workforce: CAMEL Workforce instance to trace.
+            name: Name for this tracer in traces. Defaults to "workforce".
+        """
+        _check_camel_installed()
+        self.workforce = workforce
+        self.name = name
+
+    def gather_traces(self) -> Dict[str, Any]:
+        """Gather orchestration traces from Workforce.
+
+        Extracts task decomposition, worker assignments, and task lifecycle
+        information from the Workforce's internal state.
+
+        Returns:
+            Dictionary containing:
+            - name: Tracer name
+            - type: "workforce_orchestration"
+            - task_decomposition: Task dependency graph
+            - worker_assignments: Which worker handled which task
+            - completed_tasks: List of completed task summaries
+            - pending_tasks: Count of pending tasks
+        """
+        traces: Dict[str, Any] = {
+            **super().gather_traces(),
+            "name": self.name,
+            "trace_type": "workforce_orchestration",
+        }
+
+        # Extract task dependency graph
+        traces["task_decomposition"] = self._extract_task_graph()
+
+        # Extract worker assignments
+        assignees = getattr(self.workforce, "_assignees", {})
+        traces["worker_assignments"] = {str(k): str(v) for k, v in assignees.items()} if assignees else {}
+
+        # Extract completed tasks
+        traces["completed_tasks"] = self._extract_completed_tasks()
+
+        # Extract pending task count
+        pending = getattr(self.workforce, "_pending_tasks", [])
+        traces["pending_tasks_count"] = len(pending) if pending else 0
+
+        return traces
+
+    def _extract_task_graph(self) -> Dict[str, Any]:
+        """Extract task dependency graph from Workforce.
+
+        Returns:
+            Dictionary mapping task IDs to their dependencies.
+        """
+        deps = getattr(self.workforce, "_task_dependencies", {})
+        if not deps:
+            return {}
+
+        graph: Dict[str, Any] = {}
+        for task_id, dep_ids in deps.items():
+            try:
+                graph[str(task_id)] = [str(d) for d in dep_ids] if dep_ids else []
+            except (TypeError, ValueError):
+                graph[str(task_id)] = []
+
+        return graph
+
+    def _extract_completed_tasks(self) -> List[Dict[str, Any]]:
+        """Extract completed task summaries from Workforce.
+
+        Returns:
+            List of task summaries with id and content preview.
+        """
+        completed = getattr(self.workforce, "_completed_tasks", [])
+        if not completed:
+            return []
+
+        tasks: List[Dict[str, Any]] = []
+        for task in completed:
+            task_info: Dict[str, Any] = {}
+
+            # Try to get task ID
+            if hasattr(task, "id"):
+                task_info["id"] = str(task.id)
+
+            # Try to get task content (truncated)
+            if hasattr(task, "content"):
+                content = str(task.content)
+                task_info["content"] = content[:200] if len(content) > 200 else content
+
+            # Try to get task result
+            if hasattr(task, "result"):
+                result = str(task.result) if task.result else None
+                task_info["result"] = result[:200] if result and len(result) > 200 else result
+
+            if task_info:
+                tasks.append(task_info)
+
+        return tasks
+
+    def gather_config(self) -> Dict[str, Any]:
+        """Gather configuration from Workforce.
+
+        Returns:
+            Dictionary containing Workforce configuration.
+        """
+        config: Dict[str, Any] = {
+            **super().gather_config(),
+            "name": self.name,
+        }
+
+        # Extract workforce mode if available
+        if hasattr(self.workforce, "mode"):
+            config["mode"] = str(self.workforce.mode)
+
+        # Extract worker names
+        children = getattr(self.workforce, "_children", [])
+        if children:
+            worker_names = []
+            for child in children:
+                name = getattr(child, "name", None) or type(child).__name__
+                worker_names.append(str(name))
+            config["workers"] = worker_names
+
+        return config
