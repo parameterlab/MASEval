@@ -28,3 +28,11 @@ try:
     __all__.extend(["LlamaIndexAgentAdapter", "LlamaIndexUser"])
 except ImportError:
     pass
+
+# Conditionally import camel
+try:
+    from .camel import CamelAgentAdapter, CamelUser  # noqa: F401
+
+    __all__.extend(["CamelAgentAdapter", "CamelUser"])
+except ImportError:
+    pass

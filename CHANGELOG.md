@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Interface**
+
+- CAMEL-AI integration: `CamelAgentAdapter` and `CamelUser` for evaluating CAMEL-AI ChatAgent-based systems (PR: #PR_NUMBER_PLACEHOLDER)
+- Added `camel` optional dependency: `pip install maseval[camel]`
+
 ### Changed
 
 ### Fixed
