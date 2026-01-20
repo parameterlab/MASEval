@@ -2,7 +2,8 @@
 
 import pytest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+import subprocess
 import tempfile
 import json
 
@@ -11,6 +12,9 @@ from maseval.benchmark.multiagentbench.data_loader import (
     load_tasks,
     configure_model_ids,
     get_domain_info,
+    download_marble,
+    ensure_marble_exists,
+    _get_marble_dir,
     VALID_DOMAINS,
     _parse_task_entry,
     _resolve_data_dir,
@@ -319,3 +323,243 @@ class TestResolveDataDir:
             with patch.dict("os.environ", {"MARBLE_DATA_DIR": tmpdir}):
                 result = _resolve_data_dir()
                 assert result == Path(tmpdir)
+
+    def test_resolve_not_found(self):
+        """_resolve_data_dir should raise when no directory found."""
+        with patch.dict("os.environ", {}, clear=True):
+            with patch(
+                "maseval.benchmark.multiagentbench.data_loader._get_marble_dir",
+                return_value=Path("/nonexistent/marble"),
+            ):
+                with patch("pathlib.Path.cwd", return_value=Path("/nonexistent/cwd")):
+                    with pytest.raises(FileNotFoundError, match="MARBLE data directory not found"):
+                        _resolve_data_dir()
+
+
+class TestGetMarbleDir:
+    """Tests for _get_marble_dir function."""
+
+    def test_returns_path_relative_to_module(self):
+        """_get_marble_dir should return path relative to module."""
+        result = _get_marble_dir()
+        assert result.name == "marble"
+        assert "multiagentbench" in str(result.parent)
+
+
+class TestDownloadMarble:
+    """Tests for download_marble function."""
+
+    def test_download_marble_already_exists(self):
+        """download_marble should return existing path if not force."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            marble_dir = Path(tmpdir) / "marble"
+            marble_dir.mkdir()
+
+            result = download_marble(target_dir=marble_dir, force=False)
+
+            assert result == marble_dir
+
+    def test_download_marble_force_removes_existing(self):
+        """download_marble should remove existing dir when force=True."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            marble_dir = Path(tmpdir) / "marble"
+            marble_dir.mkdir()
+            (marble_dir / "test_file.txt").write_text("test")
+
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                download_marble(target_dir=marble_dir, force=True)
+
+                # Directory should have been removed and git clone called
+                mock_run.assert_called()
+
+    def test_download_marble_git_clone_called(self):
+        """download_marble should call git clone."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            marble_dir = Path(tmpdir) / "marble"
+
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                download_marble(target_dir=marble_dir)
+
+                # Verify git clone was called
+                calls = mock_run.call_args_list
+                assert len(calls) >= 1
+                clone_call = calls[0]
+                assert "git" in clone_call[0][0]
+                assert "clone" in clone_call[0][0]
+
+    def test_download_marble_with_commit(self):
+        """download_marble should checkout specific commit if provided."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            marble_dir = Path(tmpdir) / "marble"
+
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                download_marble(target_dir=marble_dir, commit="abc123")
+
+                # Verify git checkout was called
+                calls = mock_run.call_args_list
+                assert len(calls) >= 2
+                checkout_call = calls[1]
+                assert "checkout" in checkout_call[0][0]
+                assert "abc123" in checkout_call[0][0]
+
+    def test_download_marble_clone_fails(self):
+        """download_marble should raise RuntimeError on clone failure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            marble_dir = Path(tmpdir) / "marble"
+
+            with patch("subprocess.run") as mock_run:
+                mock_run.side_effect = subprocess.CalledProcessError(
+                    1, "git clone", stderr="Clone failed"
+                )
+
+                with pytest.raises(RuntimeError, match="Failed to clone MARBLE"):
+                    download_marble(target_dir=marble_dir)
+
+    def test_download_marble_git_not_found(self):
+        """download_marble should raise RuntimeError if git not installed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            marble_dir = Path(tmpdir) / "marble"
+
+            with patch("subprocess.run") as mock_run:
+                mock_run.side_effect = FileNotFoundError()
+
+                with pytest.raises(RuntimeError, match="git is not installed"):
+                    download_marble(target_dir=marble_dir)
+
+    def test_download_marble_checkout_fails(self):
+        """download_marble should raise RuntimeError on checkout failure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            marble_dir = Path(tmpdir) / "marble"
+
+            def mock_run_side_effect(*args, **kwargs):
+                cmd = args[0]
+                if "checkout" in cmd:
+                    raise subprocess.CalledProcessError(1, "git checkout", stderr="Checkout failed")
+                return MagicMock(returncode=0)
+
+            with patch("subprocess.run", side_effect=mock_run_side_effect):
+                with pytest.raises(RuntimeError, match="Failed to checkout commit"):
+                    download_marble(target_dir=marble_dir, commit="invalid")
+
+
+class TestEnsureMarbleExists:
+    """Tests for ensure_marble_exists function."""
+
+    def test_ensure_marble_exists_already_present(self):
+        """ensure_marble_exists should return path if MARBLE exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            marble_dir = Path(tmpdir) / "marble"
+            marble_dir.mkdir()
+            (marble_dir / "multiagentbench").mkdir()
+
+            with patch(
+                "maseval.benchmark.multiagentbench.data_loader._get_marble_dir",
+                return_value=marble_dir,
+            ):
+                result = ensure_marble_exists(auto_download=False)
+
+            assert result == marble_dir
+
+    def test_ensure_marble_exists_not_present_no_download(self):
+        """ensure_marble_exists should raise if not present and auto_download=False."""
+        with patch(
+            "maseval.benchmark.multiagentbench.data_loader._get_marble_dir",
+            return_value=Path("/nonexistent/marble"),
+        ):
+            with pytest.raises(FileNotFoundError, match="MARBLE not found"):
+                ensure_marble_exists(auto_download=False)
+
+    def test_ensure_marble_exists_auto_download(self):
+        """ensure_marble_exists should download if not present and auto_download=True."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            marble_dir = Path(tmpdir) / "marble"
+
+            with patch(
+                "maseval.benchmark.multiagentbench.data_loader._get_marble_dir",
+                return_value=marble_dir,
+            ):
+                with patch(
+                    "maseval.benchmark.multiagentbench.data_loader.download_marble",
+                    return_value=marble_dir,
+                ) as mock_download:
+                    result = ensure_marble_exists(auto_download=True)
+
+                    mock_download.assert_called_once_with(marble_dir)
+                    assert result == marble_dir
+
+
+class TestLoadTasksEdgeCases:
+    """Edge case tests for load_tasks."""
+
+    def test_load_tasks_empty_lines(self):
+        """load_tasks should skip empty lines in JSONL."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            research_dir = Path(tmpdir) / "research"
+            research_dir.mkdir()
+            jsonl_path = research_dir / "research_main.jsonl"
+
+            # Write tasks with empty lines
+            with jsonl_path.open("w") as f:
+                task_data = {
+                    "scenario": "research",
+                    "task_id": 1,
+                    "task": {"content": "Task 1"},
+                    "agents": [{"agent_id": "agent1"}],
+                    "relationships": [],
+                }
+                f.write(json.dumps(task_data) + "\n")
+                f.write("\n")  # Empty line
+                f.write("   \n")  # Whitespace-only line
+                task_data["task_id"] = 2
+                task_data["task"]["content"] = "Task 2"
+                f.write(json.dumps(task_data) + "\n")
+
+            tasks = load_tasks("research", data_dir=Path(tmpdir))
+
+            assert len(tasks) == 2
+
+    def test_load_tasks_file_not_found(self):
+        """load_tasks should raise FileNotFoundError if JSONL file missing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create directory but not the JSONL file
+            research_dir = Path(tmpdir) / "research"
+            research_dir.mkdir()
+
+            with pytest.raises(FileNotFoundError, match="Task data not found"):
+                load_tasks("research", data_dir=Path(tmpdir))
+
+
+class TestGetDomainInfoAllDomains:
+    """Test get_domain_info for all domains."""
+
+    @pytest.mark.parametrize(
+        "domain",
+        ["coding", "database", "minecraft", "research", "bargaining", "web", "worldsimulation"],
+    )
+    def test_all_domains_have_info(self, domain):
+        """All valid domains should return info."""
+        info = get_domain_info(domain)
+        assert "requires_infrastructure" in info
+        assert "description" in info
+        assert "coordination_mode" in info
+
+    def test_coding_domain_info(self):
+        """Coding domain should have tree coordination."""
+        info = get_domain_info("coding")
+        assert info["coordination_mode"] == "tree"
+        assert info["requires_infrastructure"] is False
+
+    def test_web_domain_info(self):
+        """Web domain should have star coordination."""
+        info = get_domain_info("web")
+        assert info["coordination_mode"] == "star"
+        assert info["requires_infrastructure"] is False
+
+    def test_worldsimulation_domain_info(self):
+        """WorldSimulation domain should have cooperative coordination."""
+        info = get_domain_info("worldsimulation")
+        assert info["coordination_mode"] == "cooperative"
+        assert info["requires_infrastructure"] is False

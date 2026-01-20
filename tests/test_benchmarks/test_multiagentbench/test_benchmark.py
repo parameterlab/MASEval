@@ -1,8 +1,13 @@
 """Tests for MultiAgentBench benchmark classes."""
 
+import pytest
+from typing import Any, Dict
+from unittest.mock import MagicMock, patch
 
 from maseval import Task
 from maseval.benchmark.multiagentbench import (
+    MultiAgentBenchBenchmark,
+    MarbleMultiAgentBenchBenchmark,
     MultiAgentBenchEnvironment,
     MultiAgentBenchEvaluator,
 )
@@ -250,3 +255,221 @@ class TestEvaluatorConfiguration:
 
         evaluator = evaluators[0]
         assert evaluator.domain == "bargaining"
+
+
+class TestMarbleMultiAgentBenchBenchmark:
+    """Tests for MarbleMultiAgentBenchBenchmark class."""
+
+    @pytest.fixture
+    def marble_benchmark_class(self):
+        """Create a concrete MarbleMultiAgentBenchBenchmark class."""
+        from conftest import DummyModelAdapter
+
+        class ConcreteMarbleBenchmark(MarbleMultiAgentBenchBenchmark):
+            def get_model_adapter(self, model_id, **kwargs):
+                adapter = DummyModelAdapter(
+                    model_id=model_id,
+                    responses=['{"rating": 4}'],
+                )
+                register_name = kwargs.get("register_name")
+                if register_name:
+                    try:
+                        self.register("models", register_name, adapter)
+                    except ValueError:
+                        pass
+                return adapter
+
+        return ConcreteMarbleBenchmark
+
+    def test_setup_agents_raises_import_error(
+        self,
+        marble_benchmark_class,
+        sample_research_task: Task,
+    ):
+        """setup_agents should raise ImportError when MARBLE not available."""
+        benchmark = marble_benchmark_class(progress_bar=False)
+        env = benchmark.setup_environment({}, sample_research_task)
+
+        with pytest.raises(ImportError, match="MARBLE is not available"):
+            benchmark.setup_agents({}, env, sample_research_task, None)
+
+    def test_create_marble_env_raises_import_error(
+        self,
+        marble_benchmark_class,
+        sample_research_task: Task,
+    ):
+        """_create_marble_env should raise ImportError when MARBLE not available."""
+        benchmark = marble_benchmark_class(progress_bar=False)
+
+        with pytest.raises(ImportError, match="MARBLE is not available"):
+            benchmark._create_marble_env(sample_research_task)
+
+    def test_setup_agent_graph_silently_fails(
+        self,
+        marble_benchmark_class,
+        sample_research_task: Task,
+    ):
+        """_setup_agent_graph should not raise when MARBLE not available."""
+        benchmark = marble_benchmark_class(progress_bar=False)
+
+        # Should not raise, just return silently
+        benchmark._setup_agent_graph({}, sample_research_task, None)
+
+    def test_run_agents_returns_structured_output(
+        self,
+        marble_benchmark_class,
+        sample_research_task: Task,
+    ):
+        """run_agents should return structured output with agent_results."""
+        from conftest import DummyAgentAdapter
+
+        benchmark = marble_benchmark_class(progress_bar=False)
+        env = benchmark.setup_environment({}, sample_research_task)
+
+        # Create mock agents
+        mock_agent1 = MagicMock()
+        mock_agent1.run.return_value = "Result from agent1"
+        mock_agent1.agent_id = "agent1"
+
+        mock_agent2 = MagicMock()
+        mock_agent2.run.return_value = "Result from agent2"
+        mock_agent2.agent_id = "agent2"
+        mock_agent2.get_serialized_messages.return_value = "Communication log"
+
+        result = benchmark.run_agents(
+            [mock_agent1, mock_agent2],
+            sample_research_task,
+            env,
+            sample_research_task.query,
+        )
+
+        assert "agent_results" in result
+        assert "communications" in result
+        assert "coordination_mode" in result
+        assert len(result["agent_results"]) == 2
+        assert result["agent_results"][0]["agent_id"] == "agent1"
+        assert result["agent_results"][1]["agent_id"] == "agent2"
+
+    def test_run_agents_collects_communications(
+        self,
+        marble_benchmark_class,
+        sample_research_task: Task,
+    ):
+        """run_agents should collect communications from agents."""
+        benchmark = marble_benchmark_class(progress_bar=False)
+        env = benchmark.setup_environment({}, sample_research_task)
+
+        # Create mock agent with get_serialized_messages
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = "Result"
+        mock_agent.agent_id = "agent1"
+        mock_agent.get_serialized_messages.return_value = "Hello from agent1"
+
+        result = benchmark.run_agents(
+            [mock_agent],
+            sample_research_task,
+            env,
+            sample_research_task.query,
+        )
+
+        assert "Hello from agent1" in result["communications"]
+
+
+class TestBenchmarkWithDifferentCoordinationModes:
+    """Tests for different coordination modes."""
+
+    def test_run_agents_with_cooperative_mode(
+        self,
+        benchmark_instance,
+        sample_research_task: Task,
+    ):
+        """run_agents should work with cooperative coordination."""
+        # sample_research_task uses cooperative mode by default
+        env = benchmark_instance.setup_environment({}, sample_research_task)
+        agents_list, _ = benchmark_instance.setup_agents({}, env, sample_research_task, None)
+
+        results = benchmark_instance.run_agents(
+            agents_list,
+            sample_research_task,
+            env,
+            sample_research_task.query,
+        )
+
+        assert len(results) == 2
+
+    def test_run_agents_with_star_mode(self, benchmark_instance):
+        """run_agents should work with star coordination."""
+        task_data = {
+            "scenario": "research",
+            "task_id": 1,
+            "agents": [
+                {"agent_id": "central", "profile": "Central coordinator"},
+                {"agent_id": "worker1", "profile": "Worker 1"},
+            ],
+            "coordinate_mode": "star",
+            "relationships": [["central", "worker1", "coordinates"]],
+            "environment": {"max_iterations": 10},
+            "task": {"content": "Research task", "output_format": "5Q"},
+            "max_iterations": 10,
+        }
+        task = Task(
+            id="test_star",
+            query="Research task",
+            environment_data=task_data,
+            evaluation_data={"model_id": "gpt-4o-mini"},
+            metadata={"domain": "research"},
+        )
+
+        env = benchmark_instance.setup_environment({}, task)
+        agents_list, _ = benchmark_instance.setup_agents({}, env, task, None)
+
+        results = benchmark_instance.run_agents(agents_list, task, env, task.query)
+
+        assert len(results) == 2
+
+
+class TestBenchmarkWithEmptyAgents:
+    """Tests for edge cases with agents."""
+
+    def test_run_agents_with_empty_list(
+        self,
+        benchmark_instance,
+        sample_research_task: Task,
+    ):
+        """run_agents should handle empty agent list."""
+        env = benchmark_instance.setup_environment({}, sample_research_task)
+
+        results = benchmark_instance.run_agents(
+            [],
+            sample_research_task,
+            env,
+            sample_research_task.query,
+        )
+
+        assert results == []
+
+    def test_setup_agents_with_no_agents_in_task(self, benchmark_instance):
+        """setup_agents should handle task with no agents."""
+        task_data = {
+            "scenario": "research",
+            "task_id": 1,
+            "agents": [],  # No agents
+            "coordinate_mode": "cooperative",
+            "relationships": [],
+            "environment": {"max_iterations": 10},
+            "task": {"content": "Research task"},
+            "max_iterations": 10,
+        }
+        task = Task(
+            id="test_no_agents",
+            query="Research task",
+            environment_data=task_data,
+            evaluation_data={"model_id": "gpt-4o-mini"},
+            metadata={"domain": "research"},
+        )
+
+        env = benchmark_instance.setup_environment({}, task)
+        agents_list, agents_dict = benchmark_instance.setup_agents({}, env, task, None)
+
+        assert len(agents_list) == 0
+        assert len(agents_dict) == 0

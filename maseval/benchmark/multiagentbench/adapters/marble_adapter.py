@@ -43,7 +43,11 @@ class MarbleAgentAdapter(AgentAdapter):
         self._profile = getattr(marble_agent, "profile", "")
         self._communication_log: List[Dict[str, Any]] = []
         self._action_log: List[Dict[str, Any]] = []
-        super().__init__(callbacks=callbacks)
+        super().__init__(agent_instance=marble_agent, name=agent_id, callbacks=callbacks)
+        # Initialize message history
+        from maseval import MessageHistory
+
+        self.messages = MessageHistory()
 
     @property
     def agent_id(self) -> str:
@@ -95,8 +99,8 @@ class MarbleAgentAdapter(AgentAdapter):
                 )
 
             # Update message history
-            self._messages.add_message(role="user", content=query)
-            self._messages.add_message(role="assistant", content=result)
+            self.messages.add_message(role="user", content=query)
+            self.messages.add_message(role="assistant", content=result)
 
             return result
 

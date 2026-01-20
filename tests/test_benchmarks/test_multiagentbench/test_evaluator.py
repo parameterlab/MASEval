@@ -317,3 +317,551 @@ class TestCodingEvaluation:
             }
         )
         assert coding_evaluator._determine_completion(metrics) is True
+
+    def test_determine_completion_coding_negative(self, coding_evaluator):
+        """_determine_completion should return False for negative coding scores."""
+        metrics = MultiAgentBenchMetrics(
+            task_evaluation={
+                "instruction_following": 5,
+                "executability": -1,
+                "consistency": 4,
+                "quality": 3,
+            }
+        )
+        assert coding_evaluator._determine_completion(metrics) is False
+
+    def test_parse_coding_ratings_invalid(self, coding_evaluator):
+        """_parse_coding_ratings should return -1 for invalid response."""
+        ratings = coding_evaluator._parse_coding_ratings("Invalid JSON")
+        assert ratings["instruction_following"] == -1
+        assert ratings["executability"] == -1
+        assert ratings["consistency"] == -1
+        assert ratings["quality"] == -1
+
+
+class TestDatabaseEvaluation:
+    """Tests for database-specific evaluation."""
+
+    @pytest.fixture
+    def database_evaluator(self):
+        """Create evaluator for database domain."""
+        adapter = DummyModelAdapter(
+            model_id="test",
+            responses=['{"rating": 4}'],
+        )
+        return MultiAgentBenchEvaluator(
+            domain="database",
+            model_adapter=adapter,
+        )
+
+    def test_evaluate_database_returns_structure(self, database_evaluator):
+        """_evaluate_database should return predicted result."""
+        result = database_evaluator._evaluate_database("Query task", "SELECT * FROM users")
+
+        assert "predicted" in result
+        assert result["predicted"] == "SELECT * FROM users"
+        assert "root_cause" in result
+        assert result["root_cause"] == []
+
+    def test_determine_completion_database_with_prediction(self, database_evaluator):
+        """_determine_completion should return True for database with prediction."""
+        metrics = MultiAgentBenchMetrics(
+            task_evaluation={"predicted": "SELECT * FROM users", "root_cause": []}
+        )
+        assert database_evaluator._determine_completion(metrics) is True
+
+    def test_determine_completion_database_empty_prediction(self, database_evaluator):
+        """_determine_completion should return False for empty prediction."""
+        metrics = MultiAgentBenchMetrics(
+            task_evaluation={"predicted": "", "root_cause": []}
+        )
+        assert database_evaluator._determine_completion(metrics) is False
+
+    def test_call_database_domain(self, database_evaluator):
+        """__call__ should work for database domain."""
+        traces = {
+            "agents": {"agent1": {"token_usage": 100, "action_log": [], "communication_log": []}},
+            "environment": {"marble_state": {"task_description": "Find query issue"}},
+        }
+        final_answer = [{"agent_id": "agent1", "result": "SELECT * FROM orders"}]
+
+        result = database_evaluator(traces, final_answer)
+
+        assert result["domain"] == "database"
+        assert "passed" in result
+
+
+class TestWorldSimulationEvaluation:
+    """Tests for worldsimulation domain (alias for bargaining)."""
+
+    @pytest.fixture
+    def worldsim_evaluator(self):
+        """Create evaluator for worldsimulation domain."""
+        adapter = DummyModelAdapter(
+            model_id="test",
+            responses=[
+                '{"effectiveness_of_strategies": 4, "progress_and_outcome": 4, "interaction_dynamics": 4}',
+                '{"effectiveness_of_strategies": 4, "progress_and_outcome": 4, "interaction_dynamics": 4}',
+            ],
+        )
+        return MultiAgentBenchEvaluator(
+            domain="worldsimulation",
+            model_adapter=adapter,
+        )
+
+    def test_worldsimulation_uses_bargaining_eval(self, worldsim_evaluator):
+        """worldsimulation domain should use bargaining evaluation."""
+        traces = {
+            "agents": {"agent1": {"token_usage": 100, "action_log": [], "communication_log": []}},
+            "environment": {},
+        }
+        final_answer = "Simulation result"
+
+        result = worldsim_evaluator(traces, final_answer)
+
+        assert result["domain"] == "worldsimulation"
+        assert "buyer" in result["metrics"]["task_evaluation"]
+        assert "seller" in result["metrics"]["task_evaluation"]
+
+    def test_determine_completion_worldsimulation(self, worldsim_evaluator):
+        """_determine_completion should work for worldsimulation domain."""
+        metrics = MultiAgentBenchMetrics(
+            task_evaluation={
+                "buyer": {
+                    "effectiveness_of_strategies": 4,
+                    "progress_and_outcome": 4,
+                    "interaction_dynamics": 4,
+                },
+                "seller": {
+                    "effectiveness_of_strategies": 4,
+                    "progress_and_outcome": 4,
+                    "interaction_dynamics": 4,
+                },
+            }
+        )
+        assert worldsim_evaluator._determine_completion(metrics) is True
+
+
+class TestUnknownDomainEvaluation:
+    """Tests for unknown domain handling."""
+
+    @pytest.fixture
+    def unknown_evaluator(self):
+        """Create evaluator for unknown domain."""
+        adapter = DummyModelAdapter(
+            model_id="test",
+            responses=['{"rating": 4}'],
+        )
+        return MultiAgentBenchEvaluator(
+            domain="unknown_domain",
+            model_adapter=adapter,
+        )
+
+    def test_unknown_domain_sets_completion_from_result(self, unknown_evaluator):
+        """Unknown domain should set completion based on final result presence."""
+        traces = {
+            "agents": {},
+            "environment": {},
+        }
+        final_answer = "Some result"
+
+        result = unknown_evaluator(traces, final_answer)
+
+        assert result["domain"] == "unknown_domain"
+        # Should still have metrics
+        assert "metrics" in result
+
+    def test_determine_completion_unknown_domain(self, unknown_evaluator):
+        """_determine_completion should return False for unknown domain."""
+        metrics = MultiAgentBenchMetrics(task_evaluation={})
+        assert unknown_evaluator._determine_completion(metrics) is False
+
+
+class TestCommunicationEvaluation:
+    """Tests for communication evaluation."""
+
+    @pytest.fixture
+    def evaluator_with_comm_response(self):
+        """Create evaluator with communication rating response."""
+        adapter = DummyModelAdapter(
+            model_id="test",
+            responses=['{"rating": 4}', '{"innovation": 4, "safety": 4, "feasibility": 4}'],
+        )
+        return MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=adapter,
+        )
+
+    def test_evaluate_communication_returns_score(self, evaluator_with_comm_response):
+        """_evaluate_communication should return score from LLM."""
+        score = evaluator_with_comm_response._evaluate_communication(
+            "Research task", "[agent1]: Hello\n[agent2]: Hi"
+        )
+        assert score == 4.0
+
+    def test_evaluate_communication_on_error(self):
+        """_evaluate_communication should return -1 on error."""
+        from unittest.mock import MagicMock
+
+        # Create mock that raises exception on generate
+        mock_adapter = MagicMock()
+        mock_adapter.generate.side_effect = RuntimeError("Model failed")
+
+        evaluator = MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=mock_adapter,
+        )
+
+        score = evaluator._evaluate_communication("Task", "Comms")
+        assert score == -1.0
+
+    def test_call_with_communications(self, evaluator_with_comm_response):
+        """__call__ should evaluate communications when present."""
+        traces = {
+            "agents": {
+                "agent1": {
+                    "token_usage": 100,
+                    "action_log": [],
+                    "communication_log": [{"communication": "Hello from agent1"}],
+                }
+            },
+            "environment": {},
+        }
+        final_answer = "Result"
+
+        result = evaluator_with_comm_response(traces, final_answer)
+
+        # Communication score should be evaluated (not -1)
+        assert result["metrics"]["communication_score"] == 4.0
+
+
+class TestExceptionHandling:
+    """Tests for exception handling in evaluation methods."""
+
+    @pytest.fixture
+    def failing_evaluator(self):
+        """Create evaluator with adapter that fails."""
+        from unittest.mock import MagicMock
+
+        # Create mock that raises exception on generate
+        mock_adapter = MagicMock()
+        mock_adapter.generate.side_effect = RuntimeError("Model failed")
+        return MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=mock_adapter,
+        )
+
+    def test_evaluate_research_on_error(self, failing_evaluator):
+        """_evaluate_research should return default values on error."""
+        result = failing_evaluator._evaluate_research("Task", "Result")
+        assert result["innovation"] == -1
+        assert result["safety"] == -1
+        assert result["feasibility"] == -1
+
+    def test_evaluate_bargaining_on_error(self, failing_evaluator):
+        """_evaluate_bargaining should return default values on error."""
+        failing_evaluator.domain = "bargaining"
+        result = failing_evaluator._evaluate_bargaining("Task", "Result")
+        assert result["buyer"]["effectiveness_of_strategies"] == -1
+        assert result["seller"]["effectiveness_of_strategies"] == -1
+
+    def test_evaluate_coding_on_error(self, failing_evaluator):
+        """_evaluate_coding should return default values on error."""
+        failing_evaluator.domain = "coding"
+        result = failing_evaluator._evaluate_coding("Task", "Result")
+        assert result["instruction_following"] == -1
+        assert result["executability"] == -1
+
+
+class TestParsingEdgeCases:
+    """Tests for parsing edge cases."""
+
+    @pytest.fixture
+    def evaluator(self):
+        """Create evaluator for parsing tests."""
+        adapter = DummyModelAdapter(model_id="test", responses=['{"rating": 4}'])
+        return MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=adapter,
+        )
+
+    def test_parse_score_out_of_range(self, evaluator):
+        """_parse_score should reject scores outside 1-5 range."""
+        response = '{"rating": 10}'
+        score = evaluator._parse_score(response)
+        # Should fall back to finding digit or default
+        assert score == 3.0  # Default
+
+    def test_parse_score_with_just_code_block(self, evaluator):
+        """_parse_score should handle code block without json marker."""
+        response = '```\n{"rating": 3}\n```'
+        score = evaluator._parse_score(response)
+        assert score == 3.0
+
+    def test_parse_score_with_text_before_json(self, evaluator):
+        """_parse_score should find JSON in text."""
+        response = 'Here is my rating: {"rating": 5}'
+        score = evaluator._parse_score(response)
+        assert score == 5.0
+
+    def test_parse_bargaining_ratings_partial(self, evaluator):
+        """_parse_bargaining_ratings should handle partial ratings."""
+        response = '{"effectiveness_of_strategies": 4}'  # Missing other fields
+        ratings = evaluator._parse_bargaining_ratings(response)
+        assert ratings["effectiveness_of_strategies"] == 4
+        assert ratings["progress_and_outcome"] == -1
+
+    def test_parse_bargaining_ratings_invalid(self, evaluator):
+        """_parse_bargaining_ratings should return -1 for invalid."""
+        ratings = evaluator._parse_bargaining_ratings("Invalid")
+        assert ratings["effectiveness_of_strategies"] == -1
+
+
+class TestFormatFinalAnswerEdgeCases:
+    """Tests for _format_final_answer edge cases."""
+
+    @pytest.fixture
+    def evaluator(self):
+        """Create evaluator for format tests."""
+        adapter = DummyModelAdapter(model_id="test", responses=[])
+        return MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=adapter,
+        )
+
+    def test_format_dict_without_agent_results(self, evaluator):
+        """_format_final_answer should JSON dump dict without agent_results."""
+        final_answer = {"status": "completed", "data": "some data"}
+        formatted = evaluator._format_final_answer(final_answer)
+        assert "status" in formatted
+        assert "completed" in formatted
+
+    def test_format_dict_with_empty_agent_results(self, evaluator):
+        """_format_final_answer should handle empty agent_results."""
+        final_answer = {"agent_results": []}
+        formatted = evaluator._format_final_answer(final_answer)
+        # Empty results should JSON dump the dict
+        assert formatted == '{"agent_results": []}'
+
+    def test_format_list_with_non_dict_items(self, evaluator):
+        """_format_final_answer should skip non-dict items in list."""
+        final_answer = [
+            {"agent_id": "agent1", "result": "Result 1"},
+            "not a dict",
+            {"agent_id": "agent2", "result": "Result 2"},
+        ]
+        formatted = evaluator._format_final_answer(final_answer)
+        assert "[agent1]: Result 1" in formatted
+        assert "[agent2]: Result 2" in formatted
+        assert "not a dict" not in formatted
+
+
+class TestTokenConsumptionEdgeCases:
+    """Tests for token consumption calculation edge cases."""
+
+    @pytest.fixture
+    def evaluator(self):
+        """Create evaluator for token tests."""
+        adapter = DummyModelAdapter(model_id="test", responses=[])
+        return MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=adapter,
+        )
+
+    def test_token_consumption_with_non_int(self, evaluator):
+        """_calculate_token_consumption should skip non-int values."""
+        traces = {
+            "agents": {
+                "agent1": {"token_usage": 500},
+                "agent2": {"token_usage": "invalid"},  # Non-int
+                "agent3": {"token_usage": 300},
+            }
+        }
+        total = evaluator._calculate_token_consumption(traces)
+        assert total == 800  # Only int values counted
+
+    def test_token_consumption_empty_agents(self, evaluator):
+        """_calculate_token_consumption should return 0 for no agents."""
+        traces = {"agents": {}}
+        total = evaluator._calculate_token_consumption(traces)
+        assert total == 0
+
+    def test_token_consumption_missing_key(self, evaluator):
+        """_calculate_token_consumption should handle missing token_usage."""
+        traces = {
+            "agents": {
+                "agent1": {"action_log": []},  # No token_usage
+            }
+        }
+        total = evaluator._calculate_token_consumption(traces)
+        assert total == 0
+
+
+class TestGetTaskDescription:
+    """Tests for _get_task_description method."""
+
+    @pytest.fixture
+    def evaluator(self):
+        """Create evaluator for task description tests."""
+        adapter = DummyModelAdapter(model_id="test", responses=[])
+        return MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=adapter,
+        )
+
+    def test_get_task_description_from_traces(self, evaluator):
+        """_get_task_description should extract from traces."""
+        traces = {
+            "environment": {
+                "marble_state": {"task_description": "Research AI safety"}
+            }
+        }
+        desc = evaluator._get_task_description(traces)
+        assert desc == "Research AI safety"
+
+    def test_get_task_description_missing_env(self, evaluator):
+        """_get_task_description should return empty for missing env."""
+        traces = {}
+        desc = evaluator._get_task_description(traces)
+        assert desc == ""
+
+    def test_get_task_description_missing_state(self, evaluator):
+        """_get_task_description should return empty for missing marble_state."""
+        traces = {"environment": {}}
+        desc = evaluator._get_task_description(traces)
+        assert desc == ""
+
+
+class TestExtractResultsEdgeCases:
+    """Tests for _extract_results edge cases."""
+
+    @pytest.fixture
+    def evaluator(self):
+        """Create evaluator for extract results tests."""
+        adapter = DummyModelAdapter(model_id="test", responses=[])
+        return MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=adapter,
+        )
+
+    def test_extract_results_empty_result(self, evaluator):
+        """_extract_results should skip empty results."""
+        traces = {
+            "agents": {
+                "agent1": {"action_log": [{"result": ""}]},
+            }
+        }
+        results = evaluator._extract_results(traces)
+        assert results == "No results recorded."
+
+    def test_extract_results_multiple_actions(self, evaluator):
+        """_extract_results should include all actions."""
+        traces = {
+            "agents": {
+                "agent1": {
+                    "action_log": [
+                        {"result": "Step 1 done"},
+                        {"result": "Step 2 done"},
+                    ]
+                }
+            }
+        }
+        results = evaluator._extract_results(traces)
+        assert "Step 1 done" in results
+        assert "Step 2 done" in results
+
+
+class TestFilterTracesEdgeCases:
+    """Tests for filter_traces edge cases."""
+
+    @pytest.fixture
+    def evaluator(self):
+        """Create evaluator for filter traces tests."""
+        adapter = DummyModelAdapter(model_id="test", responses=[])
+        return MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=adapter,
+        )
+
+    def test_filter_traces_empty(self, evaluator):
+        """filter_traces should handle empty traces."""
+        filtered = evaluator.filter_traces({})
+        assert filtered["agents"] == {}
+        assert filtered["environment"] == {}
+        assert "communications" in filtered
+        assert "results" in filtered
+
+    def test_filter_traces_extracts_all(self, evaluator):
+        """filter_traces should extract all relevant data."""
+        traces = {
+            "agents": {
+                "agent1": {
+                    "action_log": [{"result": "Done"}],
+                    "communication_log": [{"communication": "Hello"}],
+                }
+            },
+            "environment": {"domain": "research"},
+        }
+        filtered = evaluator.filter_traces(traces)
+        assert "[agent1]: Hello" in filtered["communications"]
+        assert "[agent1]: Done" in filtered["results"]
+
+
+class TestDetermineCompletionEdgeCases:
+    """Tests for _determine_completion edge cases."""
+
+    def test_completion_empty_eval_data(self):
+        """_determine_completion should return False for empty eval data."""
+        adapter = DummyModelAdapter(model_id="test", responses=[])
+        evaluator = MultiAgentBenchEvaluator(
+            domain="research",
+            model_adapter=adapter,
+        )
+        metrics = MultiAgentBenchMetrics(task_evaluation={})
+        assert evaluator._determine_completion(metrics) is False
+
+    def test_completion_bargaining_partial_buyer(self):
+        """_determine_completion should return False if buyer has negative scores."""
+        adapter = DummyModelAdapter(model_id="test", responses=[])
+        evaluator = MultiAgentBenchEvaluator(
+            domain="bargaining",
+            model_adapter=adapter,
+        )
+        metrics = MultiAgentBenchMetrics(
+            task_evaluation={
+                "buyer": {
+                    "effectiveness_of_strategies": -1,
+                    "progress_and_outcome": 4,
+                    "interaction_dynamics": 4,
+                },
+                "seller": {
+                    "effectiveness_of_strategies": 4,
+                    "progress_and_outcome": 4,
+                    "interaction_dynamics": 4,
+                },
+            }
+        )
+        assert evaluator._determine_completion(metrics) is False
+
+    def test_completion_bargaining_partial_seller(self):
+        """_determine_completion should return False if seller has negative scores."""
+        adapter = DummyModelAdapter(model_id="test", responses=[])
+        evaluator = MultiAgentBenchEvaluator(
+            domain="bargaining",
+            model_adapter=adapter,
+        )
+        metrics = MultiAgentBenchMetrics(
+            task_evaluation={
+                "buyer": {
+                    "effectiveness_of_strategies": 4,
+                    "progress_and_outcome": 4,
+                    "interaction_dynamics": 4,
+                },
+                "seller": {
+                    "effectiveness_of_strategies": -1,
+                    "progress_and_outcome": 4,
+                    "interaction_dynamics": 4,
+                },
+            }
+        )
+        assert evaluator._determine_completion(metrics) is False
