@@ -1,0 +1,6 @@
+repos:
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.14  # use the latest stable tag
+    hooks:
+    -   id: ruff-format
+        args: [--line-length=80]

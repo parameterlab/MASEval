@@ -85,6 +85,14 @@ ruff check . --fix
 
 If you haven't activated your virtual environment, you can use `uv run ruff format .` and `uv run ruff check . --fix` instead.
 
+In addition to manual usage, `ruff` is integrated via **pre-commit hooks**. Once pre-commit is installed (e.g., by `pip install pre-commit`), formatting is automatically applied on every commit using `ruff format` with a line length of 80 characters. To enable this locally, run:
+
+```bash
+pre-commit install
+```
+
+After that, any files you commit will be automatically formatted, ensuring consistent style across the codebase without extra manual steps.
+
 ### 3. Dependency Management
 
 Dependencies are defined in `pyproject.toml` and locked in `uv.lock`. Understanding the different dependency types is important:
