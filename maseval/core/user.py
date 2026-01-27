@@ -21,17 +21,73 @@ class TerminationReason(Enum):
 
 
 class User(ABC, TraceableMixin, ConfigurableMixin):
-    """A class representing a simulated user that can interact with a multi-agent system (MAS).
+    """Abstract interface for user interaction during evaluation.
 
-    The User class is designed to simulate human-like interaction by generating responses
-    to questions from the MAS. It maintains a conversation history and uses a
-    UserLLMSimulator to generate responses based on a predefined user profile and scenario.
+    A user represents the entity that interacts with agents during evaluation.
+    This could be an LLM simulating a human, a scripted response sequence,
+    a real human, or another agent system.
 
-    This class is abstract and requires a concrete implementation of the `get_tool` method,
-    which should provide a tool specific to the MAS framework being used.
+    Implementations must provide:
+    - get_initial_query(): The opening message to start the conversation
+    - respond(): Generate responses to agent messages
+    - is_done(): Determine when the interaction should end
 
-    The user only has access to the conversation history and does not see the full environment state,
-    ensuring partial observability of environment and MAS.
+    The optional get_tool() method can be overridden by subclasses for frameworks
+    that use tool-based user interaction (e.g., smolagents, CAMEL).
+    """
+
+    @abstractmethod
+    def get_initial_query(self) -> str:
+        """Return the initial query to start the conversation.
+
+        Returns:
+            The opening message from the user to begin the interaction.
+        """
+        ...
+
+    @abstractmethod
+    def respond(self, message: str) -> str:
+        """Respond to a message from the agent.
+
+        Args:
+            message: The agent's message or question.
+
+        Returns:
+            The user's response.
+        """
+        ...
+
+    @abstractmethod
+    def is_done(self) -> bool:
+        """Check if the user interaction should terminate.
+
+        Returns:
+            True if the user is done interacting, False to continue.
+        """
+        ...
+
+    def get_tool(self):
+        """Return a framework-compatible tool for agent interaction.
+
+        Some frameworks (smolagents, CAMEL) use a tool-based pattern where
+        agents invoke an AskUser tool to interact with the user. Override
+        this in subclasses for frameworks that need it.
+
+        Returns:
+            Framework-specific tool, or None if not applicable.
+        """
+        return None
+
+
+class LLMUser(User):
+    """User simulated by a language model.
+
+    Uses an LLM to generate realistic user responses based on a user profile
+    and scenario description. Maintains conversation history and supports
+    multi-turn interaction with configurable termination conditions.
+
+    The user only has access to the conversation history and does not see
+    the full environment state, ensuring partial observability.
 
     Multi-Turn Interaction:
         By default, users support single-turn interaction (max_turns=1). For benchmarks
@@ -70,34 +126,33 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         stop_tokens: Optional[List[str]] = None,
         early_stopping_condition: Optional[str] = None,
     ):
-        """Initializes the User.
+        """Initialize the LLMUser.
 
         Args:
-            name (str): The name of the user.
-            model (ModelAdapter): The language model to be used for generating responses.
-            user_profile (Dict[str, Any]): A dictionary describing the user's persona,
+            name: The name of the user.
+            model: The language model to be used for generating responses.
+            user_profile: A dictionary describing the user's persona,
                 preferences, and other relevant information.
-            scenario (str): A description of the situation or task the user is trying to
+            scenario: A description of the situation or task the user is trying to
                 accomplish.
-            initial_query (Optional[str], optional): A pre-set query to start the
-                conversation. If provided, it becomes the first user message. If None,
-                call get_initial_query() to generate one from the model based on the
-                user profile and scenario. Defaults to None.
-            template (Optional[str], optional): A custom prompt template for the user
-                simulator. Defaults to None.
-            max_try (int, optional): The maximum number of attempts for the simulator to
+            initial_query: A pre-set query to start the conversation. If provided,
+                it becomes the first user message. If None, call get_initial_query()
+                to generate one from the model based on the user profile and scenario.
+                Defaults to None.
+            template: A custom prompt template for the user simulator. Defaults to None.
+            max_try: The maximum number of attempts for the simulator to
                 generate a valid response. Defaults to 3.
-            max_turns (int, optional): Maximum number of user messages in the
-                conversation. Each user message counts as one turn, including the
-                initial_query. Use max_turns=1 for single-turn benchmarks, or higher
-                values for multi-turn interaction. Defaults to 1.
-            stop_tokens (Optional[List[str]], optional): List of tokens that signal user
-                satisfaction, enabling early termination. When the user's LLM-generated
-                response contains any of these tokens, is_done() returns True regardless
-                of remaining turns. The matched token is stripped from the response.
+            max_turns: Maximum number of user messages in the conversation.
+                Each user message counts as one turn, including the initial_query.
+                Use max_turns=1 for single-turn benchmarks, or higher values for
+                multi-turn interaction. Defaults to 1.
+            stop_tokens: List of tokens that signal user satisfaction, enabling
+                early termination. When the user's LLM-generated response contains
+                any of these tokens, is_done() returns True regardless of remaining
+                turns. The matched token is stripped from the response.
                 Defaults to None (early stopping disabled).
-            early_stopping_condition (Optional[str], optional): A description of when the
-                user should stop the conversation (e.g., "all goals have been accomplished").
+            early_stopping_condition: A description of when the user should stop
+                the conversation (e.g., "all goals have been accomplished").
                 Used with stop_tokens to instruct the LLM when to emit a stop token.
                 Must be provided if stop_tokens is set. Defaults to None.
 
@@ -148,22 +203,22 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         self._stopped = False
         self._stop_reason: Optional[str] = None  # Which token triggered the stop
 
-    def simulate_response(self, question: str) -> str:
-        """Simulates a user response to a given question from the MAS.
+    def respond(self, message: str) -> str:
+        """Respond to a message from the agent using LLM simulation.
 
-        This method appends the agent's question to the conversation history,
-        generates a response using the UserLLMSimulator, appends the simulated
-        response to the history, and returns the response.
+        This method appends the agent's message to the conversation history,
+        generates a response using the LLM simulator, appends the response
+        to the history, and returns it.
 
         If the user is already done (max_turns reached or stop_token detected),
         returns an empty string without making an LLM call. If a stop_token is
         detected in the response, triggers early stopping.
 
         Args:
-            question (str): The question or message from the MAS to which the user should respond.
+            message: The message from the agent to which the user should respond.
 
         Returns:
-            str: The simulated user's response, or empty string if done.
+            The user's response, or empty string if done.
         """
         # Check if already done - saves LLM call
         if self.is_done():
@@ -171,11 +226,11 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
 
         # Record the assistant prompt and ask simulator. MessageHistory is iterable
         # and can be converted to a list for the simulator.
-        self.messages.add_message("assistant", question)
+        self.messages.add_message("assistant", message)
         start_time = time.time()
         log_entry: Dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
-            "question": question,
+            "question": message,
             "status": "success",
         }
 
@@ -214,7 +269,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         - Counts the initial query as the first turn
 
         Returns:
-            str: The initial query (either pre-set or LLM-generated).
+            The initial query (either pre-set or LLM-generated).
 
         Raises:
             RuntimeError: If called after conversation has progressed beyond
@@ -225,7 +280,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
             first_message = self.messages[0]
             if first_message.get("role") == "user":
                 return first_message.get("content", "")
-            raise RuntimeError("Cannot get initial query: conversation has progressed. Use simulate_response() for subsequent turns.")
+            raise RuntimeError("Cannot get initial query: conversation has progressed. Use respond() for subsequent turns.")
 
         # Generate initial query via LLM
         start_time = time.time()
@@ -258,7 +313,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         return clean_response
 
     def gather_traces(self) -> dict[str, Any]:
-        """Gather execution traces from this user simulator.
+        """Gather execution traces from this user.
 
         Returns:
             Dictionary containing:
@@ -316,7 +371,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
     def is_done(self) -> bool:
         """Check if the user interaction should end.
 
-        The base implementation checks:
+        Checks:
         1. If max_turns has been reached
         2. If the user previously indicated termination (via stop_token)
 
@@ -355,7 +410,7 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
         self._turn_count += 1
 
     def gather_config(self) -> dict[str, Any]:
-        """Gather configuration from this user simulator.
+        """Gather configuration from this user.
 
         Returns:
             Dictionary containing:
@@ -376,23 +431,14 @@ class User(ABC, TraceableMixin, ConfigurableMixin):
             "stop_tokens": self.stop_tokens,
         }
 
-    @abstractmethod
-    def get_tool(self):
-        """Returns a tool that can be used by the MAS to interact with the user.
 
-        This method must be implemented by a concrete subclass to provide a tool
-        that is compatible with the specific MAS framework being used. The tool
-        should wrap the `simulate_response` method to allow the MAS to get
-        user input.
+class AgenticLLMUser(LLMUser):
+    """LLM-simulated user with access to tools.
 
-        Raises:
-            NotImplementedError: If the method is not implemented by the subclass.
-        """
-        raise NotImplementedError
-
-
-class AgenticUser(User):
-    """A user that can use tools to interact with the environment."""
+    Extends LLMUser with the ability to use tools (e.g., check order status,
+    lookup information) during the conversation. Uses a ReAct-style loop
+    to iteratively call tools and generate responses.
+    """
 
     def __init__(
         self,
@@ -404,12 +450,16 @@ class AgenticUser(User):
         max_internal_steps: int = 5,
         **kwargs,
     ):
-        """Initialize AgenticUser.
+        """Initialize AgenticLLMUser.
 
         Args:
+            name: The name of the user.
+            model: The language model to be used for generating responses.
+            user_profile: A dictionary describing the user's persona.
+            scenario: A description of the task the user is trying to accomplish.
             tools: Dictionary of tools available to the user.
             max_internal_steps: Maximum number of tool execution loops per turn.
-            **kwargs: Arguments passed to User.__init__
+            **kwargs: Arguments passed to LLMUser.__init__
         """
         self.tools = tools or {}
         self.max_internal_steps = max_internal_steps
@@ -459,20 +509,30 @@ class AgenticUser(User):
             definitions.append({"name": name, "description": doc.strip(), "inputs": inputs})
         return definitions
 
-    def simulate_response(self, question: str) -> str:
-        """Simulate a user response, potentially executing tools in a loop."""
+    def respond(self, message: str) -> str:
+        """Respond to a message, potentially executing tools in a loop.
+
+        Uses a ReAct-style loop where the LLM can call tools and reason
+        about the results before generating a final response.
+
+        Args:
+            message: The message from the agent to respond to.
+
+        Returns:
+            The user's final response after any tool execution.
+        """
         if self.is_done():
             return ""
 
         # Start with the current shared history
-        self.messages.add_message("assistant", question)
+        self.messages.add_message("assistant", message)
 
         # Internal history for the ReAct loop (scratchpad)
         # We start with a copy of the shared conversation history
         internal_history = list(self.messages.to_list())
 
         start_time = time.time()
-        log_entry: Dict[str, Any] = {"timestamp": datetime.now().isoformat(), "question": question, "status": "success", "internal_steps": []}
+        log_entry: Dict[str, Any] = {"timestamp": datetime.now().isoformat(), "question": message, "status": "success", "internal_steps": []}
 
         final_response = ""
         steps = 0

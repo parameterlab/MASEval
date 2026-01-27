@@ -548,7 +548,7 @@ class Benchmark(ABC):
             ```python
             def setup_user(self, agent_data: Dict[str, Any], environment: Environment, task: Task) -> User:
                 framework = agent_data.get("framework", "default")
-                return UserSimulator(
+                return LLMUser(
                     profile=task.environment_data.get("user_profile"),
                     scenario=task.metadata["scenario"],
                     model=self.user_model,
@@ -842,7 +842,7 @@ class Benchmark(ABC):
         """Execute agents with optional user interaction loop.
 
         This method orchestrates the agent-user interaction pattern. When a user is
-        present, the user initiates the conversation using `User.get_intial_query`.
+        present, the user initiates the conversation using `user.get_initial_query()`.
         If no user is present, ``task.query`` is used as the initial query.
 
         Interaction Flow:
@@ -891,7 +891,7 @@ class Benchmark(ABC):
                 break
 
             # Simulate user response (handles message recording, stop token detection, turn counting)
-            user_response = user.simulate_response(str(final_answer) if final_answer else "")
+            user_response = user.respond(str(final_answer) if final_answer else "")
 
             # Check if user is done (cheap state check - no LLM call)
             if user.is_done():
