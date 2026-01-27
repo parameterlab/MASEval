@@ -72,7 +72,7 @@ all = ["maseval[examples,transformers,wandb]"]
 
 [dependency-groups]
 # Development tools (linting, testing) - for contributors only
-dev = ["pytest>=9.0.0", "pytest-cov>=7.0.0", "ruff>=0.14.0", "ty>=0.0.5"]
+dev = ["pytest>=9.0.0", "pytest-cov>=7.0.0", "ruff>=0.14.0", "ty>=0.0.5", "pre-commit>=4.0.0"]
 
 # Documentation building - for contributors only
 docs = [
